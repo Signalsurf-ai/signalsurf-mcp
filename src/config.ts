@@ -1,0 +1,191 @@
+import { z } from "zod"
+
+import type { AccessRole, SignalSurfContext } from "./types.js"
+import { UserFacingError } from "./errors.js"
+
+const roleSchema = z.enum(["viewer", "editor", "owner"]).default("viewer")
+
+const tokenEntrySchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    token: z.string().min(1).optional(),
+    tokenSha256: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
+    productId: z.string().uuid(),
+    userId: z.string().uuid().optional(),
+    role: roleSchema,
+  })
+  .refine((entry) => !!entry.token || !!entry.tokenSha256, {
+    message: "Each token entry needs token or tokenSha256",
+  })
+
+export type TokenEntry = z.infer<typeof tokenEntrySchema>
+
+export type AppConfig = {
+  supabaseUrl: string
+  supabaseServiceRoleKey: string
+  transport: "stdio" | "http"
+  host: string
+  port: number
+  path: string
+  allowedHosts: string[]
+  authDisabled: boolean
+  stdioToken?: string
+  directContext?: SignalSurfContext
+  tokenEntries: TokenEntry[]
+}
+
+function readBool(value: string | undefined): boolean {
+  return ["1", "true", "yes", "on"].includes((value ?? "").toLowerCase())
+}
+
+function parseTokens(raw: string | undefined): TokenEntry[] {
+  if (!raw?.trim()) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (error) {
+    throw new UserFacingError(
+      `SIGNALSURF_MCP_TOKENS must be valid JSON: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { code: "CONFIG_ERROR", status: 500 }
+    )
+  }
+  const arraySchema = z.array(tokenEntrySchema)
+  const result = arraySchema.safeParse(parsed)
+  if (!result.success) {
+    throw new UserFacingError(result.error.message, {
+      code: "CONFIG_ERROR",
+      status: 500,
+    })
+  }
+  return result.data
+}
+
+function parseAllowedHosts(raw: string | undefined, host: string): string[] {
+  if (raw?.trim()) {
+    return [
+      ...new Set(
+        raw
+          .split(",")
+          .map((item) => item.trim().toLowerCase())
+          .filter(Boolean)
+      ),
+    ]
+  }
+
+  const normalizedHost = host.toLowerCase()
+  if (
+    normalizedHost === "127.0.0.1" ||
+    normalizedHost === "localhost" ||
+    normalizedHost === "::1" ||
+    normalizedHost === "[::1]"
+  ) {
+    return ["127.0.0.1", "localhost", "::1"]
+  }
+  if (
+    normalizedHost === "0.0.0.0" ||
+    normalizedHost === "::" ||
+    normalizedHost === "[::]"
+  ) {
+    return ["127.0.0.1", "localhost", "::1"]
+  }
+  return [normalizedHost]
+}
+
+function buildDirectContext(env: NodeJS.ProcessEnv): SignalSurfContext | undefined {
+  const productId = env.SIGNALSURF_MCP_PRODUCT_ID
+  if (!productId) return undefined
+
+  const parsed = z
+    .object({
+      productId: z.string().uuid(),
+      userId: z.string().uuid().optional(),
+      role: roleSchema.default("editor"),
+      tokenName: z.string().optional(),
+    })
+    .safeParse({
+      productId,
+      userId: env.SIGNALSURF_MCP_USER_ID || undefined,
+      role: env.SIGNALSURF_MCP_ROLE || "editor",
+      tokenName: "direct-env",
+    })
+
+  if (!parsed.success) {
+    throw new UserFacingError(parsed.error.message, {
+      code: "CONFIG_ERROR",
+      status: 500,
+    })
+  }
+  return parsed.data
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  const supabaseUrl = env.SIGNALSURF_SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceRoleKey =
+    env.SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl) {
+    throw new UserFacingError(
+      "Missing SIGNALSURF_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL",
+      { code: "CONFIG_ERROR", status: 500 }
+    )
+  }
+  if (!supabaseServiceRoleKey) {
+    throw new UserFacingError(
+      "Missing SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY",
+      { code: "CONFIG_ERROR", status: 500 }
+    )
+  }
+
+  const transportResult = z
+    .enum(["stdio", "http"])
+    .safeParse((env.SIGNALSURF_MCP_TRANSPORT ?? "stdio").toLowerCase())
+  if (!transportResult.success) {
+    throw new UserFacingError(
+      "SIGNALSURF_MCP_TRANSPORT must be either stdio or http",
+      { code: "CONFIG_ERROR", status: 500 }
+    )
+  }
+  const portResult = z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(65535)
+    .safeParse(env.SIGNALSURF_MCP_PORT ?? "3333")
+  if (!portResult.success) {
+    throw new UserFacingError("SIGNALSURF_MCP_PORT must be a valid TCP port", {
+      code: "CONFIG_ERROR",
+      status: 500,
+    })
+  }
+
+  const host = env.SIGNALSURF_MCP_HOST ?? "127.0.0.1"
+
+  const config = {
+    supabaseUrl,
+    supabaseServiceRoleKey,
+    transport: transportResult.data,
+    host,
+    port: portResult.data,
+    path: env.SIGNALSURF_MCP_PATH ?? "/mcp",
+    allowedHosts: parseAllowedHosts(env.SIGNALSURF_MCP_ALLOWED_HOSTS, host),
+    authDisabled: readBool(env.SIGNALSURF_MCP_AUTH_DISABLED),
+    stdioToken: env.SIGNALSURF_MCP_TOKEN,
+    directContext: buildDirectContext(env),
+    tokenEntries: parseTokens(env.SIGNALSURF_MCP_TOKENS),
+  }
+
+  if (config.transport === "http" && config.authDisabled) {
+    throw new UserFacingError(
+      "SIGNALSURF_MCP_AUTH_DISABLED is only allowed for stdio transport.",
+      { code: "CONFIG_ERROR", status: 500 }
+    )
+  }
+
+  return config
+}
+
+export function assertValidRole(role: AccessRole): AccessRole {
+  return roleSchema.parse(role)
+}
