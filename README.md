@@ -9,7 +9,101 @@ Every request is bound to one SignalSurf product through an MCP token.
 See `docs/architecture.md` for the request lifecycle, safety model, and
 extension guidelines.
 
-## Quick Start
+## External User Setup
+
+If you are connecting an agent to SignalSurf, use the hosted MCP service. You do
+not need this repository, a Supabase key, or a local server.
+
+1. Open SignalSurf Web.
+2. Go to **Settings -> Product**, then find the **MCP** section.
+3. Copy the hosted endpoint, usually `https://mcp.signalsurf.ai/mcp`.
+4. Create a token. Use `Viewer` for read-only agents and `Editor` for agents
+   that should create, update, or delete Surf Points and product table rows.
+5. Configure your MCP client as a remote Streamable HTTP server and send
+   `Authorization: Bearer <token>` on every request.
+
+Example:
+
+```json
+{
+  "mcpServers": {
+    "signalsurf": {
+      "type": "streamable-http",
+      "url": "https://mcp.signalsurf.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_SIGNALSURF_MCP_TOKEN"
+      }
+    }
+  }
+}
+```
+
+Some local desktop clients require a stdio bridge for remote HTTP MCP servers.
+The service architecture remains the same: the bridge sends requests to the
+hosted endpoint with your SignalSurf bearer token. Do not clone this repository
+or configure Supabase credentials just to use the hosted service.
+
+Example bridge configuration:
+
+```json
+{
+  "mcpServers": {
+    "signalsurf": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.signalsurf.ai/mcp",
+        "--header",
+        "Authorization:${SIGNALSURF_MCP_AUTH_HEADER}"
+      ],
+      "env": {
+        "SIGNALSURF_MCP_AUTH_HEADER": "Bearer YOUR_SIGNALSURF_MCP_TOKEN"
+      }
+    }
+  }
+}
+```
+
+## Hosted Service Deployment
+
+Use this repository when you are operating SignalSurf's hosted MCP service or a
+single-tenant internal deployment.
+
+```bash
+git clone https://github.com/Signalsurf-ai/signalsurf-mcp.git
+cd signalsurf-mcp
+corepack enable
+corepack pnpm@10.0.0 install
+cp .env.example .env
+```
+
+Minimal hosted `.env`:
+
+```bash
+SIGNALSURF_SUPABASE_URL=https://your-project-ref.supabase.co
+SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SIGNALSURF_MCP_TRANSPORT=http
+SIGNALSURF_MCP_AUTH_MODE=database
+SIGNALSURF_MCP_HOST=0.0.0.0
+SIGNALSURF_MCP_PORT=3333
+SIGNALSURF_MCP_PATH=/mcp
+SIGNALSURF_MCP_ALLOWED_HOSTS=mcp.signalsurf.ai
+SIGNALSURF_MCP_TRUST_PROXY=true
+```
+
+Build and run:
+
+```bash
+corepack pnpm@10.0.0 build
+corepack pnpm@10.0.0 start
+```
+
+In `database` auth mode, the server hashes bearer tokens and resolves them from
+SignalSurf Web's `mcp_tokens` table. Token plaintext is only shown once in
+SignalSurf Web; this service never needs static token JSON in production.
+
+## Local Development Quick Start
 
 Use stdio first. It is the simplest and does not expose an HTTP port.
 
@@ -35,6 +129,7 @@ cp .env.example .env
 SIGNALSURF_SUPABASE_URL=https://your-project-ref.supabase.co
 SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 SIGNALSURF_MCP_TRANSPORT=stdio
+SIGNALSURF_MCP_AUTH_MODE=env
 SIGNALSURF_MCP_TOKEN=local-dev-token
 SIGNALSURF_MCP_TOKENS='[{"name":"local-agent","token":"local-dev-token","productId":"signal-surf-product-uuid","role":"editor"}]'
 ```
@@ -69,8 +164,9 @@ The server automatically loads `.env` from the repo root. After the client
 connects, call `get_context` first and confirm the returned `productId`.
 
 For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
-`SIGNALSURF_MCP_TOKEN` from the server env, start the server, and send the token
-as `Authorization: Bearer <token>`.
+`SIGNALSURF_MCP_TOKEN` from the server env, set
+`SIGNALSURF_MCP_AUTH_MODE=env`, start the server, and send the token as
+`Authorization: Bearer <token>`.
 
 ## What It Exposes
 
@@ -176,17 +272,25 @@ corepack pnpm@10.0.0 build
 
 Required env:
 
-- `SIGNALSURF_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL`
+- `SIGNALSURF_SUPABASE_URL`, `SUPABASE_URL`, or `NEXT_PUBLIC_SUPABASE_URL`
 - `SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SERVICE_ROLE_KEY`
-- `SIGNALSURF_MCP_TOKENS` for HTTP auth, or `SIGNALSURF_MCP_TOKEN` / direct context for stdio
+- `SIGNALSURF_MCP_AUTH_MODE=database` for hosted SignalSurf Web tokens, or
+  `SIGNALSURF_MCP_AUTH_MODE=env` with `SIGNALSURF_MCP_TOKENS` for static
+  token config
+- `SIGNALSURF_MCP_TOKEN` / direct context for local stdio
 - `SIGNALSURF_MCP_ALLOWED_HOSTS` when HTTP is served behind a hostname that is
   not the configured bind host
+- `SIGNALSURF_MCP_TRUST_PROXY=true` only behind a trusted proxy that overwrites
+  `X-Forwarded-For`
 
 Do not expose this service directly to the public internet without a trusted
 network boundary. MCP tokens limit product scope, but the process still holds a
 Supabase service-role key.
 
-## Token Config
+## Static Token Config
+
+Static token config is for local development or internal single-tenant
+deployments. Hosted production should use `SIGNALSURF_MCP_AUTH_MODE=database`.
 
 Prefer hashed tokens:
 
@@ -228,6 +332,7 @@ Rotate a token by:
 
 ```bash
 SIGNALSURF_MCP_TRANSPORT=stdio \
+SIGNALSURF_MCP_AUTH_MODE=env \
 SIGNALSURF_MCP_TOKEN=ssmcp_live_xxx \
 pnpm start
 ```
@@ -242,6 +347,7 @@ Claude Code example:
       "args": ["/absolute/path/to/signalsurf-mcp/dist/index.js"],
       "env": {
         "SIGNALSURF_MCP_TRANSPORT": "stdio",
+        "SIGNALSURF_MCP_AUTH_MODE": "env",
         "SIGNALSURF_SUPABASE_URL": "https://your-project-ref.supabase.co",
         "SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY": "service-role-key",
         "SIGNALSURF_MCP_TOKENS": "[{\"tokenSha256\":\"sha256-hex\",\"productId\":\"product-uuid\",\"userId\":\"user-uuid\",\"role\":\"editor\"}]",

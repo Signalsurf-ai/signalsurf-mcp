@@ -9,7 +9,7 @@ raw Supabase access.
 ```text
 MCP client
   -> stdio or stateless Streamable HTTP
-  -> token or direct stdio context resolution
+  -> env-token, database-token, or direct stdio context resolution
   -> MCP tool/resource handler
   -> repository product-scope guard
   -> Supabase service-role client
@@ -39,13 +39,28 @@ HTTP mode rejects `SIGNALSURF_MCP_AUTH_DISABLED=true`. It also checks the
 request Host header against `SIGNALSURF_MCP_ALLOWED_HOSTS` to reduce localhost
 DNS-rebinding risk.
 
+`SIGNALSURF_MCP_TRUST_PROXY=false` is the default. In that mode, token usage
+audit metadata stores the direct socket IP only. Set
+`SIGNALSURF_MCP_TRUST_PROXY=true` only behind a trusted reverse proxy that
+overwrites `X-Forwarded-For`; the stored IP is validated before writing.
+
 ## Auth Model
 
-`src/auth.ts` supports plaintext local tokens and SHA-256 token hashes. Shared or
-deployed environments should use `tokenSha256`, not plaintext `token` entries.
-Token comparison uses constant-time hash comparison.
+The server has two token auth modes:
 
-Each token entry binds one caller to exactly one product:
+- `SIGNALSURF_MCP_AUTH_MODE=database`: hosted production mode. The HTTP bearer
+  token is SHA-256 hashed and looked up in SignalSurf Web's `mcp_tokens` table.
+  The table stores product id, creator id, role, prefix, revocation state, and
+  last-used metadata; it never stores plaintext tokens.
+- `SIGNALSURF_MCP_AUTH_MODE=env`: local or single-tenant mode. Tokens are read
+  from `SIGNALSURF_MCP_TOKENS`.
+
+`src/auth.ts` contains bearer parsing, static-token matching, and role checks.
+`src/repository.ts` owns database-token lookup because it is already the
+service-role database boundary. Static-token comparison uses constant-time hash
+comparison.
+
+Each static token entry binds one caller to exactly one product:
 
 ```json
 {
@@ -59,6 +74,13 @@ Each token entry binds one caller to exactly one product:
 
 Agents should call `get_context` first and verify `productId`, `role`, and
 `tokenName` before making writes.
+
+Hosted token revocation is immediate: SignalSurf Web sets `revoked_at`, and
+database auth only resolves rows where `revoked_at IS NULL`.
+Database-backed hosted tokens are product-scoped service credentials, so
+`created_by` is not exposed as `context.userId` to MCP tools. User-specific
+cleanup, such as repairing `user_preferences.current_playbook_id`, only runs
+for local/static contexts that explicitly configure a user id.
 
 ## Product Scope Guards
 

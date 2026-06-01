@@ -1,4 +1,5 @@
 import type {
+  AccessRole,
   DatabaseRow,
   EntryRow,
   JsonRecord,
@@ -6,6 +7,7 @@ import type {
   SupabaseLike,
   SurfPointRow,
 } from "./types.js"
+import { sha256Hex } from "./auth.js"
 import { UserFacingError } from "./errors.js"
 
 type ListSurfPointsInput = {
@@ -67,6 +69,15 @@ type ReadTableInput = {
   orderBy?: "created_at" | "updated_at"
   ascending?: boolean
   dataContains?: JsonRecord
+}
+
+type McpTokenRow = {
+  id: string
+  product_id: string
+  created_by: string | null
+  name: string | null
+  role: AccessRole
+  revoked_at: string | null
 }
 
 type CreateTableRowInput = {
@@ -180,6 +191,51 @@ function asRecord(value: unknown): JsonRecord {
 export class SignalSurfRepository {
   constructor(private readonly db: SupabaseLike) {}
 
+  async resolveMcpToken(
+    token: string,
+    metadata: { ip?: string | null } = {}
+  ): Promise<SignalSurfContext | null> {
+    const { data, error } = await this.db
+      .from("mcp_tokens")
+      .select("id, product_id, created_by, name, role, revoked_at")
+      .eq("token_sha256", sha256Hex(token))
+      .is("revoked_at", null)
+      .maybeSingle()
+
+    requireNoDbError(error, "Failed to resolve MCP token")
+    if (!data) return null
+
+    const row = data as McpTokenRow
+    if (!["viewer", "editor", "owner"].includes(row.role)) {
+      throw new UserFacingError("MCP token has an invalid role", {
+        code: "CONFIG_ERROR",
+        status: 500,
+      })
+    }
+
+    const update: Record<string, unknown> = {
+      last_used_at: new Date().toISOString(),
+    }
+    if (metadata.ip) update.last_used_ip = metadata.ip
+
+    const { error: updateError } = await this.db
+      .from("mcp_tokens")
+      .update(update)
+      .eq("id", row.id)
+
+    if (updateError) {
+      console.error(
+        `Failed to update MCP token usage metadata: ${updateError.message}`
+      )
+    }
+
+    return {
+      productId: row.product_id,
+      role: row.role,
+      tokenName: row.name ?? undefined,
+    }
+  }
+
   async listSurfPoints(
     context: SignalSurfContext,
     input: ListSurfPointsInput = {}
@@ -206,8 +262,14 @@ export class SignalSurfRepository {
     }
   }
 
-  async createSurfPoint(context: SignalSurfContext, input: CreateSurfPointInput) {
-    const databaseIds = await this.resolveDatabaseIds(context, input.databaseIds)
+  async createSurfPoint(
+    context: SignalSurfContext,
+    input: CreateSurfPointInput
+  ) {
+    const databaseIds = await this.resolveDatabaseIds(
+      context,
+      input.databaseIds
+    )
     const promptTemplate =
       input.promptTemplate ??
       joinPromptSections(input.scoringRubric, input.surfPrompt) ??
@@ -233,10 +295,12 @@ export class SignalSurfRepository {
     if (input.folderId) {
       await this.assertFolderBelongsToProduct(context, input.folderId)
     }
-    if (promptTemplate !== undefined) insertData.prompt_template = promptTemplate
+    if (promptTemplate !== undefined)
+      insertData.prompt_template = promptTemplate
     if (input.scoringRubric !== undefined)
       insertData.scoring_rubric = input.scoringRubric
-    if (input.surfPrompt !== undefined) insertData.surf_prompt = input.surfPrompt
+    if (input.surfPrompt !== undefined)
+      insertData.surf_prompt = input.surfPrompt
     if (input.relevanceThreshold !== undefined)
       insertData.relevance_threshold = input.relevanceThreshold
 
@@ -259,28 +323,40 @@ export class SignalSurfRepository {
     return { surfPoint: formatSurfPoint(data as SurfPointRow) }
   }
 
-  async updateSurfPoint(context: SignalSurfContext, input: UpdateSurfPointInput) {
+  async updateSurfPoint(
+    context: SignalSurfContext,
+    input: UpdateSurfPointInput
+  ) {
     await this.assertSurfPointBelongsToProduct(context, input.surfPointId)
     if (input.folderId) {
       await this.assertFolderBelongsToProduct(context, input.folderId)
     }
     if (input.variables !== undefined && input.variablesPatch !== undefined) {
-      throw new UserFacingError("Pass either variables or variablesPatch, not both.", {
-        code: "BAD_REQUEST",
-        status: 400,
-      })
+      throw new UserFacingError(
+        "Pass either variables or variablesPatch, not both.",
+        {
+          code: "BAD_REQUEST",
+          status: 400,
+        }
+      )
     }
     if (input.toolConfig !== undefined && input.toolConfigPatch !== undefined) {
-      throw new UserFacingError("Pass either toolConfig or toolConfigPatch, not both.", {
-        code: "BAD_REQUEST",
-        status: 400,
-      })
+      throw new UserFacingError(
+        "Pass either toolConfig or toolConfigPatch, not both.",
+        {
+          code: "BAD_REQUEST",
+          status: 400,
+        }
+      )
     }
     if (input.config !== undefined && input.configPatch !== undefined) {
-      throw new UserFacingError("Pass either config or configPatch, not both.", {
-        code: "BAD_REQUEST",
-        status: 400,
-      })
+      throw new UserFacingError(
+        "Pass either config or configPatch, not both.",
+        {
+          code: "BAD_REQUEST",
+          status: 400,
+        }
+      )
     }
 
     const updateData: Record<string, unknown> = {
@@ -308,8 +384,10 @@ export class SignalSurfRepository {
       updateData.prompt_template = input.promptTemplate
     if (input.scoringRubric !== undefined)
       updateData.scoring_rubric = input.scoringRubric
-    if (input.surfPrompt !== undefined) updateData.surf_prompt = input.surfPrompt
-    if (input.viewConfigs !== undefined) updateData.view_configs = input.viewConfigs
+    if (input.surfPrompt !== undefined)
+      updateData.surf_prompt = input.surfPrompt
+    if (input.viewConfigs !== undefined)
+      updateData.view_configs = input.viewConfigs
 
     const needsExisting =
       input.variablesPatch !== undefined ||
@@ -329,7 +407,8 @@ export class SignalSurfRepository {
         ...input.variablesPatch,
       }
     }
-    if (input.toolConfig !== undefined) updateData.tool_config = input.toolConfig
+    if (input.toolConfig !== undefined)
+      updateData.tool_config = input.toolConfig
     if (input.toolConfigPatch !== undefined) {
       updateData.tool_config = {
         ...asRecord(existing?.tool_config),
@@ -351,15 +430,17 @@ export class SignalSurfRepository {
       const finalRubric =
         input.scoringRubric !== undefined
           ? input.scoringRubric
-          : existing?.scoring_rubric ?? null
+          : (existing?.scoring_rubric ?? null)
       const finalSurf =
         input.surfPrompt !== undefined
           ? input.surfPrompt
-          : existing?.surf_prompt ?? null
+          : (existing?.surf_prompt ?? null)
       updateData.prompt_template = joinPromptSections(finalRubric, finalSurf)
     }
 
-    const changedKeys = Object.keys(updateData).filter((key) => key !== "updated_at")
+    const changedKeys = Object.keys(updateData).filter(
+      (key) => key !== "updated_at"
+    )
     if (changedKeys.length === 0) {
       throw new UserFacingError("No fields to update.", {
         code: "BAD_REQUEST",
@@ -392,7 +473,10 @@ export class SignalSurfRepository {
           updated_at: new Date().toISOString(),
         })
         .eq("playbook_id", input.surfPointId)
-      requireNoDbError(errorOrNull(sourceError), "Failed to cascade source state")
+      requireNoDbError(
+        errorOrNull(sourceError),
+        "Failed to cascade source state"
+      )
     }
 
     return {
@@ -439,7 +523,10 @@ export class SignalSurfRepository {
         .select("current_playbook_id")
         .eq("user_id", context.userId)
         .maybeSingle()
-      if (prefs?.current_playbook_id && ids.includes(prefs.current_playbook_id)) {
+      if (
+        prefs?.current_playbook_id &&
+        ids.includes(prefs.current_playbook_id)
+      ) {
         const replacement = await this.findFirstActiveSurfPoint(context, ids)
         const { error: prefsError } = await this.db
           .from("user_preferences")
@@ -461,7 +548,10 @@ export class SignalSurfRepository {
     }
   }
 
-  async listDatabases(context: SignalSurfContext, input: ListDatabasesInput = {}) {
+  async listDatabases(
+    context: SignalSurfContext,
+    input: ListDatabasesInput = {}
+  ) {
     let query = this.db
       .from("databases")
       .select(DATABASE_COLUMNS)
@@ -524,7 +614,11 @@ export class SignalSurfRepository {
         input.databaseId
       )
     }
-    await this.validateEntryDataReferences(context, input.databaseId, input.data)
+    await this.validateEntryDataReferences(
+      context,
+      input.databaseId,
+      input.data
+    )
 
     const { data, error } = await this.db
       .from("entries")
@@ -598,7 +692,8 @@ export class SignalSurfRepository {
     }
 
     const directUpdate: Record<string, unknown> = {}
-    if (input.playbookId !== undefined) directUpdate.playbook_id = input.playbookId
+    if (input.playbookId !== undefined)
+      directUpdate.playbook_id = input.playbookId
 
     if (Object.keys(directUpdate).length > 0) {
       directUpdate.updated_at = new Date().toISOString()
@@ -691,7 +786,9 @@ export class SignalSurfRepository {
       .in("id", databaseIds)
 
     requireNoDbError(error, "Failed to validate database access")
-    const found = new Set(((data ?? []) as Array<{ id: string }>).map((row) => row.id))
+    const found = new Set(
+      ((data ?? []) as Array<{ id: string }>).map((row) => row.id)
+    )
     const missing = databaseIds.filter((id) => !found.has(id))
     if (missing.length > 0) {
       throw new UserFacingError(
@@ -816,10 +913,13 @@ export class SignalSurfRepository {
       requireNoDbError(targetError, "Failed to validate referenced entry")
 
       if (!target) {
-        throw new UserFacingError(`Referenced entry ${value.entry_id} not found`, {
-          code: "BAD_REQUEST",
-          status: 400,
-        })
+        throw new UserFacingError(
+          `Referenced entry ${value.entry_id} not found`,
+          {
+            code: "BAD_REQUEST",
+            status: 400,
+          }
+        )
       }
       if (!target.database_id) {
         throw new UserFacingError(
@@ -849,10 +949,13 @@ export class SignalSurfRepository {
       .maybeSingle()
     requireNoDbError(error, "Failed to validate surf point folder access")
     if (!data) {
-      throw new UserFacingError("Surf point folder not found or access denied.", {
-        code: "NOT_FOUND",
-        status: 404,
-      })
+      throw new UserFacingError(
+        "Surf point folder not found or access denied.",
+        {
+          code: "NOT_FOUND",
+          status: 404,
+        }
+      )
     }
   }
 
@@ -954,7 +1057,9 @@ export class SignalSurfRepository {
   }
 }
 
-function errorOrNull(error: unknown): { message: string; code?: string } | null {
+function errorOrNull(
+  error: unknown
+): { message: string; code?: string } | null {
   if (!error) return null
   if (typeof error === "object" && "message" in error) {
     const record = error as { message: string; code?: string }

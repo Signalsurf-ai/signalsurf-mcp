@@ -18,6 +18,8 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     supabaseUrl: "https://example.supabase.co",
     supabaseServiceRoleKey: "service-role",
     transport: "http",
+    authMode: "env",
+    trustProxy: false,
     host: "127.0.0.1",
     port: 3333,
     path: "/mcp",
@@ -48,12 +50,15 @@ function makeRepository() {
   )
 }
 
-async function listen(config = makeConfig()): Promise<{
+async function listen(
+  config = makeConfig(),
+  createRepository = makeRepository
+): Promise<{
   server: Server
   url: string
 }> {
   const app = createHttpApp(config, {
-    createRepository: makeRepository,
+    createRepository,
   })
   const server = await new Promise<Server>((resolve) => {
     const listener = app.listen(0, "127.0.0.1", () => resolve(listener))
@@ -87,9 +92,7 @@ function initializeBody() {
 async function readMcpJson(response: Response) {
   const text = await response.text()
   if (!text.startsWith("event:")) return JSON.parse(text)
-  const dataLine = text
-    .split("\n")
-    .find((line) => line.startsWith("data: "))
+  const dataLine = text.split("\n").find((line) => line.startsWith("data: "))
   if (!dataLine) throw new Error(`Missing SSE data line: ${text}`)
   return JSON.parse(dataLine.slice("data: ".length))
 }
@@ -163,6 +166,130 @@ describe("HTTP transport", () => {
         },
       },
     })
+  })
+
+  it("resolves hosted database tokens for HTTP auth", async () => {
+    const db = new FakeSupabase({
+      mcp_tokens: [
+        {
+          id: "00000000-0000-4000-8000-000000000101",
+          product_id: productId,
+          created_by: "00000000-0000-4000-8000-000000000102",
+          name: "hosted-agent",
+          role: "editor",
+          token_sha256: sha256Hex(token),
+          revoked_at: null,
+          last_used_at: null,
+          last_used_ip: null,
+        },
+      ],
+      playbooks: [],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] }),
+      () => new SignalSurfRepository(db as any)
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: initializeBody(),
+    })
+
+    expect(response.status).toBe(200)
+    expect(db.tables.mcp_tokens[0].last_used_at).toEqual(expect.any(String))
+    expect(db.tables.mcp_tokens[0].last_used_ip).toEqual(expect.any(String))
+  })
+
+  it("rejects revoked hosted database tokens", async () => {
+    const db = new FakeSupabase({
+      mcp_tokens: [
+        {
+          id: "00000000-0000-4000-8000-000000000101",
+          product_id: productId,
+          created_by: "00000000-0000-4000-8000-000000000102",
+          name: "hosted-agent",
+          role: "editor",
+          token_sha256: sha256Hex(token),
+          revoked_at: "2026-06-01T00:00:00Z",
+        },
+      ],
+      playbooks: [],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] }),
+      () => new SignalSurfRepository(db as any)
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: initializeBody(),
+    })
+
+    expect(response.status).toBe(401)
+  })
+
+  it("does not trust spoofed forwarded IPs unless proxy trust is enabled", async () => {
+    const db = new FakeSupabase({
+      mcp_tokens: [
+        {
+          id: "00000000-0000-4000-8000-000000000101",
+          product_id: productId,
+          created_by: null,
+          name: "hosted-agent",
+          role: "editor",
+          token_sha256: sha256Hex(token),
+          revoked_at: null,
+          last_used_ip: null,
+        },
+      ],
+      playbooks: [],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] }),
+      () => new SignalSurfRepository(db as any)
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.9",
+      },
+      body: initializeBody(),
+    })
+
+    expect(response.status).toBe(200)
+    expect(db.tables.mcp_tokens[0].last_used_ip).not.toBe("203.0.113.9")
   })
 
   it("rejects missing and invalid bearer tokens", async () => {
@@ -255,6 +382,19 @@ describe("HTTP transport", () => {
         SIGNALSURF_MCP_AUTH_DISABLED: "true",
         SIGNALSURF_MCP_PRODUCT_ID: productId,
       })
-    ).toThrow("SIGNALSURF_MCP_AUTH_DISABLED is only allowed for stdio transport")
+    ).toThrow(
+      "SIGNALSURF_MCP_AUTH_DISABLED is only allowed for stdio transport"
+    )
+  })
+
+  it("requires HTTP transport for database auth mode", () => {
+    expect(() =>
+      loadConfig({
+        SIGNALSURF_SUPABASE_URL: "https://example.supabase.co",
+        SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SIGNALSURF_MCP_TRANSPORT: "stdio",
+        SIGNALSURF_MCP_AUTH_MODE: "database",
+      })
+    ).toThrow("SIGNALSURF_MCP_AUTH_MODE=database is only supported for HTTP")
   })
 })

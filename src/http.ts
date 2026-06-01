@@ -1,9 +1,10 @@
 import type { Server } from "node:http"
+import { isIP } from "node:net"
 
 import express from "express"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
 
-import { parseBearerToken, resolveTokenContext } from "./auth.js"
+import { parseBearerToken, resolveHttpTokenContext } from "./auth.js"
 import type { AppConfig } from "./config.js"
 import { errorToObject, UserFacingError } from "./errors.js"
 import { SignalSurfRepository } from "./repository.js"
@@ -25,10 +26,22 @@ function normalizeHostHeader(value: string | undefined): string | null {
   return trimmed.split(":")[0] || null
 }
 
-function hostAllowed(header: string | undefined, allowedHosts: string[]): boolean {
+function hostAllowed(
+  header: string | undefined,
+  allowedHosts: string[]
+): boolean {
   const host = normalizeHostHeader(header)
   if (!host) return false
   return allowedHosts.map((item) => item.toLowerCase()).includes(host)
+}
+
+function normalizeIp(value: string | undefined | null): string | null {
+  const candidate = value?.trim()
+  return candidate && isIP(candidate) ? candidate : null
+}
+
+function getClientIp(req: express.Request, trustProxy: boolean): string | null {
+  return normalizeIp(trustProxy ? req.ip : req.socket.remoteAddress)
 }
 
 export function createHttpApp(
@@ -36,6 +49,7 @@ export function createHttpApp(
   dependencies: HttpServerDependencies = {}
 ) {
   const app = express()
+  app.set("trust proxy", config.trustProxy)
 
   app.use((req, res, next) => {
     if (!hostAllowed(req.headers.host, config.allowedHosts)) {
@@ -51,13 +65,15 @@ export function createHttpApp(
 
   app.post(config.path, async (req, res) => {
     try {
-      const context = resolveTokenContext(
-        config,
-        parseBearerToken(req.headers.authorization)
-      )
       const repository =
         dependencies.createRepository?.() ??
         new SignalSurfRepository(createSupabaseClient(config))
+      const context = await resolveHttpTokenContext(
+        config,
+        parseBearerToken(req.headers.authorization),
+        repository,
+        { ip: getClientIp(req, config.trustProxy) }
+      )
       const server = createSignalSurfMcpServer({ context, repository })
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
@@ -80,7 +96,8 @@ export function createHttpApp(
   app.get(config.path, (_req, res) => {
     res.status(405).json({
       ok: false,
-      error: "This server uses stateless Streamable HTTP. Send MCP JSON-RPC requests with POST.",
+      error:
+        "This server uses stateless Streamable HTTP. Send MCP JSON-RPC requests with POST.",
     })
   })
 

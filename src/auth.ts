@@ -41,6 +41,13 @@ function contextFromTokenEntry(entry: TokenEntry): SignalSurfContext {
   }
 }
 
+export type DatabaseTokenResolver = {
+  resolveMcpToken: (
+    token: string,
+    metadata?: { ip?: string | null }
+  ) => Promise<SignalSurfContext | null>
+}
+
 export function resolveTokenContext(
   config: Pick<AppConfig, "authDisabled" | "directContext" | "tokenEntries">,
   token: string | undefined
@@ -74,6 +81,40 @@ export function resolveTokenContext(
   return contextFromTokenEntry(entry)
 }
 
+export async function resolveHttpTokenContext(
+  config: Pick<
+    AppConfig,
+    "authDisabled" | "directContext" | "tokenEntries" | "authMode"
+  >,
+  token: string | undefined,
+  databaseResolver: DatabaseTokenResolver,
+  metadata?: { ip?: string | null }
+): Promise<SignalSurfContext> {
+  if (config.authMode !== "database") {
+    return resolveTokenContext(config, token)
+  }
+
+  if (config.authDisabled) {
+    return resolveTokenContext(config, token)
+  }
+
+  if (!token) {
+    throw new UserFacingError("Missing MCP bearer token", {
+      code: "UNAUTHORIZED",
+      status: 401,
+    })
+  }
+
+  const context = await databaseResolver.resolveMcpToken(token, metadata)
+  if (!context) {
+    throw new UserFacingError("Invalid MCP bearer token", {
+      code: "UNAUTHORIZED",
+      status: 401,
+    })
+  }
+  return context
+}
+
 export function resolveStdioContext(config: AppConfig): SignalSurfContext {
   if (config.stdioToken || !config.directContext || config.authDisabled) {
     return resolveTokenContext(config, config.stdioToken)
@@ -81,7 +122,9 @@ export function resolveStdioContext(config: AppConfig): SignalSurfContext {
   return config.directContext
 }
 
-export function parseBearerToken(header: string | string[] | undefined): string | undefined {
+export function parseBearerToken(
+  header: string | string[] | undefined
+): string | undefined {
   const value = Array.isArray(header) ? header[0] : header
   if (!value) return undefined
   const match = /^Bearer\s+(.+)$/i.exec(value.trim())

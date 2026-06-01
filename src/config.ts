@@ -9,7 +9,10 @@ const tokenEntrySchema = z
   .object({
     name: z.string().min(1).optional(),
     token: z.string().min(1).optional(),
-    tokenSha256: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
+    tokenSha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/i)
+      .optional(),
     productId: z.string().uuid(),
     userId: z.string().uuid().optional(),
     role: roleSchema,
@@ -24,6 +27,8 @@ export type AppConfig = {
   supabaseUrl: string
   supabaseServiceRoleKey: string
   transport: "stdio" | "http"
+  authMode: "env" | "database"
+  trustProxy: boolean
   host: string
   port: number
   path: string
@@ -93,7 +98,9 @@ function parseAllowedHosts(raw: string | undefined, host: string): string[] {
   return [normalizedHost]
 }
 
-function buildDirectContext(env: NodeJS.ProcessEnv): SignalSurfContext | undefined {
+function buildDirectContext(
+  env: NodeJS.ProcessEnv
+): SignalSurfContext | undefined {
   const productId = env.SIGNALSURF_MCP_PRODUCT_ID
   if (!productId) return undefined
 
@@ -121,7 +128,10 @@ function buildDirectContext(env: NodeJS.ProcessEnv): SignalSurfContext | undefin
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const supabaseUrl = env.SIGNALSURF_SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseUrl =
+    env.SIGNALSURF_SUPABASE_URL ??
+    env.SUPABASE_URL ??
+    env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseServiceRoleKey =
     env.SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -147,6 +157,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       { code: "CONFIG_ERROR", status: 500 }
     )
   }
+  const authModeResult = z
+    .enum(["env", "database"])
+    .safeParse((env.SIGNALSURF_MCP_AUTH_MODE ?? "env").toLowerCase())
+  if (!authModeResult.success) {
+    throw new UserFacingError(
+      "SIGNALSURF_MCP_AUTH_MODE must be either env or database",
+      { code: "CONFIG_ERROR", status: 500 }
+    )
+  }
   const portResult = z.coerce
     .number()
     .int()
@@ -166,6 +185,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     supabaseUrl,
     supabaseServiceRoleKey,
     transport: transportResult.data,
+    authMode: authModeResult.data,
+    trustProxy: readBool(env.SIGNALSURF_MCP_TRUST_PROXY),
     host,
     port: portResult.data,
     path: env.SIGNALSURF_MCP_PATH ?? "/mcp",
@@ -179,6 +200,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (config.transport === "http" && config.authDisabled) {
     throw new UserFacingError(
       "SIGNALSURF_MCP_AUTH_DISABLED is only allowed for stdio transport.",
+      { code: "CONFIG_ERROR", status: 500 }
+    )
+  }
+  if (config.transport === "stdio" && config.authMode === "database") {
+    throw new UserFacingError(
+      "SIGNALSURF_MCP_AUTH_MODE=database is only supported for HTTP transport.",
       { code: "CONFIG_ERROR", status: 500 }
     )
   }

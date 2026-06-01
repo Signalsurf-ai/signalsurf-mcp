@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { sha256Hex } from "../src/auth.js"
 import { SignalSurfRepository } from "../src/repository.js"
 import type { SignalSurfContext } from "../src/types.js"
 import { FakeSupabase } from "./fake-supabase.js"
@@ -236,6 +237,35 @@ describe("SignalSurfRepository", () => {
     expect(db.tables.user_preferences[0].current_playbook_id).toBe(surfPoint2)
   })
 
+  it("does not expose hosted token creators as interactive user context", async () => {
+    const db = makeDb()
+    db.tables.mcp_tokens = [
+      {
+        id: "00000000-0000-4000-8000-000000000501",
+        product_id: context.productId,
+        created_by: context.userId,
+        name: "hosted-agent",
+        role: "editor",
+        token_sha256: sha256Hex("hosted-token"),
+        revoked_at: null,
+      },
+    ]
+    const repo = new SignalSurfRepository(db as any)
+
+    const hostedContext = await repo.resolveMcpToken("hosted-token")
+
+    expect(hostedContext).toMatchObject({
+      productId: context.productId,
+      role: "editor",
+      tokenName: "hosted-agent",
+    })
+    expect(hostedContext?.userId).toBeUndefined()
+
+    await repo.deleteSurfPoints(hostedContext!, [surfPoint1])
+
+    expect(db.tables.user_preferences[0].current_playbook_id).toBe(surfPoint1)
+  })
+
   it("creates prompt templates from scoring rubric and surf prompt", async () => {
     const db = makeDb()
     db.tables.databases = db.tables.databases.filter((row) => row.id === db1)
@@ -447,8 +477,8 @@ describe("SignalSurfRepository", () => {
     ).rejects.toThrow("Database not found or access denied")
 
     expect(db.tables.entries.some((entry) => entry.id === row1)).toBe(true)
-    expect(db.tables.entries.some((entry) => entry.id === otherProductRow)).toBe(
-      true
-    )
+    expect(
+      db.tables.entries.some((entry) => entry.id === otherProductRow)
+    ).toBe(true)
   })
 })
