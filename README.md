@@ -9,6 +9,103 @@ Every request is bound to one SignalSurf product through an MCP token.
 See `docs/architecture.md` for the request lifecycle, safety model, and
 extension guidelines.
 
+## Quick Start
+
+Use this path for a local agent over stdio. It is the safest first setup because
+the MCP server is not exposed over HTTP.
+
+Prerequisites:
+
+- Node.js `>=22.13.0`
+- Corepack enabled, or pnpm `10`
+- A SignalSurf Supabase URL and service-role key
+- The SignalSurf `productId` the agent should be allowed to access
+- Optional: the `userId` whose current surf point preference should be repaired
+  when a surf point is deleted
+
+1. Install dependencies:
+
+```bash
+git clone https://github.com/Signalsurf-ai/signalsurf-mcp.git
+cd signalsurf-mcp
+corepack enable
+corepack pnpm@10.0.0 install
+```
+
+2. Generate one MCP token and its SHA-256 hash:
+
+```bash
+export SIGNALSURF_MCP_TOKEN="ssmcp_$(openssl rand -hex 24)"
+export SIGNALSURF_MCP_TOKEN_SHA256="$(printf '%s' "$SIGNALSURF_MCP_TOKEN" | shasum -a 256 | awk '{print $1}')"
+
+printf 'MCP client token:\n%s\n\n.env tokenSha256:\n%s\n' \
+  "$SIGNALSURF_MCP_TOKEN" \
+  "$SIGNALSURF_MCP_TOKEN_SHA256"
+```
+
+Keep `MCP client token` private. Put only the SHA-256 value in
+`SIGNALSURF_MCP_TOKENS`.
+
+3. Create `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set these values:
+
+```bash
+SIGNALSURF_SUPABASE_URL=https://your-project-ref.supabase.co
+SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SIGNALSURF_MCP_TRANSPORT=stdio
+SIGNALSURF_MCP_TOKEN=ssmcp_token_from_step_2
+SIGNALSURF_MCP_TOKENS='[
+  {
+    "name": "local-agent",
+    "tokenSha256": "sha256_from_step_2",
+    "productId": "signal-surf-product-uuid",
+    "role": "editor"
+  }
+]'
+```
+
+Add `"userId": "user-uuid"` to the token entry when you want surf point deletion
+to repair that user's current surf point preference.
+
+4. Build and run:
+
+```bash
+corepack pnpm@10.0.0 build
+corepack pnpm@10.0.0 start
+```
+
+5. Add it to Claude Code or another stdio MCP client:
+
+```json
+{
+  "mcpServers": {
+    "signalsurf": {
+      "command": "node",
+      "args": ["/absolute/path/to/signalsurf-mcp/dist/index.js"],
+      "env": {
+        "SIGNALSURF_MCP_TRANSPORT": "stdio",
+        "SIGNALSURF_SUPABASE_URL": "https://your-project-ref.supabase.co",
+        "SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY": "service-role-key",
+        "SIGNALSURF_MCP_TOKENS": "[{\"name\":\"local-agent\",\"tokenSha256\":\"sha256_from_step_2\",\"productId\":\"signal-surf-product-uuid\",\"role\":\"editor\"}]",
+        "SIGNALSURF_MCP_TOKEN": "ssmcp_token_from_step_2"
+      }
+    }
+  }
+}
+```
+
+After the client connects, call `get_context` first. Confirm the returned
+`productId`, `role`, and `tokenName` before running write tools.
+
+For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
+`SIGNALSURF_MCP_TOKEN` from the server env, start the server, and send the token
+from step 2 as `Authorization: Bearer <token>`.
+
 ## What It Exposes
 
 - `list_surf_points`, `create_surf_point`, `update_surf_point`, `delete_surf_point`
