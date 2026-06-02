@@ -51,8 +51,10 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `delete_table_rows` | `tables.delete` | Yes | Hard-deletes rows after product-scope verification |
 
 `tools/list` advertises this public contract consistently. A caller whose token
-lacks a required capability receives an `INSUFFICIENT_SCOPE` tool error payload
-that includes the granular scope needed for step-up authorization.
+lacks a required scoped capability over HTTP receives a `403` response with a
+`WWW-Authenticate` `insufficient_scope` challenge. In-process tool calls also
+return an `INSUFFICIENT_SCOPE` tool error payload that includes the granular
+scope needed for step-up authorization.
 
 ## Adding a Tool
 
