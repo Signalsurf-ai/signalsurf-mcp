@@ -6,8 +6,8 @@ product tables.
 This server is intentionally narrow. It gives external agents the core product
 operations they need without exposing arbitrary SQL or raw service-role access.
 Every request is bound to one SignalSurf product through an MCP token.
-See `docs/architecture.md` for the request lifecycle, safety model, and
-extension guidelines.
+See `docs/architecture.md` for the request lifecycle and safety model, and
+`docs/capabilities.md` for the public tool/scope contract.
 
 ## External User Setup
 
@@ -20,6 +20,10 @@ not need this repository, a Supabase key, or a local server.
 3. Sign in, choose the SignalSurf product, review requested scopes, and approve.
 4. The MCP client receives OAuth tokens through its callback and can use
    SignalSurf tools.
+
+The hosted MCP currently supports product-scoped Surf Point CRUD and table row
+read/create/update/delete. It is a safe public subset of Surfer, the agent in
+SignalSurf Web's right panel; it does not expose every internal chat tool.
 
 Example:
 
@@ -181,12 +185,28 @@ The server uses Supabase service-role credentials internally, so every operation
 explicitly validates product ownership before touching rows. Surf point deletion
 is a soft delete (`deleted_at`), matching the web app behavior.
 
+OAuth clients can request broad compatibility scopes (`mcp:read`, `mcp:write`)
+or granular scopes. The protected resource metadata advertises the granular
+SignalSurf resource scopes so the consent screen can name each capability
+instead of hiding them behind broad write access:
+
+- `mcp:surf_points.read`
+- `mcp:surf_points.write`
+- `mcp:surf_points.delete`
+- `mcp:tables.read`
+- `mcp:tables.write`
+- `mcp:tables.delete`
+
+OAuth tokens may also carry `offline_access` for refresh-token support. The MCP
+resource server accepts that scope but does not advertise it as a resource
+requirement, and it grants no tool capability by itself.
+
 ## Architecture
 
 ```text
 MCP client
   -> stdio or Streamable HTTP transport
-  -> token auth resolves { productId, userId, role }
+  -> token auth resolves { productId, userId, role, scopes }
   -> MCP tool/resource handlers
   -> SignalSurf repository
   -> Supabase service-role client with explicit product-scope checks
@@ -198,6 +218,7 @@ Key files:
 - `src/http.ts`: stateless Streamable HTTP transport
 - `src/stdio.ts`: stdio transport for local MCP clients
 - `src/auth.ts`: token hashing, bearer parsing, and role checks
+- `src/capabilities.ts`: public scope, capability, and tool contract
 - `src/repository.ts`: SignalSurf product-scope and mutation logic
 - `src/server.ts`: MCP tools and resources
 - `src/schemas.ts`: Zod input schemas exposed to MCP clients
@@ -211,7 +232,7 @@ in-memory session state and makes bearer-token product scoping straightforward.
 Context:
 
 - `get_context`: returns the product, optional user, role, token name, and
-  read/write capability for the current connection. Agents should call this
+  scope/capability context for the current connection. Agents should call this
   before writes and verify they are operating in the intended product.
 
 Surf points:
@@ -248,6 +269,11 @@ Roles:
 - `viewer`: can read tools and resources only
 - `editor`: can read and write
 - `owner`: currently same MCP capability as `editor`; reserved for future policy
+
+OAuth scopes can narrow those role grants. For example, an editor OAuth token
+with `mcp:tables.write` can create and update rows but cannot delete rows or
+create Surf Points. Manual fallback tokens without `scopes` keep the legacy
+role-only behavior.
 
 Resources:
 
@@ -308,7 +334,8 @@ Then configure:
     "tokenSha256": "sha256-hex",
     "productId": "product-uuid",
     "userId": "user-uuid",
-    "role": "editor"
+    "role": "editor",
+    "scopes": ["mcp:tables.read", "mcp:tables.write"]
   }
 ]
 ```
@@ -320,6 +347,10 @@ Each token binds exactly one MCP caller to one `productId`. `userId` is optional
 but include it when you want surf point deletion to repair that user's
 `current_playbook_id`. `tokenName` appears in `get_context` and is used as the
 row-update source reference.
+
+`scopes` is optional for static tokens. When present, the server enforces both
+the token role and the listed scopes. When omitted, static tokens retain the
+legacy broad role behavior.
 
 Rotate a token by:
 

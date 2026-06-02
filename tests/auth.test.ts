@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  assertCanUseCapability,
   assertCanWrite,
+  listContextCapabilities,
   resolveStdioContext,
   resolveTokenContext,
   sha256Hex,
 } from "../src/auth.js"
 import type { AppConfig } from "../src/config.js"
+import { loadConfig } from "../src/config.js"
 import { UserFacingError } from "../src/errors.js"
 
 describe("auth", () => {
@@ -62,6 +65,57 @@ describe("auth", () => {
         role: "viewer",
       })
     ).toThrow("write access")
+  })
+
+  it("prevents scoped tokens from using ungranted capabilities", () => {
+    const context = {
+      productId: "00000000-0000-4000-8000-000000000001",
+      role: "editor" as const,
+      scopes: ["mcp:tables.read", "mcp:tables.write"],
+    }
+
+    expect(() => assertCanUseCapability(context, "tables.write")).not.toThrow()
+    expect(() => assertCanUseCapability(context, "tables.delete")).toThrow(
+      "Token scope does not allow"
+    )
+    expect(() =>
+      assertCanUseCapability(context, "surf_points.write")
+    ).toThrow("Token scope does not allow")
+    expect(listContextCapabilities(context)).toEqual([
+      "context.read",
+      "tables.read",
+      "tables.write",
+    ])
+  })
+
+  it("treats explicit empty scopes as no capability grant", () => {
+    const context = {
+      productId: "00000000-0000-4000-8000-000000000001",
+      role: "editor" as const,
+      scopes: [],
+    }
+
+    expect(() => assertCanUseCapability(context, "tables.read")).toThrow(
+      "Token scope does not allow"
+    )
+    expect(listContextCapabilities(context)).toEqual([])
+  })
+
+  it("keeps unscoped editor tokens broad for manual-token compatibility", () => {
+    expect(
+      listContextCapabilities({
+        productId: "00000000-0000-4000-8000-000000000001",
+        role: "editor",
+      })
+    ).toEqual([
+        "context.read",
+        "surf_points.read",
+        "surf_points.write",
+        "surf_points.delete",
+        "tables.read",
+        "tables.write",
+        "tables.delete",
+    ])
   })
 
   it("uses SIGNALSURF_MCP_TOKEN before direct stdio context", () => {
@@ -141,5 +195,22 @@ describe("auth", () => {
     expect(() => resolveStdioContext(config)).toThrow(
       "SIGNALSURF_MCP_AUTH_DISABLED requires SIGNALSURF_MCP_PRODUCT_ID"
     )
+  })
+
+  it("rejects static token config with an explicit empty scopes array", () => {
+    expect(() =>
+      loadConfig({
+        SIGNALSURF_SUPABASE_URL: "https://example.supabase.co",
+        SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SIGNALSURF_MCP_TOKENS: JSON.stringify([
+          {
+            tokenSha256: sha256Hex("token-context"),
+            productId: "00000000-0000-4000-8000-000000000001",
+            role: "editor",
+            scopes: [],
+          },
+        ]),
+      })
+    ).toThrow(/too_small/i)
   })
 })

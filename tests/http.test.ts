@@ -4,6 +4,11 @@ import type { Server } from "node:http"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { sha256Hex } from "../src/auth.js"
+import {
+  MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_OFFLINE_ACCESS_SCOPE,
+  MCP_RESOURCE_SCOPES,
+} from "../src/capabilities.js"
 import type { AppConfig } from "../src/config.js"
 import { loadConfig } from "../src/config.js"
 import { createHttpApp } from "../src/http.js"
@@ -86,6 +91,18 @@ function initializeBody() {
       protocolVersion: "2025-06-18",
       capabilities: {},
       clientInfo: { name: "http-test", version: "0.0.0" },
+    },
+  })
+}
+
+function callToolBody(name: string, args: Record<string, unknown> = {}) {
+  return JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: {
+      name,
+      arguments: args,
     },
   })
 }
@@ -349,7 +366,10 @@ describe("HTTP transport", () => {
       'resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"'
     )
     expect(response.headers.get("www-authenticate")).toContain(
-      'scope="mcp:read mcp:write offline_access"'
+      `scope="${MCP_DEFAULT_RESOURCE_SCOPES.join(" ")}"`
+    )
+    expect(response.headers.get("www-authenticate")).not.toContain(
+      MCP_OFFLINE_ACCESS_SCOPE
     )
   })
 
@@ -369,14 +389,16 @@ describe("HTTP transport", () => {
     )
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({
+    const body = await response.json()
+    expect(body).toMatchObject({
       resource: "https://mcp.example.com/mcp",
       authorization_servers: ["https://app.example.com"],
-      scopes_supported: ["mcp:read", "mcp:write", "offline_access"],
+      scopes_supported: MCP_RESOURCE_SCOPES,
     })
+    expect(body.scopes_supported).not.toContain(MCP_OFFLINE_ACCESS_SCOPE)
   })
 
-  it("resolves OAuth access tokens for HTTP auth", async () => {
+  it("resolves OAuth access tokens with harmless additive scopes", async () => {
     const resourceUrl = "https://mcp.example.com/mcp"
     const db = new FakeSupabase({
       mcp_tokens: [],
@@ -386,7 +408,7 @@ describe("HTTP transport", () => {
           client_id: "ssmcp_client_test",
           user_id: "00000000-0000-4000-8000-000000000202",
           product_id: productId,
-          scope: "mcp:read mcp:write offline_access",
+          scope: "mcp:read mcp:write offline_access openid profile",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
           access_token_expires_at: "2999-01-01T00:00:00.000Z",
@@ -433,6 +455,134 @@ describe("HTTP transport", () => {
     expect(db.tables.mcp_oauth_tokens[0].last_used_at).toEqual(
       expect.any(String)
     )
+  })
+
+  it("returns an OAuth insufficient-scope challenge for scoped HTTP tool calls", async () => {
+    const resourceUrl = "https://mcp.example.com/mcp"
+    const db = new FakeSupabase({
+      mcp_tokens: [],
+      mcp_oauth_tokens: [
+        {
+          id: "00000000-0000-4000-8000-000000000201",
+          client_id: "ssmcp_client_test",
+          user_id: "00000000-0000-4000-8000-000000000202",
+          product_id: productId,
+          scope: "mcp:tables.read mcp:tables.write",
+          resource: resourceUrl,
+          access_token_sha256: sha256Hex(token),
+          access_token_expires_at: "2999-01-01T00:00:00.000Z",
+          revoked_at: null,
+        },
+      ],
+      mcp_oauth_clients: [
+        {
+          client_id: "ssmcp_client_test",
+          client_name: "Claude",
+          revoked_at: null,
+        },
+      ],
+      playbooks: [],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const { server, url } = await listen(
+      makeConfig({
+        authMode: "database",
+        authorizationServerUrl: "https://app.example.com",
+        resourceUrl,
+        tokenEntries: [],
+      }),
+      () => new SignalSurfRepository(db as any)
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: callToolBody("create_surf_point", { name: "Denied" }),
+    })
+
+    expect(response.status).toBe(403)
+    expect(response.headers.get("www-authenticate")).toContain(
+      'error="insufficient_scope"'
+    )
+    expect(response.headers.get("www-authenticate")).toContain(
+      'scope="mcp:surf_points.write"'
+    )
+    expect(response.headers.get("www-authenticate")).toContain(
+      'resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"'
+    )
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      code: "INSUFFICIENT_SCOPE",
+      details: {
+        oauthError: "insufficient_scope",
+        requiredScopes: ["mcp:surf_points.write"],
+        toolName: "create_surf_point",
+      },
+    })
+    expect(db.tables.playbooks).toHaveLength(0)
+  })
+
+  it("rejects OAuth access tokens with blank stored scopes", async () => {
+    const resourceUrl = "https://mcp.example.com/mcp"
+    const db = new FakeSupabase({
+      mcp_tokens: [],
+      mcp_oauth_tokens: [
+        {
+          id: "00000000-0000-4000-8000-000000000201",
+          client_id: "ssmcp_client_test",
+          user_id: "00000000-0000-4000-8000-000000000202",
+          product_id: productId,
+          scope: "  ",
+          resource: resourceUrl,
+          access_token_sha256: sha256Hex(token),
+          access_token_expires_at: "2999-01-01T00:00:00.000Z",
+          revoked_at: null,
+        },
+      ],
+      mcp_oauth_clients: [
+        {
+          client_id: "ssmcp_client_test",
+          client_name: "Claude",
+          revoked_at: null,
+        },
+      ],
+      playbooks: [],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const { server, url } = await listen(
+      makeConfig({
+        authMode: "database",
+        resourceUrl,
+        tokenEntries: [],
+      }),
+      () => new SignalSurfRepository(db as any)
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: initializeBody(),
+    })
+
+    expect(response.status).toBe(401)
   })
 
   it("rejects OAuth access tokens issued for another MCP resource", async () => {

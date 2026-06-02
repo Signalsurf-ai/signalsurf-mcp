@@ -2,6 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { afterEach, describe, expect, it } from "vitest"
 
+import { PUBLIC_MCP_TOOL_NAMES } from "../src/capabilities.js"
 import { SignalSurfRepository } from "../src/repository.js"
 import { createSignalSurfMcpServer } from "../src/server.js"
 import type { SignalSurfContext } from "../src/types.js"
@@ -86,14 +87,8 @@ describe("MCP server", () => {
     ])
 
     const tools = await client.listTools()
-    expect(tools.tools.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining([
-        "list_surf_points",
-        "create_surf_point",
-        "delete_surf_point",
-        "read_table",
-        "update_table_row",
-      ])
+    expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
+      [...PUBLIC_MCP_TOOL_NAMES].sort()
     )
 
     const result = await client.callTool({
@@ -116,7 +111,7 @@ describe("MCP server", () => {
     )
   })
 
-  it("returns MCP tool errors for viewer write attempts", async () => {
+  it("advertises the stable public tool contract and denies viewer writes", async () => {
     const db = new FakeSupabase({
       playbooks: [],
       databases: [],
@@ -139,16 +134,85 @@ describe("MCP server", () => {
       client.connect(clientTransport),
     ])
 
+    const tools = await client.listTools()
+    expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
+      [...PUBLIC_MCP_TOOL_NAMES].sort()
+    )
+
     const result = await client.callTool({
       name: "create_surf_point",
-      arguments: { name: "Forbidden" },
+      arguments: { name: "Denied" },
     })
-
     expect(result.isError).toBe(true)
     const text = result.content?.[0]?.type === "text" ? result.content[0].text : ""
     expect(JSON.parse(text)).toMatchObject({
-      ok: false,
       code: "FORBIDDEN",
+    })
+    expect(db.tables.playbooks).toHaveLength(0)
+  })
+
+  it("honors granular scopes when evaluating public tools", async () => {
+    const db = new FakeSupabase({
+      playbooks: [],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const scopedContext: SignalSurfContext = {
+      productId: context.productId,
+      role: "editor",
+      scopes: ["mcp:tables.read", "mcp:tables.write"],
+    }
+    const server = createSignalSurfMcpServer({
+      context: scopedContext,
+      repository: new SignalSurfRepository(db as any),
+    })
+    const client = new Client({ name: "test-client", version: "0.0.0" })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    cleanup.push(async () => client.close())
+    cleanup.push(async () => server.close())
+
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    const contextResult = await client.callTool({
+      name: "get_context",
+      arguments: {},
+    })
+    const contextText =
+      contextResult.content?.[0]?.type === "text"
+        ? contextResult.content[0].text
+        : ""
+    const contextBody = JSON.parse(contextText).data
+    expect(contextBody.capabilities.tools).toMatchObject({
+      create_table_row: true,
+      update_table_row: true,
+      delete_table_rows: false,
+      create_surf_point: false,
+    })
+
+    const tools = await client.listTools()
+    expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
+      [...PUBLIC_MCP_TOOL_NAMES].sort()
+    )
+
+    const denied = await client.callTool({
+      name: "create_surf_point",
+      arguments: { name: "Denied" },
+    })
+    expect(denied.isError).toBe(true)
+    const deniedText =
+      denied.content?.[0]?.type === "text" ? denied.content[0].text : ""
+    expect(JSON.parse(deniedText)).toMatchObject({
+      code: "INSUFFICIENT_SCOPE",
+      details: {
+        oauthError: "insufficient_scope",
+        requiredScopes: ["mcp:surf_points.write"],
+      },
     })
     expect(db.tables.playbooks).toHaveLength(0)
   })

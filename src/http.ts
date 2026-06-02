@@ -4,15 +4,34 @@ import { isIP } from "node:net"
 import express from "express"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
 
-import { parseBearerToken, resolveHttpTokenContext } from "./auth.js"
+import {
+  canUseCapability,
+  parseBearerToken,
+  resolveHttpTokenContext,
+} from "./auth.js"
+import {
+  MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_RESOURCE_SCOPES,
+  PUBLIC_MCP_TOOLS,
+  requiredScopesForCapability,
+  type PublicMcpToolName,
+} from "./capabilities.js"
 import type { AppConfig } from "./config.js"
 import { errorToObject, UserFacingError } from "./errors.js"
 import { SignalSurfRepository } from "./repository.js"
 import { createSignalSurfMcpServer } from "./server.js"
 import { createSupabaseClient } from "./supabase.js"
+import type { SignalSurfContext } from "./types.js"
 
 export type HttpServerDependencies = {
   createRepository?: () => SignalSurfRepository
+}
+
+class McpJsonParseError extends Error {
+  constructor() {
+    super("Malformed MCP JSON request body")
+    this.name = "McpJsonParseError"
+  }
 }
 
 function normalizeHostHeader(value: string | undefined): string | null {
@@ -53,10 +72,79 @@ function getWwwAuthenticateHeader(config: AppConfig): string {
   if (config.authorizationServerUrl) {
     parts.push(
       `resource_metadata="${getProtectedResourceMetadataUrl(config)}"`,
-      'scope="mcp:read mcp:write offline_access"'
+      `scope="${MCP_DEFAULT_RESOURCE_SCOPES.join(" ")}"`
     )
   }
   return parts.join(", ")
+}
+
+function quoteAuthParam(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+}
+
+function getInsufficientScopeHeader(
+  config: AppConfig,
+  requiredScopes: readonly string[],
+  description: string
+): string {
+  const parts = [
+    'Bearer realm="signalsurf-mcp"',
+    'error="insufficient_scope"',
+    `scope="${quoteAuthParam(requiredScopes.join(" "))}"`,
+    `error_description="${quoteAuthParam(description)}"`,
+  ]
+  if (config.authorizationServerUrl) {
+    parts.push(
+      `resource_metadata="${getProtectedResourceMetadataUrl(config)}"`
+    )
+  }
+  return parts.join(", ")
+}
+
+async function readJsonBody(req: express.Request): Promise<unknown> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+  const text = Buffer.concat(chunks).toString("utf8")
+  if (!text.trim()) return undefined
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new McpJsonParseError()
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function getKnownToolName(message: unknown): PublicMcpToolName | null {
+  if (!isRecord(message) || message.method !== "tools/call") return null
+  const params = message.params
+  if (!isRecord(params) || typeof params.name !== "string") return null
+  return params.name in PUBLIC_MCP_TOOLS
+    ? (params.name as PublicMcpToolName)
+    : null
+}
+
+function findInsufficientScopeRequest(
+  context: SignalSurfContext,
+  body: unknown
+): { toolName: PublicMcpToolName; requiredScopes: readonly string[] } | null {
+  const messages = Array.isArray(body) ? body : [body]
+  for (const message of messages) {
+    const toolName = getKnownToolName(message)
+    if (!toolName) continue
+    const capability = PUBLIC_MCP_TOOLS[toolName].requiredCapability
+    if (canUseCapability(context, capability)) continue
+    if (context.scopes === undefined) continue
+    return {
+      toolName,
+      requiredScopes: requiredScopesForCapability(capability),
+    }
+  }
+  return null
 }
 
 export function createHttpApp(
@@ -92,6 +180,36 @@ export function createHttpApp(
           resource: config.resourceUrl,
         }
       )
+      const parsedBody = await readJsonBody(req)
+      const insufficientScope = findInsufficientScopeRequest(
+        context,
+        parsedBody
+      )
+      if (insufficientScope) {
+        const error = new UserFacingError(
+          `Token scope does not allow SignalSurf MCP tool: ${insufficientScope.toolName}`,
+          {
+            code: "INSUFFICIENT_SCOPE",
+            status: 403,
+            details: {
+              oauthError: "insufficient_scope",
+              requiredScopes: insufficientScope.requiredScopes,
+              toolName: insufficientScope.toolName,
+            },
+          }
+        )
+        res.setHeader(
+          "WWW-Authenticate",
+          getInsufficientScopeHeader(
+            config,
+            insufficientScope.requiredScopes,
+            error.message
+          )
+        )
+        res.status(403).json(errorToObject(error))
+        return
+      }
+
       const server = createSignalSurfMcpServer({ context, repository })
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
@@ -101,8 +219,20 @@ export function createHttpApp(
         void server.close()
       })
       await server.connect(transport)
-      await transport.handleRequest(req, res)
+      await transport.handleRequest(req, res, parsedBody)
     } catch (error) {
+      if (error instanceof McpJsonParseError) {
+        res.status(400).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32700,
+            message: "Parse error",
+          },
+          id: null,
+        })
+        return
+      }
+
       const status = error instanceof UserFacingError ? error.status : 500
       if (status === 401) {
         res.setHeader("WWW-Authenticate", getWwwAuthenticateHeader(config))
@@ -127,7 +257,7 @@ export function createHttpApp(
       res.json({
         resource: config.resourceUrl,
         authorization_servers: [config.authorizationServerUrl],
-        scopes_supported: ["mcp:read", "mcp:write", "offline_access"],
+        scopes_supported: MCP_RESOURCE_SCOPES,
         bearer_methods_supported: ["header"],
       })
     }
