@@ -12,6 +12,7 @@ const context: SignalSurfContext = {
   productId: "00000000-0000-4000-8000-000000000001",
   role: "viewer",
 }
+const secondProductId = "00000000-0000-4000-8000-000000000002"
 const databaseId = "00000000-0000-4000-8000-000000000201"
 
 let cleanup: Array<() => Promise<void>> = []
@@ -77,7 +78,8 @@ describe("MCP server", () => {
       repository: new SignalSurfRepository(db as any),
     })
     const client = new Client({ name: "test-client", version: "0.0.0" })
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
     cleanup.push(async () => client.close())
     cleanup.push(async () => server.close())
 
@@ -97,7 +99,8 @@ describe("MCP server", () => {
     })
 
     expect(result.isError).toBeFalsy()
-    const text = result.content?.[0]?.type === "text" ? result.content[0].text : ""
+    const text =
+      result.content?.[0]?.type === "text" ? result.content[0].text : ""
     expect(JSON.parse(text).data.surfPoints[0].name).toBe("Active")
 
     const resources = await client.listResources()
@@ -125,7 +128,8 @@ describe("MCP server", () => {
       repository: new SignalSurfRepository(db as any),
     })
     const client = new Client({ name: "test-client", version: "0.0.0" })
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
     cleanup.push(async () => client.close())
     cleanup.push(async () => server.close())
 
@@ -144,7 +148,8 @@ describe("MCP server", () => {
       arguments: { name: "Denied" },
     })
     expect(result.isError).toBe(true)
-    const text = result.content?.[0]?.type === "text" ? result.content[0].text : ""
+    const text =
+      result.content?.[0]?.type === "text" ? result.content[0].text : ""
     expect(JSON.parse(text)).toMatchObject({
       code: "FORBIDDEN",
     })
@@ -170,7 +175,8 @@ describe("MCP server", () => {
       repository: new SignalSurfRepository(db as any),
     })
     const client = new Client({ name: "test-client", version: "0.0.0" })
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
     cleanup.push(async () => client.close())
     cleanup.push(async () => server.close())
 
@@ -215,5 +221,135 @@ describe("MCP server", () => {
       },
     })
     expect(db.tables.playbooks).toHaveLength(0)
+  })
+
+  it("requires productId for product-scoped tools when context has multiple products", async () => {
+    const db = new FakeSupabase({
+      playbooks: [
+        {
+          id: "00000000-0000-4000-8000-000000000101",
+          product_id: context.productId,
+          name: "Primary Product Surf Point",
+          description: null,
+          is_default: false,
+          is_active: true,
+          show_ai_dashboard: true,
+          icon: "folder.fill",
+          color: "#5599FF",
+          database_ids: [],
+          relevance_threshold: null,
+          prompt_template: null,
+          scoring_rubric: null,
+          surf_prompt: null,
+          tool_config: {},
+          variables: {},
+          config: {},
+          folder_id: null,
+          display_order: 0,
+          created_at: "2026-06-01T00:00:00Z",
+          updated_at: "2026-06-01T00:00:00Z",
+          deleted_at: null,
+        },
+        {
+          id: "00000000-0000-4000-8000-000000000102",
+          product_id: secondProductId,
+          name: "Second Product Surf Point",
+          description: null,
+          is_default: false,
+          is_active: true,
+          show_ai_dashboard: true,
+          icon: "folder.fill",
+          color: "#5599FF",
+          database_ids: [],
+          relevance_threshold: null,
+          prompt_template: null,
+          scoring_rubric: null,
+          surf_prompt: null,
+          tool_config: {},
+          variables: {},
+          config: {},
+          folder_id: null,
+          display_order: 0,
+          created_at: "2026-06-01T00:00:00Z",
+          updated_at: "2026-06-01T00:00:00Z",
+          deleted_at: null,
+        },
+      ],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const multiProductContext: SignalSurfContext = {
+      ...context,
+      productIds: [context.productId, secondProductId],
+    }
+    const server = createSignalSurfMcpServer({
+      context: multiProductContext,
+      repository: new SignalSurfRepository(db as any),
+    })
+    const client = new Client({ name: "test-client", version: "0.0.0" })
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
+    cleanup.push(async () => client.close())
+    cleanup.push(async () => server.close())
+
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    const contextResult = await client.callTool({
+      name: "get_context",
+      arguments: {},
+    })
+    const contextText =
+      contextResult.content?.[0]?.type === "text"
+        ? contextResult.content[0].text
+        : ""
+    expect(JSON.parse(contextText).data.productIds).toEqual([
+      context.productId,
+      secondProductId,
+    ])
+
+    const missingProduct = await client.callTool({
+      name: "list_surf_points",
+      arguments: {},
+    })
+    expect(missingProduct.isError).toBe(true)
+    const missingProductText =
+      missingProduct.content?.[0]?.type === "text"
+        ? missingProduct.content[0].text
+        : ""
+    expect(JSON.parse(missingProductText)).toMatchObject({
+      code: "BAD_REQUEST",
+    })
+
+    const result = await client.callTool({
+      name: "list_surf_points",
+      arguments: { productId: secondProductId },
+    })
+    expect(result.isError).toBeFalsy()
+    const text =
+      result.content?.[0]?.type === "text" ? result.content[0].text : ""
+    expect(JSON.parse(text).data.surfPoints).toMatchObject([
+      { name: "Second Product Surf Point" },
+    ])
+
+    const resources = await client.listResources()
+    expect(resources.resources.map((resource) => resource.uri)).toEqual([
+      "signalsurf://context",
+    ])
+
+    const contextResource = await client.readResource({
+      uri: "signalsurf://context",
+    })
+    const contextResourceText =
+      contextResource.contents?.[0]?.text?.toString() ?? ""
+    expect(JSON.parse(contextResourceText).productIds).toEqual([
+      context.productId,
+      secondProductId,
+    ])
   })
 })

@@ -1,9 +1,14 @@
-import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"
+import {
+  McpServer,
+  ResourceTemplate,
+} from "@modelcontextprotocol/sdk/server/mcp.js"
 
 import {
   assertCanUseCapability,
+  authorizedProductIds,
   canUseCapability,
   listContextCapabilities,
+  resolveProductContext,
 } from "./auth.js"
 import {
   PUBLIC_MCP_TOOLS,
@@ -31,7 +36,9 @@ export type CreateServerOptions = {
   repository: SignalSurfRepository
 }
 
-export function createSignalSurfMcpServer(options: CreateServerOptions): McpServer {
+export function createSignalSurfMcpServer(
+  options: CreateServerOptions
+): McpServer {
   const { context, repository } = options
   const server = new McpServer(
     {
@@ -44,7 +51,7 @@ export function createSignalSurfMcpServer(options: CreateServerOptions): McpServ
         tools: {},
       },
       instructions:
-        "Use these tools to work with the SignalSurf product bound to this MCP token. Do not assume access to other products.",
+        "Use these tools to work with SignalSurf products authorized for this MCP token. Call get_context first; when productIds contains multiple products, pass productId to every product-scoped tool call.",
     }
   )
 
@@ -72,6 +79,13 @@ function registerTools(
     assertCanUseCapability(context, PUBLIC_MCP_TOOLS[name].requiredCapability)
   }
 
+  function toolContext(args: any): SignalSurfContext {
+    return resolveProductContext(
+      context,
+      typeof args?.productId === "string" ? args.productId : undefined
+    )
+  }
+
   function registerPublicTool(
     name: PublicMcpToolName,
     inputSchema: any,
@@ -80,38 +94,36 @@ function registerTools(
     server.registerTool(name, toolConfig(name, inputSchema), handler)
   }
 
-  registerPublicTool(
-    "get_context",
-    undefined,
-    async () =>
-      runJsonTool(async () => {
-        assertToolAllowed("get_context")
-        return {
-          productId: context.productId,
-          userId: context.userId ?? null,
-          role: context.role,
-          tokenName: context.tokenName ?? null,
-          scopes: context.scopes ?? null,
-          capabilities: {
-            effective: listContextCapabilities(context),
-            tools: Object.fromEntries(
-              PUBLIC_MCP_TOOL_NAMES.map((toolName) => [
-                toolName,
-                canUseCapability(
-                  context,
-                  PUBLIC_MCP_TOOLS[toolName].requiredCapability
-                ),
-              ])
-            ),
-            read: canUseCapability(context, "context.read"),
-            write:
-              canUseCapability(context, "surf_points.write") ||
-              canUseCapability(context, "surf_points.delete") ||
-              canUseCapability(context, "tables.write") ||
-              canUseCapability(context, "tables.delete"),
-          },
-        }
-      })
+  registerPublicTool("get_context", undefined, async () =>
+    runJsonTool(async () => {
+      assertToolAllowed("get_context")
+      return {
+        productId: context.productId,
+        productIds: authorizedProductIds(context),
+        userId: context.userId ?? null,
+        role: context.role,
+        tokenName: context.tokenName ?? null,
+        scopes: context.scopes ?? null,
+        capabilities: {
+          effective: listContextCapabilities(context),
+          tools: Object.fromEntries(
+            PUBLIC_MCP_TOOL_NAMES.map((toolName) => [
+              toolName,
+              canUseCapability(
+                context,
+                PUBLIC_MCP_TOOLS[toolName].requiredCapability
+              ),
+            ])
+          ),
+          read: canUseCapability(context, "context.read"),
+          write:
+            canUseCapability(context, "surf_points.write") ||
+            canUseCapability(context, "surf_points.delete") ||
+            canUseCapability(context, "tables.write") ||
+            canUseCapability(context, "tables.delete"),
+        },
+      }
+    })
   )
 
   registerPublicTool(
@@ -120,7 +132,7 @@ function registerTools(
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("list_surf_points")
-        return repository.listSurfPoints(context, args)
+        return repository.listSurfPoints(toolContext(args), args)
       })
   )
 
@@ -130,7 +142,7 @@ function registerTools(
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("create_surf_point")
-        return repository.createSurfPoint(context, args)
+        return repository.createSurfPoint(toolContext(args), args)
       })
   )
 
@@ -140,7 +152,7 @@ function registerTools(
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("update_surf_point")
-        return repository.updateSurfPoint(context, args)
+        return repository.updateSurfPoint(toolContext(args), args)
       })
   )
 
@@ -150,38 +162,29 @@ function registerTools(
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("delete_surf_point")
-        return repository.deleteSurfPoints(context, args.surfPointIds)
+        return repository.deleteSurfPoints(toolContext(args), args.surfPointIds)
       })
   )
 
-  registerPublicTool(
-    "list_databases",
-    listDatabasesSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("list_databases")
-        return repository.listDatabases(context, args)
-      })
+  registerPublicTool("list_databases", listDatabasesSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("list_databases")
+      return repository.listDatabases(toolContext(args), args)
+    })
   )
 
-  registerPublicTool(
-    "read_table",
-    readTableSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("read_table")
-        return repository.readTable(context, args)
-      })
+  registerPublicTool("read_table", readTableSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("read_table")
+      return repository.readTable(toolContext(args), args)
+    })
   )
 
-  registerPublicTool(
-    "get_table_row",
-    getTableRowSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("get_table_row")
-        return repository.getTableRow(context, args.rowId)
-      })
+  registerPublicTool("get_table_row", getTableRowSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("get_table_row")
+      return repository.getTableRow(toolContext(args), args.rowId)
+    })
   )
 
   registerPublicTool(
@@ -190,7 +193,7 @@ function registerTools(
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("create_table_row")
-        return repository.createTableRow(context, args)
+        return repository.createTableRow(toolContext(args), args)
       })
   )
 
@@ -200,7 +203,7 @@ function registerTools(
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("update_table_row")
-        return repository.updateTableRow(context, args)
+        return repository.updateTableRow(toolContext(args), args)
       })
   )
 
@@ -210,7 +213,7 @@ function registerTools(
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("delete_table_rows")
-        return repository.deleteTableRows(context, args.rowIds)
+        return repository.deleteTableRows(toolContext(args), args.rowIds)
       })
   )
 }
@@ -220,6 +223,8 @@ function registerResources(
   repository: SignalSurfRepository,
   context: SignalSurfContext
 ) {
+  const contextProductIds = authorizedProductIds(context)
+
   server.registerResource(
     "signalsurf_context",
     "signalsurf://context",
@@ -232,6 +237,7 @@ function registerResources(
       assertCanUseCapability(context, "context.read")
       return jsonResource(uri.href, {
         productId: context.productId,
+        productIds: contextProductIds,
         userId: context.userId ?? null,
         role: context.role,
         tokenName: context.tokenName ?? null,
@@ -240,6 +246,8 @@ function registerResources(
       })
     }
   )
+
+  if (contextProductIds.length > 1) return
 
   server.registerResource(
     "signalsurf_surf_points",
@@ -253,7 +261,9 @@ function registerResources(
       assertCanUseCapability(context, "surf_points.read")
       return jsonResource(
         uri.href,
-        await repository.listSurfPoints(context, { limit: 200 })
+        await repository.listSurfPoints(resolveProductContext(context), {
+          limit: 200,
+        })
       )
     }
   )
@@ -270,7 +280,9 @@ function registerResources(
       assertCanUseCapability(context, "tables.read")
       return jsonResource(
         uri.href,
-        await repository.listDatabases(context, { limit: 200 })
+        await repository.listDatabases(resolveProductContext(context), {
+          limit: 200,
+        })
       )
     }
   )
@@ -282,9 +294,12 @@ function registerResources(
         if (!canUseCapability(context, "tables.read")) {
           return { resources: [] }
         }
-        const { databases } = await repository.listDatabases(context, {
-          limit: 200,
-        })
+        const { databases } = await repository.listDatabases(
+          resolveProductContext(context),
+          {
+            limit: 200,
+          }
+        )
         return {
           resources: databases.map(
             (database: { databaseId: string; name: string }) => ({
@@ -309,7 +324,10 @@ function registerResources(
       const databaseId = String(variables.databaseId ?? "")
       return jsonResource(
         uri.href,
-        await repository.readTable(context, { databaseId, limit: 100 })
+        await repository.readTable(resolveProductContext(context), {
+          databaseId,
+          limit: 100,
+        })
       )
     }
   )

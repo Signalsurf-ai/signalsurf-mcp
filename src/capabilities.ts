@@ -103,7 +103,7 @@ export const PUBLIC_MCP_TOOLS = {
   get_context: {
     title: "Get SignalSurf MCP Context",
     description:
-      "Return the product, user, role, scopes, and capability context bound to this MCP connection.",
+      "Return authorized product ids, user, role, scopes, and capability context bound to this MCP connection.",
     requiredCapability: "context.read",
     surferSurface: "connection context",
     publicStatus: "supported",
@@ -112,7 +112,7 @@ export const PUBLIC_MCP_TOOLS = {
   list_surf_points: {
     title: "List Surf Points",
     description:
-      "List SignalSurf surf points for the current product. Soft-deleted rows are never returned; pass includeInactive=false to hide paused surf points.",
+      "List SignalSurf surf points for an authorized product. Pass productId when this connection can access multiple products. Soft-deleted rows are never returned; pass includeInactive=false to hide paused surf points.",
     requiredCapability: "surf_points.read",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
@@ -121,7 +121,7 @@ export const PUBLIC_MCP_TOOLS = {
   create_surf_point: {
     title: "Create Surf Point",
     description:
-      "Create a surf point/playbook in the current product. Pass databaseIds when the product has multiple databases.",
+      "Create a surf point/playbook in an authorized product. Pass productId when this connection can access multiple products, and pass databaseIds when the product has multiple databases.",
     requiredCapability: "surf_points.write",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
@@ -130,7 +130,7 @@ export const PUBLIC_MCP_TOOLS = {
   update_surf_point: {
     title: "Update Surf Point",
     description:
-      "Modify surf point metadata, prompt fields, target databases, and JSON config for the current product.",
+      "Modify surf point metadata, prompt fields, target databases, and JSON config for an authorized product. Pass productId when this connection can access multiple products.",
     requiredCapability: "surf_points.write",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
@@ -139,7 +139,7 @@ export const PUBLIC_MCP_TOOLS = {
   delete_surf_point: {
     title: "Delete Surf Point",
     description:
-      "Soft-delete one or more surf points in the current product and cancel pending jobs. This does not hard-delete historical rows.",
+      "Soft-delete one or more surf points in an authorized product and cancel pending jobs. Pass productId when this connection can access multiple products. This does not hard-delete historical rows.",
     requiredCapability: "surf_points.delete",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
@@ -148,7 +148,7 @@ export const PUBLIC_MCP_TOOLS = {
   list_databases: {
     title: "List Databases",
     description:
-      "List product databases/tables available to this MCP token. System databases are hidden unless includeSystem is true.",
+      "List databases/tables available in an authorized product. Pass productId when this connection can access multiple products. System databases are hidden unless includeSystem is true.",
     requiredCapability: "tables.read",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -157,7 +157,7 @@ export const PUBLIC_MCP_TOOLS = {
   read_table: {
     title: "Read Table",
     description:
-      "Read rows from a SignalSurf database/table in the current product. Supports pagination and exact JSON containment filters.",
+      "Read rows from a SignalSurf database/table in an authorized product. Pass productId when this connection can access multiple products. Supports pagination and exact JSON containment filters.",
     requiredCapability: "tables.read",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -165,7 +165,8 @@ export const PUBLIC_MCP_TOOLS = {
   },
   get_table_row: {
     title: "Get Table Row",
-    description: "Read one table row by rowId after verifying product scope.",
+    description:
+      "Read one table row by rowId after verifying product scope. Pass productId when this connection can access multiple products.",
     requiredCapability: "tables.read",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -174,7 +175,7 @@ export const PUBLIC_MCP_TOOLS = {
   create_table_row: {
     title: "Create Table Row",
     description:
-      "Create a row/item in a SignalSurf database/table after verifying it belongs to the current product.",
+      "Create a row/item in a SignalSurf database/table after verifying it belongs to an authorized product. Pass productId when this connection can access multiple products.",
     requiredCapability: "tables.write",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -183,7 +184,7 @@ export const PUBLIC_MCP_TOOLS = {
   update_table_row: {
     title: "Update Table Row",
     description:
-      "Modify a row/item. Use dataPatch for shallow field updates or data to replace the row data object.",
+      "Modify a row/item in an authorized product. Pass productId when this connection can access multiple products. Use dataPatch for shallow field updates or data to replace the row data object.",
     requiredCapability: "tables.write",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -192,7 +193,7 @@ export const PUBLIC_MCP_TOOLS = {
   delete_table_rows: {
     title: "Delete Table Rows",
     description:
-      "Delete one or more table rows/items after verifying every row belongs to the current product.",
+      "Delete one or more table rows/items after verifying every row belongs to an authorized product. Pass productId when this connection can access multiple products.",
     requiredCapability: "tables.delete",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -205,11 +206,7 @@ export const PUBLIC_MCP_TOOL_NAMES = Object.keys(
 ) as PublicMcpToolName[]
 
 const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
-  [MCP_LEGACY_READ_SCOPE]: [
-    "context.read",
-    "surf_points.read",
-    "tables.read",
-  ],
+  [MCP_LEGACY_READ_SCOPE]: ["context.read", "surf_points.read", "tables.read"],
   [MCP_LEGACY_WRITE_SCOPE]: [
     "context.read",
     "surf_points.read",

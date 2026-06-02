@@ -2,6 +2,7 @@ export type AccessRole = "viewer" | "editor" | "owner"
 
 export type SignalSurfContext = {
   productId: string
+  productIds?: string[]
   userId?: string
   role: AccessRole
   tokenName?: string
@@ -69,7 +70,10 @@ export type EntryRow = {
 
 export type SupabaseLike = {
   from: (table: string) => any
-  rpc: (name: string, args?: Record<string, unknown>) => Promise<{
+  rpc: (
+    name: string,
+    args?: Record<string, unknown>
+  ) => Promise<{
     data: unknown
     error: { message: string; code?: string } | null
   }>

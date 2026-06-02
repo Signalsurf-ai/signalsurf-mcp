@@ -223,3 +223,35 @@ export function listContextCapabilities(
         "tables.delete",
       ]
 }
+
+export function authorizedProductIds(context: SignalSurfContext): string[] {
+  const ids = context.productIds?.length
+    ? context.productIds
+    : [context.productId]
+  return [...new Set(ids.filter(Boolean))]
+}
+
+export function resolveProductContext(
+  context: SignalSurfContext,
+  requestedProductId?: string
+): SignalSurfContext {
+  const productIds = authorizedProductIds(context)
+  if (!requestedProductId) {
+    if (productIds.length > 1) {
+      throw new UserFacingError(
+        "productId is required because this MCP connection can access multiple SignalSurf products.",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+    return { ...context, productId: productIds[0]!, productIds }
+  }
+
+  if (!productIds.includes(requestedProductId)) {
+    throw new UserFacingError(
+      "This MCP connection is not authorized for the requested product.",
+      { code: "FORBIDDEN", status: 403 }
+    )
+  }
+
+  return { ...context, productId: requestedProductId, productIds }
+}

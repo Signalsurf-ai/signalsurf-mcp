@@ -266,6 +266,47 @@ describe("SignalSurfRepository", () => {
     expect(db.tables.user_preferences[0].current_playbook_id).toBe(surfPoint1)
   })
 
+  it("resolves OAuth tokens with every authorized product id", async () => {
+    const db = makeDb()
+    db.tables.mcp_tokens = []
+    db.tables.mcp_oauth_clients = [
+      {
+        client_id: "ssmcp_client_multi",
+        client_name: "Typeless",
+        revoked_at: null,
+      },
+    ]
+    db.tables.mcp_oauth_tokens = [
+      {
+        id: "00000000-0000-4000-8000-000000000601",
+        client_id: "ssmcp_client_multi",
+        user_id: context.userId,
+        product_id: context.productId,
+        product_ids: [
+          context.productId,
+          "00000000-0000-4000-8000-000000000002",
+        ],
+        scope: "mcp:surf_points.read mcp:tables.read offline_access",
+        resource: "https://mcp.signalsurf.ai/mcp",
+        access_token_sha256: sha256Hex("oauth-token"),
+        access_token_expires_at: "2999-01-01T00:00:00Z",
+        revoked_at: null,
+      },
+    ]
+    const repo = new SignalSurfRepository(db as any)
+
+    const oauthContext = await repo.resolveMcpToken("oauth-token", {
+      resource: "https://mcp.signalsurf.ai/mcp",
+    })
+
+    expect(oauthContext).toMatchObject({
+      productId: context.productId,
+      productIds: [context.productId, "00000000-0000-4000-8000-000000000002"],
+      role: "viewer",
+      tokenName: "OAuth: Typeless",
+    })
+  })
+
   it("creates prompt templates from scoring rubric and surf prompt", async () => {
     const db = makeDb()
     db.tables.databases = db.tables.databases.filter((row) => row.id === db1)
