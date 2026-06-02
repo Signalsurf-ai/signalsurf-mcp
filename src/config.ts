@@ -188,20 +188,26 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       { code: "CONFIG_ERROR", status: 500 }
     )
   }
+  const platformPort = env.PORT?.trim() || undefined
+  const configuredPort = env.SIGNALSURF_MCP_PORT?.trim() || undefined
   const portResult = z.coerce
     .number()
     .int()
     .min(1)
     .max(65535)
-    .safeParse(env.SIGNALSURF_MCP_PORT ?? "3333")
+    .safeParse(platformPort ?? configuredPort ?? "3333")
   if (!portResult.success) {
-    throw new UserFacingError("SIGNALSURF_MCP_PORT must be a valid TCP port", {
-      code: "CONFIG_ERROR",
-      status: 500,
-    })
+    throw new UserFacingError(
+      "PORT or SIGNALSURF_MCP_PORT must be a valid TCP port",
+      {
+        code: "CONFIG_ERROR",
+        status: 500,
+      }
+    )
   }
 
-  const host = env.SIGNALSURF_MCP_HOST ?? "127.0.0.1"
+  const host =
+    env.SIGNALSURF_MCP_HOST ?? (platformPort ? "0.0.0.0" : "127.0.0.1")
   const path = env.SIGNALSURF_MCP_PATH ?? "/mcp"
   const defaultResourceUrl = `http://${host}:${portResult.data}${path}`
   const configuredResourceUrl = normalizeUrl(

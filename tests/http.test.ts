@@ -598,6 +598,30 @@ describe("HTTP transport", () => {
     ).toThrow("SIGNALSURF_MCP_ALLOWED_HOSTS is required")
   })
 
+  it("uses platform PORT defaults for hosted HTTP deployments", () => {
+    const config = loadConfig({
+      SIGNALSURF_SUPABASE_URL: "https://example.supabase.co",
+      SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      SIGNALSURF_MCP_TRANSPORT: "http",
+      PORT: "4173",
+    })
+
+    expect(config.port).toBe(4173)
+    expect(config.host).toBe("0.0.0.0")
+  })
+
+  it("lets platform PORT override SIGNALSURF_MCP_PORT", () => {
+    const config = loadConfig({
+      SIGNALSURF_SUPABASE_URL: "https://example.supabase.co",
+      SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      SIGNALSURF_MCP_TRANSPORT: "http",
+      PORT: "4173",
+      SIGNALSURF_MCP_PORT: "3333",
+    })
+
+    expect(config.port).toBe(4173)
+  })
+
   it("reports invalid OAuth URL configuration as config errors", () => {
     expect(() =>
       loadConfig({

@@ -83,11 +83,14 @@ SIGNALSURF_MCP_AUTH_MODE=database
 SIGNALSURF_MCP_RESOURCE_URL=https://mcp.signalsurf.ai/mcp
 SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL=https://www.signalsurf.ai
 SIGNALSURF_MCP_HOST=0.0.0.0
-SIGNALSURF_MCP_PORT=3333
 SIGNALSURF_MCP_PATH=/mcp
 SIGNALSURF_MCP_ALLOWED_HOSTS=mcp.signalsurf.ai
 SIGNALSURF_MCP_TRUST_PROXY=true
 ```
+
+On Zeabur and similar platforms, do not hard-code
+`SIGNALSURF_MCP_PORT=3333`. The service reads the platform-provided `PORT` and
+listens on `0.0.0.0` when that variable is present.
 
 Build and run:
 
