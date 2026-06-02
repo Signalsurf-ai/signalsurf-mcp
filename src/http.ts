@@ -5,6 +5,10 @@ import express from "express"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
 
 import { parseBearerToken, resolveHttpTokenContext } from "./auth.js"
+import {
+  MCP_DEFAULT_OAUTH_SCOPES,
+  MCP_SUPPORTED_SCOPES,
+} from "./capabilities.js"
 import type { AppConfig } from "./config.js"
 import { errorToObject, UserFacingError } from "./errors.js"
 import { SignalSurfRepository } from "./repository.js"
@@ -53,7 +57,7 @@ function getWwwAuthenticateHeader(config: AppConfig): string {
   if (config.authorizationServerUrl) {
     parts.push(
       `resource_metadata="${getProtectedResourceMetadataUrl(config)}"`,
-      'scope="mcp:read mcp:write offline_access"'
+      `scope="${MCP_DEFAULT_OAUTH_SCOPES.join(" ")}"`
     )
   }
   return parts.join(", ")
@@ -127,7 +131,7 @@ export function createHttpApp(
       res.json({
         resource: config.resourceUrl,
         authorization_servers: [config.authorizationServerUrl],
-        scopes_supported: ["mcp:read", "mcp:write", "offline_access"],
+        scopes_supported: MCP_SUPPORTED_SCOPES,
         bearer_methods_supported: ["header"],
       })
     }

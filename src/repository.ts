@@ -7,6 +7,11 @@ import type {
   SupabaseLike,
   SurfPointRow,
 } from "./types.js"
+import {
+  isSupportedMcpScope,
+  parseStoredScopes,
+  scopesImplyWriteAccess,
+} from "./capabilities.js"
 import { sha256Hex } from "./auth.js"
 import { UserFacingError } from "./errors.js"
 
@@ -306,13 +311,22 @@ export class SignalSurfRepository {
       )
     }
 
+    const scopes = parseStoredScopes(row.scope)
+    if (
+      scopes.length === 0 ||
+      scopes.some((scope) => !isSupportedMcpScope(scope))
+    ) {
+      return null
+    }
+
     return {
       productId: row.product_id,
       userId: row.user_id,
-      role: row.scope.split(/\s+/).includes("mcp:write") ? "editor" : "viewer",
+      role: scopesImplyWriteAccess(scopes) ? "editor" : "viewer",
       tokenName: client.client_name
         ? `OAuth: ${client.client_name}`
         : "OAuth MCP client",
+      scopes,
     }
   }
 

@@ -5,6 +5,7 @@ export type SignalSurfContext = {
   userId?: string
   role: AccessRole
   tokenName?: string
+  scopes?: string[]
 }
 
 export type JsonRecord = Record<string, unknown>

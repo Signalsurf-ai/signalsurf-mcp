@@ -1,6 +1,11 @@
 import { createHash, timingSafeEqual } from "node:crypto"
 
 import type { AppConfig, TokenEntry } from "./config.js"
+import {
+  type McpCapability,
+  grantedCapabilitiesForScopes,
+  scopesGrantCapability,
+} from "./capabilities.js"
 import type { AccessRole, SignalSurfContext } from "./types.js"
 import { UserFacingError } from "./errors.js"
 
@@ -38,6 +43,7 @@ function contextFromTokenEntry(entry: TokenEntry): SignalSurfContext {
     userId: entry.userId,
     role: entry.role,
     tokenName: entry.name,
+    scopes: entry.scopes,
   }
 }
 
@@ -147,4 +153,68 @@ export function assertCanWrite(context: SignalSurfContext): void {
       status: 403,
     })
   }
+}
+
+function requiredRoleForCapability(capability: McpCapability): AccessRole {
+  return capability.endsWith(".read") ? "viewer" : "editor"
+}
+
+export function canUseCapability(
+  context: SignalSurfContext,
+  capability: McpCapability
+): boolean {
+  const requiredRole = requiredRoleForCapability(capability)
+  if (roleRank[context.role] < roleRank[requiredRole]) return false
+  if (context.scopes === undefined) return true
+  if (context.scopes.length === 0) return false
+  return scopesGrantCapability(context.scopes, capability)
+}
+
+export function assertCanUseCapability(
+  context: SignalSurfContext,
+  capability: McpCapability
+): void {
+  if (canUseCapability(context, capability)) return
+
+  const requiredRole = requiredRoleForCapability(capability)
+  if (roleRank[context.role] < roleRank[requiredRole]) {
+    throw new UserFacingError(
+      requiredRole === "viewer"
+        ? "Token does not have read access"
+        : "Token does not have write access",
+      {
+        code: "FORBIDDEN",
+        status: 403,
+      }
+    )
+  }
+
+  throw new UserFacingError(
+    `Token scope does not allow SignalSurf MCP capability: ${capability}`,
+    {
+      code: "FORBIDDEN",
+      status: 403,
+    }
+  )
+}
+
+export function listContextCapabilities(
+  context: SignalSurfContext
+): McpCapability[] {
+  if (context.scopes !== undefined) {
+    return grantedCapabilitiesForScopes(context.scopes).filter((capability) =>
+      canUseCapability(context, capability)
+    )
+  }
+  return context.role === "viewer"
+    ? ["context.read", "surf_points.read", "tables.read"]
+    : [
+        "context.read",
+        "surf_points.read",
+        "surf_points.write",
+        "surf_points.delete",
+        "tables.read",
+        "tables.write",
+        "tables.delete",
+      ]
 }

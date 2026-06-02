@@ -1,9 +1,11 @@
 import { z } from "zod"
 
+import { MCP_SUPPORTED_SCOPES } from "./capabilities.js"
 import type { AccessRole, SignalSurfContext } from "./types.js"
 import { UserFacingError } from "./errors.js"
 
 const roleSchema = z.enum(["viewer", "editor", "owner"]).default("viewer")
+const mcpScopeSchema = z.enum(MCP_SUPPORTED_SCOPES)
 
 const tokenEntrySchema = z
   .object({
@@ -16,6 +18,7 @@ const tokenEntrySchema = z
     productId: z.string().uuid(),
     userId: z.string().uuid().optional(),
     role: roleSchema,
+    scopes: z.array(mcpScopeSchema).min(1).optional(),
   })
   .refine((entry) => !!entry.token || !!entry.tokenSha256, {
     message: "Each token entry needs token or tokenSha256",

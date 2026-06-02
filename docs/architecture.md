@@ -21,9 +21,13 @@ The server always resolves a `SignalSurfContext` before any tool runs:
 - `userId`: optional user context, currently used for surf point delete cleanup
 - `role`: `viewer`, `editor`, or `owner`
 - `tokenName`: optional source label for MCP row mutations
+- `scopes`: optional OAuth/static-token scopes that can narrow role access
 
 `viewer` can read tools and resources. `editor` and `owner` can write. `owner`
 currently has no extra MCP-only power; it is reserved for future product policy.
+When `scopes` are present, the server enforces both role and scope. A token with
+`role = editor` and `mcp:tables.write` can create and update rows but cannot
+delete rows or mutate Surf Points.
 
 ## Transports
 
@@ -91,9 +95,15 @@ when the resolved context includes `userId`; OAuth contexts include it, while
 manual hosted fallback tokens do not.
 
 OAuth access tokens are user-consented, so the resolved MCP context includes
-`userId`. `mcp:read` maps to `viewer`; `mcp:write` maps to `editor`. The server
-rejects OAuth access tokens whose stored `resource` does not match
-`SIGNALSURF_MCP_RESOURCE_URL`.
+`userId`. `mcp:read` maps to `viewer`; `mcp:write` and granular write/delete
+scopes map to `editor`. The stored scopes remain on the request context and are
+enforced by each tool's required capability. The server rejects OAuth access
+tokens whose stored `resource` does not match `SIGNALSURF_MCP_RESOURCE_URL`.
+
+The public scope and tool contract lives in `src/capabilities.ts` and is
+documented in `docs/capabilities.md`. Broad legacy scopes remain for client
+compatibility, while granular scopes support least-privilege access to Surf
+Points, table reads, table writes, and table deletes.
 
 ## Product Scope Guards
 
@@ -157,10 +167,12 @@ When adding a tool:
 3. Validate product scope before every read or write.
 4. Prefer existing SignalSurf RPCs/helpers when they preserve changelog,
    provenance, or side effects.
-5. Register the tool in `src/server.ts` with accurate MCP annotations.
-6. Add tests for read/write authorization, product-boundary rejection, and any
+5. Add a tool entry and required capability in `src/capabilities.ts`.
+6. Register the tool in `src/server.ts` with accurate MCP annotations.
+7. Add tests for read/write authorization, scope rejection, product-boundary rejection, and any
    destructive side effects.
-7. Update `README.md` and this document when the public contract changes.
+8. Update `README.md`, `docs/capabilities.md`, and the Web-side Surfer
+   capability matrix when the public contract changes.
 
 Do not add a tool that accepts raw SQL, table names, arbitrary filters, or
 service-role-like capabilities. Model concrete product operations instead.

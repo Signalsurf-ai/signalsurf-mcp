@@ -12,6 +12,13 @@ const context: SignalSurfContext = {
   role: "viewer",
 }
 const databaseId = "00000000-0000-4000-8000-000000000201"
+const viewerToolNames = [
+  "get_context",
+  "list_surf_points",
+  "list_databases",
+  "read_table",
+  "get_table_row",
+]
 
 let cleanup: Array<() => Promise<void>> = []
 
@@ -86,14 +93,8 @@ describe("MCP server", () => {
     ])
 
     const tools = await client.listTools()
-    expect(tools.tools.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining([
-        "list_surf_points",
-        "create_surf_point",
-        "delete_surf_point",
-        "read_table",
-        "update_table_row",
-      ])
+    expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
+      [...viewerToolNames].sort()
     )
 
     const result = await client.callTool({
@@ -116,7 +117,7 @@ describe("MCP server", () => {
     )
   })
 
-  it("returns MCP tool errors for viewer write attempts", async () => {
+  it("does not advertise write tools for viewer tokens", async () => {
     const db = new FakeSupabase({
       playbooks: [],
       databases: [],
@@ -139,17 +140,77 @@ describe("MCP server", () => {
       client.connect(clientTransport),
     ])
 
-    const result = await client.callTool({
-      name: "create_surf_point",
-      arguments: { name: "Forbidden" },
+    const tools = await client.listTools()
+    expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
+      [...viewerToolNames].sort()
+    )
+    expect(tools.tools.map((tool) => tool.name)).not.toContain(
+      "create_surf_point"
+    )
+    expect(db.tables.playbooks).toHaveLength(0)
+  })
+
+  it("honors granular scopes when evaluating public tools", async () => {
+    const db = new FakeSupabase({
+      playbooks: [],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const scopedContext: SignalSurfContext = {
+      productId: context.productId,
+      role: "editor",
+      scopes: ["mcp:tables.read", "mcp:tables.write"],
+    }
+    const server = createSignalSurfMcpServer({
+      context: scopedContext,
+      repository: new SignalSurfRepository(db as any),
+    })
+    const client = new Client({ name: "test-client", version: "0.0.0" })
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    cleanup.push(async () => client.close())
+    cleanup.push(async () => server.close())
+
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    const contextResult = await client.callTool({
+      name: "get_context",
+      arguments: {},
+    })
+    const contextText =
+      contextResult.content?.[0]?.type === "text"
+        ? contextResult.content[0].text
+        : ""
+    const contextBody = JSON.parse(contextText).data
+    expect(contextBody.capabilities.tools).toMatchObject({
+      create_table_row: true,
+      update_table_row: true,
+      delete_table_rows: false,
+      create_surf_point: false,
     })
 
-    expect(result.isError).toBe(true)
-    const text = result.content?.[0]?.type === "text" ? result.content[0].text : ""
-    expect(JSON.parse(text)).toMatchObject({
-      ok: false,
-      code: "FORBIDDEN",
-    })
+    const tools = await client.listTools()
+    expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
+      [
+        "get_context",
+        "list_databases",
+        "read_table",
+        "get_table_row",
+        "create_table_row",
+        "update_table_row",
+      ].sort()
+    )
+    expect(tools.tools.map((tool) => tool.name)).not.toContain(
+      "delete_table_rows"
+    )
+    expect(tools.tools.map((tool) => tool.name)).not.toContain(
+      "create_surf_point"
+    )
     expect(db.tables.playbooks).toHaveLength(0)
   })
 })

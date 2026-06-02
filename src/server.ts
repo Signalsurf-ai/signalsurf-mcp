@@ -1,6 +1,15 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"
 
-import { assertCanRead, assertCanWrite } from "./auth.js"
+import {
+  assertCanUseCapability,
+  canUseCapability,
+  listContextCapabilities,
+} from "./auth.js"
+import {
+  PUBLIC_MCP_TOOLS,
+  PUBLIC_MCP_TOOL_NAMES,
+  type PublicMcpToolName,
+} from "./capabilities.js"
 import { jsonResource, runJsonTool } from "./mcp-results.js"
 import { SignalSurfRepository } from "./repository.js"
 import {
@@ -49,240 +58,161 @@ function registerTools(
   repository: SignalSurfRepository,
   context: SignalSurfContext
 ) {
-  server.registerTool(
+  function toolConfig(name: PublicMcpToolName, inputSchema?: any) {
+    const definition = PUBLIC_MCP_TOOLS[name]
+    const config = {
+      title: definition.title,
+      description: definition.description,
+      annotations: definition.annotations,
+    }
+    return inputSchema ? { ...config, inputSchema } : config
+  }
+
+  function assertToolAllowed(name: PublicMcpToolName) {
+    assertCanUseCapability(context, PUBLIC_MCP_TOOLS[name].requiredCapability)
+  }
+
+  function registerPublicTool(
+    name: PublicMcpToolName,
+    inputSchema: any,
+    handler: (args: any) => Promise<any>
+  ) {
+    if (!canUseCapability(context, PUBLIC_MCP_TOOLS[name].requiredCapability)) {
+      return
+    }
+    server.registerTool(name, toolConfig(name, inputSchema), handler)
+  }
+
+  registerPublicTool(
     "get_context",
-    {
-      title: "Get SignalSurf MCP Context",
-      description:
-        "Return the product, user, role, and capability context bound to this MCP connection.",
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
+    undefined,
     async () =>
       runJsonTool(async () => {
-        assertCanRead(context)
+        assertToolAllowed("get_context")
         return {
           productId: context.productId,
           userId: context.userId ?? null,
           role: context.role,
           tokenName: context.tokenName ?? null,
+          scopes: context.scopes ?? null,
           capabilities: {
-            read: true,
-            write: context.role === "editor" || context.role === "owner",
+            effective: listContextCapabilities(context),
+            tools: Object.fromEntries(
+              PUBLIC_MCP_TOOL_NAMES.map((toolName) => [
+                toolName,
+                canUseCapability(
+                  context,
+                  PUBLIC_MCP_TOOLS[toolName].requiredCapability
+                ),
+              ])
+            ),
+            read: canUseCapability(context, "context.read"),
+            write:
+              canUseCapability(context, "surf_points.write") ||
+              canUseCapability(context, "surf_points.delete") ||
+              canUseCapability(context, "tables.write") ||
+              canUseCapability(context, "tables.delete"),
           },
         }
       })
   )
 
-  server.registerTool(
+  registerPublicTool(
     "list_surf_points",
-    {
-      title: "List Surf Points",
-      description:
-        "List SignalSurf surf points for the current product. Soft-deleted rows are never returned; pass includeInactive=false to hide paused surf points.",
-      inputSchema: listSurfPointsSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    async (args) =>
+    listSurfPointsSchema,
+    async (args: any) =>
       runJsonTool(async () => {
-        assertCanRead(context)
+        assertToolAllowed("list_surf_points")
         return repository.listSurfPoints(context, args)
       })
   )
 
-  server.registerTool(
+  registerPublicTool(
     "create_surf_point",
-    {
-      title: "Create Surf Point",
-      description:
-        "Create a surf point/playbook in the current product. Pass databaseIds when the product has multiple databases.",
-      inputSchema: createSurfPointSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
-    },
-    async (args) =>
+    createSurfPointSchema,
+    async (args: any) =>
       runJsonTool(async () => {
-        assertCanWrite(context)
+        assertToolAllowed("create_surf_point")
         return repository.createSurfPoint(context, args)
       })
   )
 
-  server.registerTool(
+  registerPublicTool(
     "update_surf_point",
-    {
-      title: "Update Surf Point",
-      description:
-        "Modify surf point metadata, prompt fields, target databases, and JSON config for the current product.",
-      inputSchema: updateSurfPointSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
-    },
-    async (args) =>
+    updateSurfPointSchema,
+    async (args: any) =>
       runJsonTool(async () => {
-        assertCanWrite(context)
+        assertToolAllowed("update_surf_point")
         return repository.updateSurfPoint(context, args)
       })
   )
 
-  server.registerTool(
+  registerPublicTool(
     "delete_surf_point",
-    {
-      title: "Delete Surf Point",
-      description:
-        "Soft-delete one or more surf points in the current product and cancel pending jobs. This does not hard-delete historical rows.",
-      inputSchema: deleteSurfPointSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
-    },
-    async (args) =>
+    deleteSurfPointSchema,
+    async (args: any) =>
       runJsonTool(async () => {
-        assertCanWrite(context)
+        assertToolAllowed("delete_surf_point")
         return repository.deleteSurfPoints(context, args.surfPointIds)
       })
   )
 
-  server.registerTool(
+  registerPublicTool(
     "list_databases",
-    {
-      title: "List Databases",
-      description:
-        "List product databases/tables available to this MCP token. System databases are hidden unless includeSystem is true.",
-      inputSchema: listDatabasesSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    async (args) =>
+    listDatabasesSchema,
+    async (args: any) =>
       runJsonTool(async () => {
-        assertCanRead(context)
+        assertToolAllowed("list_databases")
         return repository.listDatabases(context, args)
       })
   )
 
-  server.registerTool(
+  registerPublicTool(
     "read_table",
-    {
-      title: "Read Table",
-      description:
-        "Read rows from a SignalSurf database/table in the current product. Supports pagination and exact JSON containment filters.",
-      inputSchema: readTableSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    async (args) =>
+    readTableSchema,
+    async (args: any) =>
       runJsonTool(async () => {
-        assertCanRead(context)
+        assertToolAllowed("read_table")
         return repository.readTable(context, args)
       })
   )
 
-  server.registerTool(
+  registerPublicTool(
     "get_table_row",
-    {
-      title: "Get Table Row",
-      description: "Read one table row by rowId after verifying product scope.",
-      inputSchema: getTableRowSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    async (args) =>
+    getTableRowSchema,
+    async (args: any) =>
       runJsonTool(async () => {
-        assertCanRead(context)
+        assertToolAllowed("get_table_row")
         return repository.getTableRow(context, args.rowId)
       })
   )
 
-  server.registerTool(
+  registerPublicTool(
     "create_table_row",
-    {
-      title: "Create Table Row",
-      description:
-        "Create a row/item in a SignalSurf database/table after verifying it belongs to the current product.",
-      inputSchema: createTableRowSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
-    },
-    async (args) =>
+    createTableRowSchema,
+    async (args: any) =>
       runJsonTool(async () => {
-        assertCanWrite(context)
+        assertToolAllowed("create_table_row")
         return repository.createTableRow(context, args)
       })
   )
 
-  server.registerTool(
+  registerPublicTool(
     "update_table_row",
-    {
-      title: "Update Table Row",
-      description:
-        "Modify a row/item. Use dataPatch for shallow field updates or data to replace the row data object.",
-      inputSchema: updateTableRowSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
-    },
-    async (args) =>
+    updateTableRowSchema,
+    async (args: any) =>
       runJsonTool(async () => {
-        assertCanWrite(context)
+        assertToolAllowed("update_table_row")
         return repository.updateTableRow(context, args)
       })
   )
 
-  server.registerTool(
+  registerPublicTool(
     "delete_table_rows",
-    {
-      title: "Delete Table Rows",
-      description:
-        "Delete one or more table rows/items after verifying every row belongs to the current product.",
-      inputSchema: deleteTableRowsSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
-    },
-    async (args) =>
+    deleteTableRowsSchema,
+    async (args: any) =>
       runJsonTool(async () => {
-        assertCanWrite(context)
+        assertToolAllowed("delete_table_rows")
         return repository.deleteTableRows(context, args.rowIds)
       })
   )
@@ -293,93 +223,101 @@ function registerResources(
   repository: SignalSurfRepository,
   context: SignalSurfContext
 ) {
-  server.registerResource(
-    "signalsurf_context",
-    "signalsurf://context",
-    {
-      title: "SignalSurf MCP Context",
-      description: "Product and role context for this MCP connection.",
-      mimeType: "application/json",
-    },
-    async (uri) => {
-      assertCanRead(context)
-      return jsonResource(uri.href, {
-        productId: context.productId,
-        userId: context.userId ?? null,
-        role: context.role,
-        tokenName: context.tokenName ?? null,
-      })
-    }
-  )
-
-  server.registerResource(
-    "signalsurf_surf_points",
-    "signalsurf://surf-points",
-    {
-      title: "SignalSurf Surf Points",
-      description: "Non-deleted surf points for the current product.",
-      mimeType: "application/json",
-    },
-    async (uri) => {
-      assertCanRead(context)
-      return jsonResource(
-        uri.href,
-        await repository.listSurfPoints(context, { limit: 200 })
-      )
-    }
-  )
-
-  server.registerResource(
-    "signalsurf_databases",
-    "signalsurf://databases",
-    {
-      title: "SignalSurf Databases",
-      description: "Databases/tables for the current product.",
-      mimeType: "application/json",
-    },
-    async (uri) => {
-      assertCanRead(context)
-      return jsonResource(
-        uri.href,
-        await repository.listDatabases(context, { limit: 200 })
-      )
-    }
-  )
-
-  server.registerResource(
-    "signalsurf_database_rows",
-    new ResourceTemplate("signalsurf://databases/{databaseId}/rows", {
-      list: async () => {
-        assertCanRead(context)
-        const { databases } = await repository.listDatabases(context, {
-          limit: 200,
-        })
-        return {
-          resources: databases.map(
-            (database: { databaseId: string; name: string }) => ({
-              uri: `signalsurf://databases/${database.databaseId}/rows`,
-              name: `Rows: ${database.name}`,
-              title: `${database.name} Rows`,
-              description: `Rows for SignalSurf database ${database.name}`,
-              mimeType: "application/json",
-            })
-          ),
-        }
+  if (canUseCapability(context, "context.read")) {
+    server.registerResource(
+      "signalsurf_context",
+      "signalsurf://context",
+      {
+        title: "SignalSurf MCP Context",
+        description: "Product and role context for this MCP connection.",
+        mimeType: "application/json",
       },
-    }),
-    {
-      title: "SignalSurf Database Rows",
-      description:
-        "Rows for one SignalSurf database. Use the databaseId template variable.",
-      mimeType: "application/json",
-    },
-    async (uri, variables) => {
-      assertCanRead(context)
-      const databaseId = String(variables.databaseId ?? "")
-      return jsonResource(
-        uri.href,
-        await repository.readTable(context, { databaseId, limit: 100 })
-      )
-    }
-  )
+      async (uri) => {
+        assertCanUseCapability(context, "context.read")
+        return jsonResource(uri.href, {
+          productId: context.productId,
+          userId: context.userId ?? null,
+          role: context.role,
+          tokenName: context.tokenName ?? null,
+          scopes: context.scopes ?? null,
+          capabilities: listContextCapabilities(context),
+        })
+      }
+    )
+  }
+
+  if (canUseCapability(context, "surf_points.read")) {
+    server.registerResource(
+      "signalsurf_surf_points",
+      "signalsurf://surf-points",
+      {
+        title: "SignalSurf Surf Points",
+        description: "Non-deleted surf points for the current product.",
+        mimeType: "application/json",
+      },
+      async (uri) => {
+        assertCanUseCapability(context, "surf_points.read")
+        return jsonResource(
+          uri.href,
+          await repository.listSurfPoints(context, { limit: 200 })
+        )
+      }
+    )
+  }
+
+  if (canUseCapability(context, "tables.read")) {
+    server.registerResource(
+      "signalsurf_databases",
+      "signalsurf://databases",
+      {
+        title: "SignalSurf Databases",
+        description: "Databases/tables for the current product.",
+        mimeType: "application/json",
+      },
+      async (uri) => {
+        assertCanUseCapability(context, "tables.read")
+        return jsonResource(
+          uri.href,
+          await repository.listDatabases(context, { limit: 200 })
+        )
+      }
+    )
+
+    server.registerResource(
+      "signalsurf_database_rows",
+      new ResourceTemplate("signalsurf://databases/{databaseId}/rows", {
+        list: async () => {
+          assertCanUseCapability(context, "tables.read")
+          const { databases } = await repository.listDatabases(context, {
+            limit: 200,
+          })
+          return {
+            resources: databases.map(
+              (database: { databaseId: string; name: string }) => ({
+                uri: `signalsurf://databases/${database.databaseId}/rows`,
+                name: `Rows: ${database.name}`,
+                title: `${database.name} Rows`,
+                description: `Rows for SignalSurf database ${database.name}`,
+                mimeType: "application/json",
+              })
+            ),
+          }
+        },
+      }),
+      {
+        title: "SignalSurf Database Rows",
+        description:
+          "Rows for one SignalSurf database. Use the databaseId template variable.",
+        mimeType: "application/json",
+      },
+      async (uri, variables) => {
+        assertCanUseCapability(context, "tables.read")
+        const databaseId = String(variables.databaseId ?? "")
+        return jsonResource(
+          uri.href,
+          await repository.readTable(context, { databaseId, limit: 100 })
+        )
+      }
+    )
+  }
 }
