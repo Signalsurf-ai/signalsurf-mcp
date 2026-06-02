@@ -5,7 +5,8 @@ product tables.
 
 This server is intentionally narrow. It gives external agents the core product
 operations they need without exposing arbitrary SQL or raw service-role access.
-Every request is bound to one SignalSurf product through an MCP token.
+Every product operation is bound to a SignalSurf product. OAuth tokens can grant
+one or more products, while manual fallback tokens remain single-product scoped.
 See `docs/architecture.md` for the request lifecycle and safety model, and
 `docs/capabilities.md` for the public tool/scope contract.
 
@@ -17,9 +18,11 @@ not need this repository, a Supabase key, or a local server.
 1. Add SignalSurf as a remote MCP server in your MCP client:
    `https://mcp.signalsurf.ai/mcp`.
 2. The client opens SignalSurf's OAuth authorization page.
-3. Sign in, choose the SignalSurf product, review requested scopes, and approve.
+3. Sign in, choose the SignalSurf product or products this client may access,
+   review requested scopes, and approve.
 4. The MCP client receives OAuth tokens through its callback and can use
-   SignalSurf tools.
+   SignalSurf tools. If you approve multiple products, the agent should call
+   `get_context` first and pass `productId` to product-scoped tool calls.
 
 The hosted MCP currently supports product-scoped Surf Point CRUD and table row
 read/create/update/delete. It is a safe public subset of Surfer, the agent in
@@ -178,12 +181,15 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - `list_surf_points`, `create_surf_point`, `update_surf_point`, `delete_surf_point`
 - `list_databases`, `read_table`, `get_table_row`
 - `create_table_row`, `update_table_row`, `delete_table_rows`
-- Resources for context, surf points, databases, and database rows
+- Resources for context; single-product tokens also expose surf point, database,
+  and database-row resources
 
-All tools are scoped to one `productId` resolved from the caller's MCP token.
-The server uses Supabase service-role credentials internally, so every operation
-explicitly validates product ownership before touching rows. Surf point deletion
-is a soft delete (`deleted_at`), matching the web app behavior.
+All product-scoped tools execute against one `productId`. A single-product token
+can omit `productId`; a multi-product OAuth token must pass `productId` to every
+product-scoped tool call. The server uses Supabase service-role credentials
+internally, so every operation explicitly validates product ownership before
+touching rows. Surf point deletion is a soft delete (`deleted_at`), matching the
+web app behavior.
 
 OAuth clients can request broad compatibility scopes (`mcp:read`, `mcp:write`)
 or granular scopes. The protected resource metadata advertises the granular
@@ -206,7 +212,7 @@ requirement, and it grants no tool capability by itself.
 ```text
 MCP client
   -> stdio or Streamable HTTP transport
-  -> token auth resolves { productId, userId, role, scopes }
+  -> token auth resolves { productId, productIds, userId, role, scopes }
   -> MCP tool/resource handlers
   -> SignalSurf repository
   -> Supabase service-role client with explicit product-scope checks
@@ -231,9 +237,10 @@ in-memory session state and makes bearer-token product scoping straightforward.
 
 Context:
 
-- `get_context`: returns the product, optional user, role, token name, and
-  scope/capability context for the current connection. Agents should call this
-  before writes and verify they are operating in the intended product.
+- `get_context`: returns authorized product ids, optional user, role, token
+  name, and scope/capability context for the current connection. Agents should
+  call this before writes. If `productIds` contains more than one id, pass the
+  intended `productId` to every product-scoped tool call.
 
 Surf points:
 
@@ -249,8 +256,8 @@ Surf points:
 
 Tables:
 
-- `list_databases`: lists databases for the token product. System databases are
-  hidden unless `includeSystem=true`.
+- `list_databases`: lists databases for the selected product. System databases
+  are hidden unless `includeSystem=true`.
 - `read_table`: reads rows with pagination and optional JSON containment filter.
 - `get_table_row`: reads one row after verifying its database belongs to the
   token product.
@@ -278,9 +285,12 @@ role-only behavior.
 Resources:
 
 - `signalsurf://context`
-- `signalsurf://surf-points`
-- `signalsurf://databases`
-- `signalsurf://databases/{databaseId}/rows`
+- `signalsurf://surf-points` for single-product tokens
+- `signalsurf://databases` for single-product tokens
+- `signalsurf://databases/{databaseId}/rows` for single-product tokens
+
+For multi-product OAuth tokens, only `signalsurf://context` is listed. Use tools
+with an explicit `productId` to read or modify product data.
 
 Schema limits:
 
@@ -343,7 +353,9 @@ Then configure:
 Plaintext `token` entries are supported for local development, but
 `tokenSha256` is preferred for shared environments.
 
-Each token binds exactly one MCP caller to one `productId`. `userId` is optional,
+Each static token binds one MCP caller to one `productId`. OAuth tokens from
+SignalSurf Web may grant multiple `productIds`; static env tokens intentionally
+remain single-product for local and internal fallback use. `userId` is optional,
 but include it when you want surf point deletion to repair that user's
 `current_playbook_id`. `tokenName` appears in `get_context` and is used as the
 row-update source reference.

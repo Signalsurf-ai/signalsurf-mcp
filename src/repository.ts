@@ -91,6 +91,7 @@ type McpOAuthTokenRow = {
   client_id: string
   user_id: string
   product_id: string
+  product_ids?: string[] | null
   scope: string
   resource: string
   access_token_expires_at: string
@@ -193,6 +194,10 @@ function uniqueIds(ids: string[]): string[] {
   return [...new Set(ids)]
 }
 
+function oauthTokenProductIds(row: McpOAuthTokenRow): string[] {
+  return uniqueIds([row.product_id, ...(row.product_ids ?? [])].filter(Boolean))
+}
+
 function requireNoDbError(
   error: { message: string; code?: string } | null | undefined,
   message: string
@@ -267,9 +272,7 @@ export class SignalSurfRepository {
   ): Promise<SignalSurfContext | null> {
     const { data, error } = await this.db
       .from("mcp_oauth_tokens")
-      .select(
-        "id, client_id, user_id, product_id, scope, resource, access_token_expires_at, revoked_at"
-      )
+      .select("*")
       .eq("access_token_sha256", sha256Hex(token))
       .is("revoked_at", null)
       .maybeSingle()
@@ -319,6 +322,7 @@ export class SignalSurfRepository {
 
     return {
       productId: row.product_id,
+      productIds: oauthTokenProductIds(row),
       userId: row.user_id,
       role: scopesImplyWriteAccess(scopes) ? "editor" : "viewer",
       tokenName: client.client_name

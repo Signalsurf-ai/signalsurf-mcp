@@ -15,17 +15,17 @@ mirror of every internal Surfer tool in SignalSurf Web.
 
 ## Scope Model
 
-| Scope | Capability grant |
-| --- | --- |
-| `mcp:read` | `context.read`, `surf_points.read`, `tables.read` |
-| `mcp:write` | All current read, write, and delete capabilities |
-| `mcp:surf_points.read` | `context.read`, `surf_points.read` |
-| `mcp:surf_points.write` | `context.read`, `surf_points.read`, `surf_points.write` |
-| `mcp:surf_points.delete` | `context.read`, `surf_points.read`, `surf_points.delete` |
-| `mcp:tables.read` | `context.read`, `tables.read` |
-| `mcp:tables.write` | `context.read`, `tables.read`, `tables.write` |
-| `mcp:tables.delete` | `context.read`, `tables.read`, `tables.delete` |
-| `offline_access` | No tool capability; allows OAuth refresh in SignalSurf Web |
+| Scope                    | Capability grant                                           |
+| ------------------------ | ---------------------------------------------------------- |
+| `mcp:read`               | `context.read`, `surf_points.read`, `tables.read`          |
+| `mcp:write`              | All current read, write, and delete capabilities           |
+| `mcp:surf_points.read`   | `context.read`, `surf_points.read`                         |
+| `mcp:surf_points.write`  | `context.read`, `surf_points.read`, `surf_points.write`    |
+| `mcp:surf_points.delete` | `context.read`, `surf_points.read`, `surf_points.delete`   |
+| `mcp:tables.read`        | `context.read`, `tables.read`                              |
+| `mcp:tables.write`       | `context.read`, `tables.read`, `tables.write`              |
+| `mcp:tables.delete`      | `context.read`, `tables.read`, `tables.delete`             |
+| `offline_access`         | No tool capability; allows OAuth refresh in SignalSurf Web |
 
 The protected resource metadata and `WWW-Authenticate` scope hints include only
 SignalSurf resource scopes, not `offline_access`.
@@ -36,19 +36,24 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 
 ## Public Tool Contract
 
-| Tool | Required capability | Destructive | Notes |
-| --- | --- | --- | --- |
-| `get_context` | `context.read` | No | Returns product, user, role, scopes, and per-tool access booleans |
-| `list_surf_points` | `surf_points.read` | No | Lists non-deleted Surf Points |
-| `create_surf_point` | `surf_points.write` | No | Creates a product-scoped Surf Point |
-| `update_surf_point` | `surf_points.write` | No | Mutates Surf Point metadata, prompts, targets, or JSON config |
-| `delete_surf_point` | `surf_points.delete` | Yes | Soft-deletes Surf Points and cancels pending jobs |
-| `list_databases` | `tables.read` | No | Lists product tables/databases |
-| `read_table` | `tables.read` | No | Reads rows with pagination and containment filters |
-| `get_table_row` | `tables.read` | No | Reads one product-scoped row |
-| `create_table_row` | `tables.write` | No | Creates rows with server-side MCP provenance |
-| `update_table_row` | `tables.write` | No | Uses changelog-preserving row update RPCs |
-| `delete_table_rows` | `tables.delete` | Yes | Hard-deletes rows after product-scope verification |
+| Tool                | Required capability  | Destructive | Notes                                                                            |
+| ------------------- | -------------------- | ----------- | -------------------------------------------------------------------------------- |
+| `get_context`       | `context.read`       | No          | Returns authorized product ids, user, role, scopes, and per-tool access booleans |
+| `list_surf_points`  | `surf_points.read`   | No          | Lists non-deleted Surf Points for one authorized product                         |
+| `create_surf_point` | `surf_points.write`  | No          | Creates a Surf Point in one authorized product                                   |
+| `update_surf_point` | `surf_points.write`  | No          | Mutates Surf Point metadata, prompts, targets, or JSON config                    |
+| `delete_surf_point` | `surf_points.delete` | Yes         | Soft-deletes Surf Points and cancels pending jobs                                |
+| `list_databases`    | `tables.read`        | No          | Lists product tables/databases                                                   |
+| `read_table`        | `tables.read`        | No          | Reads rows with pagination and containment filters                               |
+| `get_table_row`     | `tables.read`        | No          | Reads one product-scoped row                                                     |
+| `create_table_row`  | `tables.write`       | No          | Creates rows with server-side MCP provenance                                     |
+| `update_table_row`  | `tables.write`       | No          | Uses changelog-preserving row update RPCs                                        |
+| `delete_table_rows` | `tables.delete`      | Yes         | Hard-deletes rows after product-scope verification                               |
+
+OAuth tokens can authorize multiple products. Agents should call `get_context`
+first; when multiple `productIds` are returned, every product-scoped tool call
+must include the intended `productId`. Static fallback tokens remain
+single-product scoped.
 
 `tools/list` advertises this public contract consistently. A caller whose token
 lacks a required scoped capability over HTTP receives a `403` response with a

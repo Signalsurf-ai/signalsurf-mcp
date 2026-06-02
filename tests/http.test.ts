@@ -531,6 +531,109 @@ describe("HTTP transport", () => {
     expect(db.tables.playbooks).toHaveLength(0)
   })
 
+  it("requires explicit productId for multi-product OAuth HTTP tool calls", async () => {
+    const resourceUrl = "https://mcp.example.com/mcp"
+    const secondProductId = "00000000-0000-4000-8000-000000000002"
+    const db = new FakeSupabase({
+      mcp_tokens: [],
+      mcp_oauth_tokens: [
+        {
+          id: "00000000-0000-4000-8000-000000000201",
+          client_id: "ssmcp_client_test",
+          user_id: "00000000-0000-4000-8000-000000000202",
+          product_id: productId,
+          product_ids: [productId, secondProductId],
+          scope: "mcp:read",
+          resource: resourceUrl,
+          access_token_sha256: sha256Hex(token),
+          access_token_expires_at: "2999-01-01T00:00:00.000Z",
+          revoked_at: null,
+        },
+      ],
+      mcp_oauth_clients: [
+        {
+          client_id: "ssmcp_client_test",
+          client_name: "Claude",
+          revoked_at: null,
+        },
+      ],
+      playbooks: [
+        {
+          id: "00000000-0000-4000-8000-000000000301",
+          product_id: secondProductId,
+          name: "Second Product Surf Point",
+          description: null,
+          is_default: false,
+          is_active: true,
+          show_ai_dashboard: true,
+          icon: "folder.fill",
+          color: "#5599FF",
+          database_ids: [],
+          relevance_threshold: null,
+          prompt_template: null,
+          scoring_rubric: null,
+          surf_prompt: null,
+          tool_config: {},
+          variables: {},
+          config: {},
+          folder_id: null,
+          display_order: 0,
+          created_at: "2026-06-01T00:00:00Z",
+          updated_at: "2026-06-01T00:00:00Z",
+          deleted_at: null,
+        },
+      ],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const { server, url } = await listen(
+      makeConfig({
+        authMode: "database",
+        resourceUrl,
+        tokenEntries: [],
+      }),
+      () => new SignalSurfRepository(db as any)
+    )
+    listeners.push(server)
+
+    const missingProduct = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: callToolBody("list_surf_points"),
+    })
+
+    expect(missingProduct.status).toBe(200)
+    const missingBody = await readMcpJson(missingProduct)
+    expect(missingBody.result.isError).toBe(true)
+    expect(JSON.parse(missingBody.result.content[0].text)).toMatchObject({
+      code: "BAD_REQUEST",
+    })
+
+    const explicitProduct = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: callToolBody("list_surf_points", { productId: secondProductId }),
+    })
+
+    expect(explicitProduct.status).toBe(200)
+    const body = await readMcpJson(explicitProduct)
+    const content = JSON.parse(body.result.content[0].text)
+    expect(content.data.surfPoints).toMatchObject([
+      { name: "Second Product Surf Point" },
+    ])
+  })
+
   it("rejects OAuth access tokens with blank stored scopes", async () => {
     const resourceUrl = "https://mcp.example.com/mcp"
     const db = new FakeSupabase({

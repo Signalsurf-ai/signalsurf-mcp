@@ -17,7 +17,8 @@ MCP client
 
 The server always resolves a `SignalSurfContext` before any tool runs:
 
-- `productId`: mandatory product boundary for every request
+- `productId`: primary product boundary for single-product calls
+- `productIds`: optional list of all products granted to the current OAuth token
 - `userId`: optional user context, currently used for surf point delete cleanup
 - `role`: `viewer`, `editor`, or `owner`
 - `tokenName`: optional source label for MCP row mutations
@@ -62,7 +63,8 @@ The server has two token auth modes:
   token is SHA-256 hashed and first looked up as a manual fallback token in
   SignalSurf Web's `mcp_tokens` table, then as an OAuth access token in
   `mcp_oauth_tokens`. OAuth access tokens are bound to `resource`, `client_id`,
-  `user_id`, `product_id`, scopes, expiry, and revocation state.
+  `user_id`, primary `product_id`, optional `product_ids`, scopes, expiry, and
+  revocation state.
 - `SIGNALSURF_MCP_AUTH_MODE=env`: local or single-tenant mode. Tokens are read
   from `SIGNALSURF_MCP_TOKENS`.
 
@@ -83,8 +85,9 @@ Each static token entry binds one caller to exactly one product:
 }
 ```
 
-Agents should call `get_context` first and verify `productId`, `role`, and
-`tokenName` before making writes.
+Agents should call `get_context` first and verify `productIds`, `role`, and
+`tokenName` before making writes. If `productIds` contains more than one id,
+agents must pass the intended `productId` to product-scoped tools.
 
 Hosted token revocation is immediate: SignalSurf Web sets `revoked_at`, and
 database auth only resolves rows where `revoked_at IS NULL`.
@@ -98,9 +101,11 @@ OAuth access tokens are user-consented, so the resolved MCP context includes
 `userId`. `mcp:read` maps to `viewer`; `mcp:write` and granular write/delete
 scopes map to `editor`. Recognized SignalSurf scopes remain on the request
 context and are enforced by each tool's required capability; additive OIDC or
-future scopes are ignored by the resource server. The server rejects OAuth
-access tokens whose stored `resource` does not match
-`SIGNALSURF_MCP_RESOURCE_URL`.
+future scopes are ignored by the resource server. OAuth tokens can authorize one
+or more products. Product-scoped tools execute against exactly one product; when
+multiple products are authorized, omitted `productId` is rejected instead of
+guessing. The server rejects OAuth access tokens whose stored `resource` does
+not match `SIGNALSURF_MCP_RESOURCE_URL`.
 
 The public scope and tool contract lives in `src/capabilities.ts` and is
 documented in `docs/capabilities.md`. Broad legacy scopes remain for client
@@ -159,6 +164,8 @@ Resources are read-only JSON context surfaces:
 
 The database-row template expands current-product databases into concrete
 resources so clients that only show `resources/list` can discover row resources.
+For multi-product OAuth contexts, ambiguous product-level resource listings are
+suppressed; agents should use tools with an explicit `productId`.
 
 ## Extending The Server
 

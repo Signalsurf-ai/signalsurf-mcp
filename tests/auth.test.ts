@@ -4,6 +4,7 @@ import {
   assertCanUseCapability,
   assertCanWrite,
   listContextCapabilities,
+  resolveProductContext,
   resolveStdioContext,
   resolveTokenContext,
   sha256Hex,
@@ -78,9 +79,9 @@ describe("auth", () => {
     expect(() => assertCanUseCapability(context, "tables.delete")).toThrow(
       "Token scope does not allow"
     )
-    expect(() =>
-      assertCanUseCapability(context, "surf_points.write")
-    ).toThrow("Token scope does not allow")
+    expect(() => assertCanUseCapability(context, "surf_points.write")).toThrow(
+      "Token scope does not allow"
+    )
     expect(listContextCapabilities(context)).toEqual([
       "context.read",
       "tables.read",
@@ -108,14 +109,38 @@ describe("auth", () => {
         role: "editor",
       })
     ).toEqual([
-        "context.read",
-        "surf_points.read",
-        "surf_points.write",
-        "surf_points.delete",
-        "tables.read",
-        "tables.write",
-        "tables.delete",
+      "context.read",
+      "surf_points.read",
+      "surf_points.write",
+      "surf_points.delete",
+      "tables.read",
+      "tables.write",
+      "tables.delete",
     ])
+  })
+
+  it("requires explicit productId for multi-product contexts", () => {
+    const context = {
+      productId: "00000000-0000-4000-8000-000000000001",
+      productIds: [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+      ],
+      role: "editor" as const,
+    }
+
+    expect(() => resolveProductContext(context)).toThrow(
+      "productId is required"
+    )
+    expect(
+      resolveProductContext(context, "00000000-0000-4000-8000-000000000002")
+    ).toMatchObject({
+      productId: "00000000-0000-4000-8000-000000000002",
+      productIds: context.productIds,
+    })
+    expect(() =>
+      resolveProductContext(context, "00000000-0000-4000-8000-000000000099")
+    ).toThrow("not authorized")
   })
 
   it("uses SIGNALSURF_MCP_TOKEN before direct stdio context", () => {
