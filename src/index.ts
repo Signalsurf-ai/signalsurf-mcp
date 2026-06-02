@@ -34,6 +34,10 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(JSON.stringify(errorToObject(error), null, 2))
+  const details = errorToObject(error)
+  console.error(
+    `[signalsurf-mcp] Startup failed: ${details.code} - ${details.error}`
+  )
+  console.error(JSON.stringify(details))
   process.exitCode = 1
 })
