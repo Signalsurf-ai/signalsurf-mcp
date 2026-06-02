@@ -4,6 +4,7 @@ import type { AppConfig, TokenEntry } from "./config.js"
 import {
   type McpCapability,
   grantedCapabilitiesForScopes,
+  requiredScopesForCapability,
   scopesGrantCapability,
 } from "./capabilities.js"
 import type { AccessRole, SignalSurfContext } from "./types.js"
@@ -192,8 +193,12 @@ export function assertCanUseCapability(
   throw new UserFacingError(
     `Token scope does not allow SignalSurf MCP capability: ${capability}`,
     {
-      code: "FORBIDDEN",
+      code: "INSUFFICIENT_SCOPE",
       status: 403,
+      details: {
+        oauthError: "insufficient_scope",
+        requiredScopes: requiredScopesForCapability(capability),
+      },
     }
   )
 }

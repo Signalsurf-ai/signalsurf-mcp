@@ -5,8 +5,9 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import { sha256Hex } from "../src/auth.js"
 import {
-  MCP_DEFAULT_OAUTH_SCOPES,
-  MCP_SUPPORTED_SCOPES,
+  MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_OFFLINE_ACCESS_SCOPE,
+  MCP_RESOURCE_SCOPES,
 } from "../src/capabilities.js"
 import type { AppConfig } from "../src/config.js"
 import { loadConfig } from "../src/config.js"
@@ -353,7 +354,10 @@ describe("HTTP transport", () => {
       'resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"'
     )
     expect(response.headers.get("www-authenticate")).toContain(
-      `scope="${MCP_DEFAULT_OAUTH_SCOPES.join(" ")}"`
+      `scope="${MCP_DEFAULT_RESOURCE_SCOPES.join(" ")}"`
+    )
+    expect(response.headers.get("www-authenticate")).not.toContain(
+      MCP_OFFLINE_ACCESS_SCOPE
     )
   })
 
@@ -373,14 +377,16 @@ describe("HTTP transport", () => {
     )
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({
+    const body = await response.json()
+    expect(body).toMatchObject({
       resource: "https://mcp.example.com/mcp",
       authorization_servers: ["https://app.example.com"],
-      scopes_supported: MCP_SUPPORTED_SCOPES,
+      scopes_supported: MCP_RESOURCE_SCOPES,
     })
+    expect(body.scopes_supported).not.toContain(MCP_OFFLINE_ACCESS_SCOPE)
   })
 
-  it("resolves OAuth access tokens for HTTP auth", async () => {
+  it("resolves OAuth access tokens with harmless additive scopes", async () => {
     const resourceUrl = "https://mcp.example.com/mcp"
     const db = new FakeSupabase({
       mcp_tokens: [],
@@ -390,7 +396,7 @@ describe("HTTP transport", () => {
           client_id: "ssmcp_client_test",
           user_id: "00000000-0000-4000-8000-000000000202",
           product_id: productId,
-          scope: "mcp:read mcp:write offline_access",
+          scope: "mcp:read mcp:write offline_access openid profile",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
           access_token_expires_at: "2999-01-01T00:00:00.000Z",

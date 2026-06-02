@@ -6,8 +6,8 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 
 import { parseBearerToken, resolveHttpTokenContext } from "./auth.js"
 import {
-  MCP_DEFAULT_OAUTH_SCOPES,
-  MCP_SUPPORTED_SCOPES,
+  MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_RESOURCE_SCOPES,
 } from "./capabilities.js"
 import type { AppConfig } from "./config.js"
 import { errorToObject, UserFacingError } from "./errors.js"
@@ -57,7 +57,7 @@ function getWwwAuthenticateHeader(config: AppConfig): string {
   if (config.authorizationServerUrl) {
     parts.push(
       `resource_metadata="${getProtectedResourceMetadataUrl(config)}"`,
-      `scope="${MCP_DEFAULT_OAUTH_SCOPES.join(" ")}"`
+      `scope="${MCP_DEFAULT_RESOURCE_SCOPES.join(" ")}"`
     )
   }
   return parts.join(", ")
@@ -131,7 +131,7 @@ export function createHttpApp(
       res.json({
         resource: config.resourceUrl,
         authorization_servers: [config.authorizationServerUrl],
-        scopes_supported: MCP_SUPPORTED_SCOPES,
+        scopes_supported: MCP_RESOURCE_SCOPES,
         bearer_methods_supported: ["header"],
       })
     }

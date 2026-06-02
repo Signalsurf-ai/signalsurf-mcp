@@ -8,6 +8,7 @@ import type {
   SurfPointRow,
 } from "./types.js"
 import {
+  grantedCapabilitiesForScopes,
   isSupportedMcpScope,
   parseStoredScopes,
   scopesImplyWriteAccess,
@@ -311,11 +312,8 @@ export class SignalSurfRepository {
       )
     }
 
-    const scopes = parseStoredScopes(row.scope)
-    if (
-      scopes.length === 0 ||
-      scopes.some((scope) => !isSupportedMcpScope(scope))
-    ) {
+    const scopes = parseStoredScopes(row.scope).filter(isSupportedMcpScope)
+    if (grantedCapabilitiesForScopes(scopes).length === 0) {
       return null
     }
 

@@ -186,8 +186,9 @@ explicitly validates product ownership before touching rows. Surf point deletion
 is a soft delete (`deleted_at`), matching the web app behavior.
 
 OAuth clients can request broad compatibility scopes (`mcp:read`, `mcp:write`)
-or granular scopes. Hosted OAuth defaults to the granular set so the consent
-screen names each capability instead of hiding them behind broad write access:
+or granular scopes. The protected resource metadata advertises the granular
+SignalSurf resource scopes so the consent screen can name each capability
+instead of hiding them behind broad write access:
 
 - `mcp:surf_points.read`
 - `mcp:surf_points.write`
@@ -196,7 +197,9 @@ screen names each capability instead of hiding them behind broad write access:
 - `mcp:tables.write`
 - `mcp:tables.delete`
 
-`offline_access` allows token refresh but grants no tool capability by itself.
+OAuth tokens may also carry `offline_access` for refresh-token support. The MCP
+resource server accepts that scope but does not advertise it as a resource
+requirement, and it grants no tool capability by itself.
 
 ## Architecture
 

@@ -5,7 +5,10 @@ mirror of every internal Surfer tool in SignalSurf Web.
 
 `src/capabilities.ts` is the code source of truth for:
 
-- Supported OAuth scopes advertised by the hosted MCP protected resource.
+- Supported SignalSurf resource scopes advertised by the hosted MCP protected
+  resource.
+- Additional accepted OAuth token scopes, such as `offline_access`, that are
+  not resource requirements.
 - Public MCP tool names, descriptions, annotations, and required capabilities.
 - Mapping from OAuth scopes to tool capabilities.
 - Legacy broad-scope compatibility for existing clients.
@@ -23,6 +26,9 @@ mirror of every internal Surfer tool in SignalSurf Web.
 | `mcp:tables.write` | `context.read`, `tables.read`, `tables.write` |
 | `mcp:tables.delete` | `context.read`, `tables.read`, `tables.delete` |
 | `offline_access` | No tool capability; allows OAuth refresh in SignalSurf Web |
+
+The protected resource metadata and `WWW-Authenticate` scope hints include only
+SignalSurf resource scopes, not `offline_access`.
 
 Manual fallback tokens are still role-based for compatibility. If a static env
 token includes a `scopes` array, both role and scopes are enforced. If it omits
@@ -43,6 +49,10 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `create_table_row` | `tables.write` | No | Creates rows with server-side MCP provenance |
 | `update_table_row` | `tables.write` | No | Uses changelog-preserving row update RPCs |
 | `delete_table_rows` | `tables.delete` | Yes | Hard-deletes rows after product-scope verification |
+
+`tools/list` advertises this public contract consistently. A caller whose token
+lacks a required capability receives an `INSUFFICIENT_SCOPE` tool error payload
+that includes the granular scope needed for step-up authorization.
 
 ## Adding a Tool
 

@@ -96,9 +96,11 @@ manual hosted fallback tokens do not.
 
 OAuth access tokens are user-consented, so the resolved MCP context includes
 `userId`. `mcp:read` maps to `viewer`; `mcp:write` and granular write/delete
-scopes map to `editor`. The stored scopes remain on the request context and are
-enforced by each tool's required capability. The server rejects OAuth access
-tokens whose stored `resource` does not match `SIGNALSURF_MCP_RESOURCE_URL`.
+scopes map to `editor`. Recognized SignalSurf scopes remain on the request
+context and are enforced by each tool's required capability; additive OIDC or
+future scopes are ignored by the resource server. The server rejects OAuth
+access tokens whose stored `resource` does not match
+`SIGNALSURF_MCP_RESOURCE_URL`.
 
 The public scope and tool contract lives in `src/capabilities.ts` and is
 documented in `docs/capabilities.md`. Broad legacy scopes remain for client

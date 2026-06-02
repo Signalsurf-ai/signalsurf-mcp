@@ -2,6 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { afterEach, describe, expect, it } from "vitest"
 
+import { PUBLIC_MCP_TOOL_NAMES } from "../src/capabilities.js"
 import { SignalSurfRepository } from "../src/repository.js"
 import { createSignalSurfMcpServer } from "../src/server.js"
 import type { SignalSurfContext } from "../src/types.js"
@@ -12,13 +13,6 @@ const context: SignalSurfContext = {
   role: "viewer",
 }
 const databaseId = "00000000-0000-4000-8000-000000000201"
-const viewerToolNames = [
-  "get_context",
-  "list_surf_points",
-  "list_databases",
-  "read_table",
-  "get_table_row",
-]
 
 let cleanup: Array<() => Promise<void>> = []
 
@@ -94,7 +88,7 @@ describe("MCP server", () => {
 
     const tools = await client.listTools()
     expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
-      [...viewerToolNames].sort()
+      [...PUBLIC_MCP_TOOL_NAMES].sort()
     )
 
     const result = await client.callTool({
@@ -117,7 +111,7 @@ describe("MCP server", () => {
     )
   })
 
-  it("does not advertise write tools for viewer tokens", async () => {
+  it("advertises the stable public tool contract and denies viewer writes", async () => {
     const db = new FakeSupabase({
       playbooks: [],
       databases: [],
@@ -142,11 +136,18 @@ describe("MCP server", () => {
 
     const tools = await client.listTools()
     expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
-      [...viewerToolNames].sort()
+      [...PUBLIC_MCP_TOOL_NAMES].sort()
     )
-    expect(tools.tools.map((tool) => tool.name)).not.toContain(
-      "create_surf_point"
-    )
+
+    const result = await client.callTool({
+      name: "create_surf_point",
+      arguments: { name: "Denied" },
+    })
+    expect(result.isError).toBe(true)
+    const text = result.content?.[0]?.type === "text" ? result.content[0].text : ""
+    expect(JSON.parse(text)).toMatchObject({
+      code: "FORBIDDEN",
+    })
     expect(db.tables.playbooks).toHaveLength(0)
   })
 
@@ -196,21 +197,23 @@ describe("MCP server", () => {
 
     const tools = await client.listTools()
     expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
-      [
-        "get_context",
-        "list_databases",
-        "read_table",
-        "get_table_row",
-        "create_table_row",
-        "update_table_row",
-      ].sort()
+      [...PUBLIC_MCP_TOOL_NAMES].sort()
     )
-    expect(tools.tools.map((tool) => tool.name)).not.toContain(
-      "delete_table_rows"
-    )
-    expect(tools.tools.map((tool) => tool.name)).not.toContain(
-      "create_surf_point"
-    )
+
+    const denied = await client.callTool({
+      name: "create_surf_point",
+      arguments: { name: "Denied" },
+    })
+    expect(denied.isError).toBe(true)
+    const deniedText =
+      denied.content?.[0]?.type === "text" ? denied.content[0].text : ""
+    expect(JSON.parse(deniedText)).toMatchObject({
+      code: "INSUFFICIENT_SCOPE",
+      details: {
+        oauthError: "insufficient_scope",
+        requiredScopes: ["mcp:surf_points.write"],
+      },
+    })
     expect(db.tables.playbooks).toHaveLength(0)
   })
 })

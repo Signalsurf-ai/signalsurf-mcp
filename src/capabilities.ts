@@ -18,14 +18,19 @@ export const MCP_SUPPORTED_SCOPES = [
   MCP_OFFLINE_ACCESS_SCOPE,
 ] as const
 
-export const MCP_DEFAULT_OAUTH_SCOPES = [
+export const MCP_RESOURCE_SCOPES = [
+  MCP_LEGACY_READ_SCOPE,
+  MCP_LEGACY_WRITE_SCOPE,
+  ...MCP_GRANULAR_SCOPES,
+] as const
+
+export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "mcp:surf_points.read",
   "mcp:surf_points.write",
   "mcp:surf_points.delete",
   "mcp:tables.read",
   "mcp:tables.write",
   "mcp:tables.delete",
-  MCP_OFFLINE_ACCESS_SCOPE,
 ] as const
 
 export type McpScope = (typeof MCP_SUPPORTED_SCOPES)[number]
@@ -231,6 +236,16 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   "mcp:tables.delete": ["context.read", "tables.read", "tables.delete"],
 }
 
+const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
+  "context.read": [MCP_LEGACY_READ_SCOPE],
+  "surf_points.read": ["mcp:surf_points.read"],
+  "surf_points.write": ["mcp:surf_points.write"],
+  "surf_points.delete": ["mcp:surf_points.delete"],
+  "tables.read": ["mcp:tables.read"],
+  "tables.write": ["mcp:tables.write"],
+  "tables.delete": ["mcp:tables.delete"],
+}
+
 export function parseStoredScopes(scope: string | undefined | null): string[] {
   return scope?.trim() ? scope.trim().split(/\s+/) : []
 }
@@ -257,6 +272,12 @@ export function scopesGrantCapability(
   capability: McpCapability
 ): boolean {
   return grantedCapabilitiesForScopes(scopes).includes(capability)
+}
+
+export function requiredScopesForCapability(
+  capability: McpCapability
+): readonly string[] {
+  return CAPABILITY_SCOPE_HINTS[capability]
 }
 
 export function scopeImpliesWriteAccess(scope: string): boolean {

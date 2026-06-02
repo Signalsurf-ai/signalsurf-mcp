@@ -77,9 +77,6 @@ function registerTools(
     inputSchema: any,
     handler: (args: any) => Promise<any>
   ) {
-    if (!canUseCapability(context, PUBLIC_MCP_TOOLS[name].requiredCapability)) {
-      return
-    }
     server.registerTool(name, toolConfig(name, inputSchema), handler)
   }
 
@@ -223,101 +220,97 @@ function registerResources(
   repository: SignalSurfRepository,
   context: SignalSurfContext
 ) {
-  if (canUseCapability(context, "context.read")) {
-    server.registerResource(
-      "signalsurf_context",
-      "signalsurf://context",
-      {
-        title: "SignalSurf MCP Context",
-        description: "Product and role context for this MCP connection.",
-        mimeType: "application/json",
-      },
-      async (uri) => {
-        assertCanUseCapability(context, "context.read")
-        return jsonResource(uri.href, {
-          productId: context.productId,
-          userId: context.userId ?? null,
-          role: context.role,
-          tokenName: context.tokenName ?? null,
-          scopes: context.scopes ?? null,
-          capabilities: listContextCapabilities(context),
+  server.registerResource(
+    "signalsurf_context",
+    "signalsurf://context",
+    {
+      title: "SignalSurf MCP Context",
+      description: "Product and role context for this MCP connection.",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      assertCanUseCapability(context, "context.read")
+      return jsonResource(uri.href, {
+        productId: context.productId,
+        userId: context.userId ?? null,
+        role: context.role,
+        tokenName: context.tokenName ?? null,
+        scopes: context.scopes ?? null,
+        capabilities: listContextCapabilities(context),
+      })
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_surf_points",
+    "signalsurf://surf-points",
+    {
+      title: "SignalSurf Surf Points",
+      description: "Non-deleted surf points for the current product.",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      assertCanUseCapability(context, "surf_points.read")
+      return jsonResource(
+        uri.href,
+        await repository.listSurfPoints(context, { limit: 200 })
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_databases",
+    "signalsurf://databases",
+    {
+      title: "SignalSurf Databases",
+      description: "Databases/tables for the current product.",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      assertCanUseCapability(context, "tables.read")
+      return jsonResource(
+        uri.href,
+        await repository.listDatabases(context, { limit: 200 })
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_database_rows",
+    new ResourceTemplate("signalsurf://databases/{databaseId}/rows", {
+      list: async () => {
+        if (!canUseCapability(context, "tables.read")) {
+          return { resources: [] }
+        }
+        const { databases } = await repository.listDatabases(context, {
+          limit: 200,
         })
-      }
-    )
-  }
-
-  if (canUseCapability(context, "surf_points.read")) {
-    server.registerResource(
-      "signalsurf_surf_points",
-      "signalsurf://surf-points",
-      {
-        title: "SignalSurf Surf Points",
-        description: "Non-deleted surf points for the current product.",
-        mimeType: "application/json",
+        return {
+          resources: databases.map(
+            (database: { databaseId: string; name: string }) => ({
+              uri: `signalsurf://databases/${database.databaseId}/rows`,
+              name: `Rows: ${database.name}`,
+              title: `${database.name} Rows`,
+              description: `Rows for SignalSurf database ${database.name}`,
+              mimeType: "application/json",
+            })
+          ),
+        }
       },
-      async (uri) => {
-        assertCanUseCapability(context, "surf_points.read")
-        return jsonResource(
-          uri.href,
-          await repository.listSurfPoints(context, { limit: 200 })
-        )
-      }
-    )
-  }
-
-  if (canUseCapability(context, "tables.read")) {
-    server.registerResource(
-      "signalsurf_databases",
-      "signalsurf://databases",
-      {
-        title: "SignalSurf Databases",
-        description: "Databases/tables for the current product.",
-        mimeType: "application/json",
-      },
-      async (uri) => {
-        assertCanUseCapability(context, "tables.read")
-        return jsonResource(
-          uri.href,
-          await repository.listDatabases(context, { limit: 200 })
-        )
-      }
-    )
-
-    server.registerResource(
-      "signalsurf_database_rows",
-      new ResourceTemplate("signalsurf://databases/{databaseId}/rows", {
-        list: async () => {
-          assertCanUseCapability(context, "tables.read")
-          const { databases } = await repository.listDatabases(context, {
-            limit: 200,
-          })
-          return {
-            resources: databases.map(
-              (database: { databaseId: string; name: string }) => ({
-                uri: `signalsurf://databases/${database.databaseId}/rows`,
-                name: `Rows: ${database.name}`,
-                title: `${database.name} Rows`,
-                description: `Rows for SignalSurf database ${database.name}`,
-                mimeType: "application/json",
-              })
-            ),
-          }
-        },
-      }),
-      {
-        title: "SignalSurf Database Rows",
-        description:
-          "Rows for one SignalSurf database. Use the databaseId template variable.",
-        mimeType: "application/json",
-      },
-      async (uri, variables) => {
-        assertCanUseCapability(context, "tables.read")
-        const databaseId = String(variables.databaseId ?? "")
-        return jsonResource(
-          uri.href,
-          await repository.readTable(context, { databaseId, limit: 100 })
-        )
-      }
-    )
-  }
+    }),
+    {
+      title: "SignalSurf Database Rows",
+      description:
+        "Rows for one SignalSurf database. Use the databaseId template variable.",
+      mimeType: "application/json",
+    },
+    async (uri, variables) => {
+      assertCanUseCapability(context, "tables.read")
+      const databaseId = String(variables.databaseId ?? "")
+      return jsonResource(
+        uri.href,
+        await repository.readTable(context, { databaseId, limit: 100 })
+      )
+    }
+  )
 }
