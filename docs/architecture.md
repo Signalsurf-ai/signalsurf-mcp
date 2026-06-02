@@ -9,7 +9,7 @@ raw Supabase access.
 ```text
 MCP client
   -> stdio or stateless Streamable HTTP
-  -> env-token, database-token, or direct stdio context resolution
+  -> env-token, OAuth database token, manual database token, or direct stdio context resolution
   -> MCP tool/resource handler
   -> repository product-scope guard
   -> Supabase service-role client
@@ -35,6 +35,12 @@ currently has no extra MCP-only power; it is reserved for future product policy.
 fresh MCP server instance, resolves bearer auth, handles one JSON-RPC request,
 and closes. There is no session lifecycle. `GET` and `DELETE` return `405`.
 
+When `SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL` is configured, HTTP 401
+responses include a `WWW-Authenticate` `resource_metadata` pointer. The server
+also serves OAuth Protected Resource Metadata at
+`/.well-known/oauth-protected-resource`, pointing clients to the SignalSurf Web
+authorization server.
+
 HTTP mode rejects `SIGNALSURF_MCP_AUTH_DISABLED=true`. It also checks the
 request Host header against `SIGNALSURF_MCP_ALLOWED_HOSTS` to reduce localhost
 DNS-rebinding risk.
@@ -49,9 +55,10 @@ overwrites `X-Forwarded-For`; the stored IP is validated before writing.
 The server has two token auth modes:
 
 - `SIGNALSURF_MCP_AUTH_MODE=database`: hosted production mode. The HTTP bearer
-  token is SHA-256 hashed and looked up in SignalSurf Web's `mcp_tokens` table.
-  The table stores product id, creator id, role, prefix, revocation state, and
-  last-used metadata; it never stores plaintext tokens.
+  token is SHA-256 hashed and first looked up as a manual fallback token in
+  SignalSurf Web's `mcp_tokens` table, then as an OAuth access token in
+  `mcp_oauth_tokens`. OAuth access tokens are bound to `resource`, `client_id`,
+  `user_id`, `product_id`, scopes, expiry, and revocation state.
 - `SIGNALSURF_MCP_AUTH_MODE=env`: local or single-tenant mode. Tokens are read
   from `SIGNALSURF_MCP_TOKENS`.
 
@@ -79,8 +86,14 @@ Hosted token revocation is immediate: SignalSurf Web sets `revoked_at`, and
 database auth only resolves rows where `revoked_at IS NULL`.
 Database-backed hosted tokens are product-scoped service credentials, so
 `created_by` is not exposed as `context.userId` to MCP tools. User-specific
-cleanup, such as repairing `user_preferences.current_playbook_id`, only runs
-for local/static contexts that explicitly configure a user id.
+cleanup, such as repairing `user_preferences.current_playbook_id`, runs only
+when the resolved context includes `userId`; OAuth contexts include it, while
+manual hosted fallback tokens do not.
+
+OAuth access tokens are user-consented, so the resolved MCP context includes
+`userId`. `mcp:read` maps to `viewer`; `mcp:write` maps to `editor`. The server
+rejects OAuth access tokens whose stored `resource` does not match
+`SIGNALSURF_MCP_RESOURCE_URL`.
 
 ## Product Scope Guards
 

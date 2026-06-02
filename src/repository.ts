@@ -80,6 +80,23 @@ type McpTokenRow = {
   revoked_at: string | null
 }
 
+type McpOAuthTokenRow = {
+  id: string
+  client_id: string
+  user_id: string
+  product_id: string
+  scope: string
+  resource: string
+  access_token_expires_at: string
+  revoked_at: string | null
+}
+
+type McpOAuthClientRow = {
+  client_id: string
+  client_name: string | null
+  revoked_at: string | null
+}
+
 type CreateTableRowInput = {
   databaseId: string
   data: JsonRecord
@@ -193,7 +210,7 @@ export class SignalSurfRepository {
 
   async resolveMcpToken(
     token: string,
-    metadata: { ip?: string | null } = {}
+    metadata: { ip?: string | null; resource?: string | null } = {}
   ): Promise<SignalSurfContext | null> {
     const { data, error } = await this.db
       .from("mcp_tokens")
@@ -203,7 +220,9 @@ export class SignalSurfRepository {
       .maybeSingle()
 
     requireNoDbError(error, "Failed to resolve MCP token")
-    if (!data) return null
+    if (!data) {
+      return this.resolveMcpOAuthToken(token, metadata)
+    }
 
     const row = data as McpTokenRow
     if (!["viewer", "editor", "owner"].includes(row.role)) {
@@ -233,6 +252,67 @@ export class SignalSurfRepository {
       productId: row.product_id,
       role: row.role,
       tokenName: row.name ?? undefined,
+    }
+  }
+
+  private async resolveMcpOAuthToken(
+    token: string,
+    metadata: { ip?: string | null; resource?: string | null }
+  ): Promise<SignalSurfContext | null> {
+    const { data, error } = await this.db
+      .from("mcp_oauth_tokens")
+      .select(
+        "id, client_id, user_id, product_id, scope, resource, access_token_expires_at, revoked_at"
+      )
+      .eq("access_token_sha256", sha256Hex(token))
+      .is("revoked_at", null)
+      .maybeSingle()
+
+    requireNoDbError(error, "Failed to resolve MCP OAuth token")
+    if (!data) return null
+
+    const row = data as McpOAuthTokenRow
+    if (metadata.resource && row.resource !== metadata.resource) {
+      return null
+    }
+    if (new Date(row.access_token_expires_at).getTime() <= Date.now()) {
+      return null
+    }
+
+    const { data: clientData, error: clientError } = await this.db
+      .from("mcp_oauth_clients")
+      .select("client_id, client_name, revoked_at")
+      .eq("client_id", row.client_id)
+      .is("revoked_at", null)
+      .maybeSingle()
+
+    requireNoDbError(clientError, "Failed to resolve MCP OAuth client")
+    const client = clientData as McpOAuthClientRow | null
+    if (!client) return null
+
+    const update: Record<string, unknown> = {
+      last_used_at: new Date().toISOString(),
+    }
+    if (metadata.ip) update.last_used_ip = metadata.ip
+
+    const { error: updateError } = await this.db
+      .from("mcp_oauth_tokens")
+      .update(update)
+      .eq("id", row.id)
+
+    if (updateError) {
+      console.error(
+        `Failed to update MCP OAuth token usage metadata: ${updateError.message}`
+      )
+    }
+
+    return {
+      productId: row.product_id,
+      userId: row.user_id,
+      role: row.scope.split(/\s+/).includes("mcp:write") ? "editor" : "viewer",
+      tokenName: client.client_name
+        ? `OAuth: ${client.client_name}`
+        : "OAuth MCP client",
     }
   }
 
@@ -927,13 +1007,23 @@ export class SignalSurfRepository {
           { code: "BAD_REQUEST", status: 400 }
         )
       }
+      try {
+        await this.assertDatabaseBelongsToProduct(context, target.database_id)
+      } catch (error) {
+        if (error instanceof UserFacingError && error.code === "NOT_FOUND") {
+          throw new UserFacingError(
+            "Referenced entry not found or access denied.",
+            { code: "BAD_REQUEST", status: 400 }
+          )
+        }
+        throw error
+      }
       if (value.database_id && target.database_id !== value.database_id) {
         throw new UserFacingError(
           `Referenced entry belongs to database ${target.database_id}, not ${value.database_id}`,
           { code: "BAD_REQUEST", status: 400 }
         )
       }
-      await this.assertDatabaseBelongsToProduct(context, target.database_id)
     }
   }
 
@@ -1052,7 +1142,17 @@ export class SignalSurfRepository {
         .map((entry) => entry.database_id)
         .filter((id): id is string => typeof id === "string")
     )
-    await this.assertDatabaseIdsBelongToProduct(context, databaseIds)
+    try {
+      await this.assertDatabaseIdsBelongToProduct(context, databaseIds)
+    } catch (error) {
+      if (error instanceof UserFacingError && error.code === "NOT_FOUND") {
+        throw new UserFacingError("Row not found or access denied.", {
+          code: "NOT_FOUND",
+          status: 404,
+        })
+      }
+      throw error
+    }
     return entries
   }
 }

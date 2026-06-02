@@ -23,6 +23,7 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     host: "127.0.0.1",
     port: 3333,
     path: "/mcp",
+    resourceUrl: "http://127.0.0.1:3333/mcp",
     allowedHosts: ["127.0.0.1", "localhost", "::1"],
     authDisabled: false,
     tokenEntries: [
@@ -323,6 +324,170 @@ describe("HTTP transport", () => {
     })
   })
 
+  it("advertises OAuth discovery metadata on database-auth 401 responses", async () => {
+    const { server, url } = await listen(
+      makeConfig({
+        authMode: "database",
+        authorizationServerUrl: "https://app.example.com",
+        resourceUrl: "https://mcp.example.com/mcp",
+        tokenEntries: [],
+      })
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        "Content-Type": "application/json",
+      },
+      body: initializeBody(),
+    })
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get("www-authenticate")).toContain(
+      'resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"'
+    )
+    expect(response.headers.get("www-authenticate")).toContain(
+      'scope="mcp:read mcp:write offline_access"'
+    )
+  })
+
+  it("serves OAuth protected resource metadata", async () => {
+    const { server, url } = await listen(
+      makeConfig({
+        authMode: "database",
+        authorizationServerUrl: "https://app.example.com",
+        resourceUrl: "https://mcp.example.com/mcp",
+        tokenEntries: [],
+      })
+    )
+    listeners.push(server)
+
+    const response = await fetch(
+      new URL("/.well-known/oauth-protected-resource", url)
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      resource: "https://mcp.example.com/mcp",
+      authorization_servers: ["https://app.example.com"],
+      scopes_supported: ["mcp:read", "mcp:write", "offline_access"],
+    })
+  })
+
+  it("resolves OAuth access tokens for HTTP auth", async () => {
+    const resourceUrl = "https://mcp.example.com/mcp"
+    const db = new FakeSupabase({
+      mcp_tokens: [],
+      mcp_oauth_tokens: [
+        {
+          id: "00000000-0000-4000-8000-000000000201",
+          client_id: "ssmcp_client_test",
+          user_id: "00000000-0000-4000-8000-000000000202",
+          product_id: productId,
+          scope: "mcp:read mcp:write offline_access",
+          resource: resourceUrl,
+          access_token_sha256: sha256Hex(token),
+          access_token_expires_at: "2999-01-01T00:00:00.000Z",
+          revoked_at: null,
+          last_used_at: null,
+          last_used_ip: null,
+        },
+      ],
+      mcp_oauth_clients: [
+        {
+          client_id: "ssmcp_client_test",
+          client_name: "Claude",
+          revoked_at: null,
+        },
+      ],
+      playbooks: [],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const { server, url } = await listen(
+      makeConfig({
+        authMode: "database",
+        resourceUrl,
+        tokenEntries: [],
+      }),
+      () => new SignalSurfRepository(db as any)
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: initializeBody(),
+    })
+
+    expect(response.status).toBe(200)
+    expect(db.tables.mcp_oauth_tokens[0].last_used_at).toEqual(
+      expect.any(String)
+    )
+  })
+
+  it("rejects OAuth access tokens issued for another MCP resource", async () => {
+    const db = new FakeSupabase({
+      mcp_tokens: [],
+      mcp_oauth_tokens: [
+        {
+          id: "00000000-0000-4000-8000-000000000201",
+          client_id: "ssmcp_client_test",
+          user_id: "00000000-0000-4000-8000-000000000202",
+          product_id: productId,
+          scope: "mcp:read",
+          resource: "https://other.example.com/mcp",
+          access_token_sha256: sha256Hex(token),
+          access_token_expires_at: "2999-01-01T00:00:00.000Z",
+          revoked_at: null,
+        },
+      ],
+      mcp_oauth_clients: [
+        {
+          client_id: "ssmcp_client_test",
+          client_name: "Claude",
+          revoked_at: null,
+        },
+      ],
+      playbooks: [],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const { server, url } = await listen(
+      makeConfig({
+        authMode: "database",
+        resourceUrl: "https://mcp.example.com/mcp",
+        tokenEntries: [],
+      }),
+      () => new SignalSurfRepository(db as any)
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: initializeBody(),
+    })
+
+    expect(response.status).toBe(401)
+  })
+
   it("rejects unexpected Host headers", async () => {
     const { server, url } = await listen()
     listeners.push(server)
@@ -396,5 +561,50 @@ describe("HTTP transport", () => {
         SIGNALSURF_MCP_AUTH_MODE: "database",
       })
     ).toThrow("SIGNALSURF_MCP_AUTH_MODE=database is only supported for HTTP")
+  })
+
+  it("requires explicit hosted OAuth config for database auth mode", () => {
+    expect(() =>
+      loadConfig({
+        SIGNALSURF_SUPABASE_URL: "https://example.supabase.co",
+        SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SIGNALSURF_MCP_TRANSPORT: "http",
+        SIGNALSURF_MCP_AUTH_MODE: "database",
+        SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL: "https://app.example.com",
+        SIGNALSURF_MCP_ALLOWED_HOSTS: "mcp.example.com",
+      })
+    ).toThrow("SIGNALSURF_MCP_RESOURCE_URL is required")
+
+    expect(() =>
+      loadConfig({
+        SIGNALSURF_SUPABASE_URL: "https://example.supabase.co",
+        SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SIGNALSURF_MCP_TRANSPORT: "http",
+        SIGNALSURF_MCP_AUTH_MODE: "database",
+        SIGNALSURF_MCP_RESOURCE_URL: "https://mcp.example.com/mcp",
+        SIGNALSURF_MCP_ALLOWED_HOSTS: "mcp.example.com",
+      })
+    ).toThrow("SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL is required")
+
+    expect(() =>
+      loadConfig({
+        SIGNALSURF_SUPABASE_URL: "https://example.supabase.co",
+        SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SIGNALSURF_MCP_TRANSPORT: "http",
+        SIGNALSURF_MCP_AUTH_MODE: "database",
+        SIGNALSURF_MCP_RESOURCE_URL: "https://mcp.example.com/mcp",
+        SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL: "https://app.example.com",
+      })
+    ).toThrow("SIGNALSURF_MCP_ALLOWED_HOSTS is required")
+  })
+
+  it("reports invalid OAuth URL configuration as config errors", () => {
+    expect(() =>
+      loadConfig({
+        SIGNALSURF_SUPABASE_URL: "https://example.supabase.co",
+        SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SIGNALSURF_MCP_RESOURCE_URL: "not-a-url",
+      })
+    ).toThrow("SIGNALSURF_MCP_RESOURCE_URL must be an absolute URL")
   })
 })

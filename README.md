@@ -14,13 +14,12 @@ extension guidelines.
 If you are connecting an agent to SignalSurf, use the hosted MCP service. You do
 not need this repository, a Supabase key, or a local server.
 
-1. Open SignalSurf Web.
-2. Go to **Settings -> Product**, then find the **MCP** section.
-3. Copy the hosted endpoint, usually `https://mcp.signalsurf.ai/mcp`.
-4. Create a token. Use `Viewer` for read-only agents and `Editor` for agents
-   that should create, update, or delete Surf Points and product table rows.
-5. Configure your MCP client as a remote Streamable HTTP server and send
-   `Authorization: Bearer <token>` on every request.
+1. Add SignalSurf as a remote MCP server in your MCP client:
+   `https://mcp.signalsurf.ai/mcp`.
+2. The client opens SignalSurf's OAuth authorization page.
+3. Sign in, choose the SignalSurf product, review requested scopes, and approve.
+4. The MCP client receives OAuth tokens through its callback and can use
+   SignalSurf tools.
 
 Example:
 
@@ -29,21 +28,17 @@ Example:
   "mcpServers": {
     "signalsurf": {
       "type": "streamable-http",
-      "url": "https://mcp.signalsurf.ai/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_SIGNALSURF_MCP_TOKEN"
-      }
+      "url": "https://mcp.signalsurf.ai/mcp"
     }
   }
 }
 ```
 
-Some local desktop clients require a stdio bridge for remote HTTP MCP servers.
-The service architecture remains the same: the bridge sends requests to the
-hosted endpoint with your SignalSurf bearer token. Do not clone this repository
-or configure Supabase credentials just to use the hosted service.
+Manual tokens remain available in SignalSurf Web under **Settings -> Product**,
+then the **MCP** section. Use them only as an advanced fallback for clients that
+do not yet support remote MCP OAuth.
 
-Example bridge configuration:
+Example fallback bridge configuration:
 
 ```json
 {
@@ -85,6 +80,8 @@ SIGNALSURF_SUPABASE_URL=https://your-project-ref.supabase.co
 SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 SIGNALSURF_MCP_TRANSPORT=http
 SIGNALSURF_MCP_AUTH_MODE=database
+SIGNALSURF_MCP_RESOURCE_URL=https://mcp.signalsurf.ai/mcp
+SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL=https://app.signalsurf.ai
 SIGNALSURF_MCP_HOST=0.0.0.0
 SIGNALSURF_MCP_PORT=3333
 SIGNALSURF_MCP_PATH=/mcp
@@ -99,9 +96,10 @@ corepack pnpm@10.0.0 build
 corepack pnpm@10.0.0 start
 ```
 
-In `database` auth mode, the server hashes bearer tokens and resolves them from
-SignalSurf Web's `mcp_tokens` table. Token plaintext is only shown once in
-SignalSurf Web; this service never needs static token JSON in production.
+In `database` auth mode, the server hashes bearer tokens and resolves OAuth
+access tokens from SignalSurf Web's `mcp_oauth_tokens` table. Manual fallback
+tokens from `mcp_tokens` are also accepted for clients that do not support
+remote MCP OAuth.
 
 ## Local Development Quick Start
 

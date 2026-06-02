@@ -74,6 +74,7 @@ describe("auth", () => {
       host: "127.0.0.1",
       port: 3333,
       path: "/mcp",
+      resourceUrl: "http://127.0.0.1:3333/mcp",
       allowedHosts: ["127.0.0.1"],
       authDisabled: false,
       stdioToken: "token-context",
@@ -108,6 +109,7 @@ describe("auth", () => {
       host: "127.0.0.1",
       port: 3333,
       path: "/mcp",
+      resourceUrl: "http://127.0.0.1:3333/mcp",
       allowedHosts: ["127.0.0.1"],
       authDisabled: false,
       directContext: {
@@ -130,6 +132,7 @@ describe("auth", () => {
       host: "127.0.0.1",
       port: 3333,
       path: "/mcp",
+      resourceUrl: "http://127.0.0.1:3333/mcp",
       allowedHosts: ["127.0.0.1"],
       authDisabled: true,
       tokenEntries: [],

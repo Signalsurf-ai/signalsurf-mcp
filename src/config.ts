@@ -32,6 +32,8 @@ export type AppConfig = {
   host: string
   port: number
   path: string
+  resourceUrl: string
+  authorizationServerUrl?: string
   allowedHosts: string[]
   authDisabled: boolean
   stdioToken?: string
@@ -96,6 +98,26 @@ function parseAllowedHosts(raw: string | undefined, host: string): string[] {
     return ["127.0.0.1", "localhost", "::1"]
   }
   return [normalizedHost]
+}
+
+function normalizeUrl(
+  value: string | undefined,
+  envName: string
+): string | undefined {
+  if (!value?.trim()) return undefined
+  try {
+    const url = new URL(value)
+    url.hash = ""
+    url.search = ""
+    return url.toString().replace(/\/+$/, "")
+  } catch (error) {
+    throw new UserFacingError(
+      `${envName} must be an absolute URL: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { code: "CONFIG_ERROR", status: 500 }
+    )
+  }
 }
 
 function buildDirectContext(
@@ -180,6 +202,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
 
   const host = env.SIGNALSURF_MCP_HOST ?? "127.0.0.1"
+  const path = env.SIGNALSURF_MCP_PATH ?? "/mcp"
+  const defaultResourceUrl = `http://${host}:${portResult.data}${path}`
+  const configuredResourceUrl = normalizeUrl(
+    env.SIGNALSURF_MCP_RESOURCE_URL,
+    "SIGNALSURF_MCP_RESOURCE_URL"
+  )
+  const configuredAuthorizationServerUrl = normalizeUrl(
+    env.SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL,
+    "SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL"
+  )
+  const hasExplicitAllowedHosts = Boolean(
+    env.SIGNALSURF_MCP_ALLOWED_HOSTS?.trim()
+  )
 
   const config = {
     supabaseUrl,
@@ -189,7 +224,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     trustProxy: readBool(env.SIGNALSURF_MCP_TRUST_PROXY),
     host,
     port: portResult.data,
-    path: env.SIGNALSURF_MCP_PATH ?? "/mcp",
+    path,
+    resourceUrl: configuredResourceUrl ?? defaultResourceUrl,
+    authorizationServerUrl: configuredAuthorizationServerUrl,
     allowedHosts: parseAllowedHosts(env.SIGNALSURF_MCP_ALLOWED_HOSTS, host),
     authDisabled: readBool(env.SIGNALSURF_MCP_AUTH_DISABLED),
     stdioToken: env.SIGNALSURF_MCP_TOKEN,
@@ -208,6 +245,26 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       "SIGNALSURF_MCP_AUTH_MODE=database is only supported for HTTP transport.",
       { code: "CONFIG_ERROR", status: 500 }
     )
+  }
+  if (config.authMode === "database") {
+    if (!configuredResourceUrl) {
+      throw new UserFacingError(
+        "SIGNALSURF_MCP_RESOURCE_URL is required when SIGNALSURF_MCP_AUTH_MODE=database.",
+        { code: "CONFIG_ERROR", status: 500 }
+      )
+    }
+    if (!configuredAuthorizationServerUrl) {
+      throw new UserFacingError(
+        "SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL is required when SIGNALSURF_MCP_AUTH_MODE=database.",
+        { code: "CONFIG_ERROR", status: 500 }
+      )
+    }
+    if (!hasExplicitAllowedHosts) {
+      throw new UserFacingError(
+        "SIGNALSURF_MCP_ALLOWED_HOSTS is required when SIGNALSURF_MCP_AUTH_MODE=database.",
+        { code: "CONFIG_ERROR", status: 500 }
+      )
+    }
   }
 
   return config

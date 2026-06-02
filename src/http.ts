@@ -44,6 +44,21 @@ function getClientIp(req: express.Request, trustProxy: boolean): string | null {
   return normalizeIp(trustProxy ? req.ip : req.socket.remoteAddress)
 }
 
+function getProtectedResourceMetadataUrl(config: AppConfig): string {
+  return `${new URL(config.resourceUrl).origin}/.well-known/oauth-protected-resource`
+}
+
+function getWwwAuthenticateHeader(config: AppConfig): string {
+  const parts = ['Bearer realm="signalsurf-mcp"']
+  if (config.authorizationServerUrl) {
+    parts.push(
+      `resource_metadata="${getProtectedResourceMetadataUrl(config)}"`,
+      'scope="mcp:read mcp:write offline_access"'
+    )
+  }
+  return parts.join(", ")
+}
+
 export function createHttpApp(
   config: AppConfig,
   dependencies: HttpServerDependencies = {}
@@ -72,7 +87,10 @@ export function createHttpApp(
         config,
         parseBearerToken(req.headers.authorization),
         repository,
-        { ip: getClientIp(req, config.trustProxy) }
+        {
+          ip: getClientIp(req, config.trustProxy),
+          resource: config.resourceUrl,
+        }
       )
       const server = createSignalSurfMcpServer({ context, repository })
       const transport = new StreamableHTTPServerTransport({
@@ -87,11 +105,33 @@ export function createHttpApp(
     } catch (error) {
       const status = error instanceof UserFacingError ? error.status : 500
       if (status === 401) {
-        res.setHeader("WWW-Authenticate", 'Bearer realm="signalsurf-mcp"')
+        res.setHeader("WWW-Authenticate", getWwwAuthenticateHeader(config))
       }
       res.status(status).json(errorToObject(error))
     }
   })
+
+  app.get(
+    /^\/\.well-known\/oauth-protected-resource(?:\/.*)?$/,
+    (_req, res) => {
+      if (!config.authorizationServerUrl) {
+        res.status(404).json({
+          ok: false,
+          error:
+            "OAuth protected resource metadata is not configured for this MCP server.",
+        })
+        return
+      }
+
+      res.setHeader("Cache-Control", "no-store")
+      res.json({
+        resource: config.resourceUrl,
+        authorization_servers: [config.authorizationServerUrl],
+        scopes_supported: ["mcp:read", "mcp:write", "offline_access"],
+        bearer_methods_supported: ["header"],
+      })
+    }
+  )
 
   app.get(config.path, (_req, res) => {
     res.status(405).json({

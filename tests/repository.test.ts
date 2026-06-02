@@ -393,7 +393,7 @@ describe("SignalSurfRepository", () => {
           },
         },
       })
-    ).rejects.toThrow("Database not found or access denied")
+    ).rejects.toThrow("Referenced entry not found or access denied")
 
     await expect(
       repo.updateTableRow(context, {
@@ -405,7 +405,7 @@ describe("SignalSurfRepository", () => {
           },
         },
       })
-    ).rejects.toThrow("Database not found or access denied")
+    ).rejects.toThrow("Referenced entry not found or access denied")
   })
 
   it("stamps MCP provenance when creating rows", async () => {
@@ -474,7 +474,7 @@ describe("SignalSurfRepository", () => {
 
     await expect(
       repo.deleteTableRows(context, [row1, otherProductRow, row1])
-    ).rejects.toThrow("Database not found or access denied")
+    ).rejects.toThrow("Row not found or access denied")
 
     expect(db.tables.entries.some((entry) => entry.id === row1)).toBe(true)
     expect(
