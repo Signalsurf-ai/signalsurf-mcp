@@ -631,4 +631,13 @@ describe("HTTP transport", () => {
       })
     ).toThrow("SIGNALSURF_MCP_RESOURCE_URL must be an absolute URL")
   })
+
+  it("reports invalid Supabase URL configuration as config errors", () => {
+    expect(() =>
+      loadConfig({
+        SIGNALSURF_SUPABASE_URL: "example.supabase.co",
+        SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      })
+    ).toThrow("SIGNALSURF_SUPABASE_URL must be a valid HTTP or HTTPS URL")
+  })
 })

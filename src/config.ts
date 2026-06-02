@@ -120,6 +120,25 @@ function normalizeUrl(
   }
 }
 
+function requireHttpUrl(value: string, envName: string): string {
+  try {
+    const url = new URL(value)
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("URL must use http or https")
+    }
+    url.hash = ""
+    url.search = ""
+    return url.toString().replace(/\/+$/, "")
+  } catch (error) {
+    throw new UserFacingError(
+      `${envName} must be a valid HTTP or HTTPS URL: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { code: "CONFIG_ERROR", status: 500 }
+    )
+  }
+}
+
 function buildDirectContext(
   env: NodeJS.ProcessEnv
 ): SignalSurfContext | undefined {
@@ -169,6 +188,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       { code: "CONFIG_ERROR", status: 500 }
     )
   }
+  const normalizedSupabaseUrl = requireHttpUrl(
+    supabaseUrl,
+    supabaseUrl === env.NEXT_PUBLIC_SUPABASE_URL
+      ? "NEXT_PUBLIC_SUPABASE_URL"
+      : "SIGNALSURF_SUPABASE_URL"
+  )
 
   const transportResult = z
     .enum(["stdio", "http"])
@@ -223,7 +248,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   )
 
   const config = {
-    supabaseUrl,
+    supabaseUrl: normalizedSupabaseUrl,
     supabaseServiceRoleKey,
     transport: transportResult.data,
     authMode: authModeResult.data,
