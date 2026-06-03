@@ -103,7 +103,7 @@ export const PUBLIC_MCP_TOOLS = {
   get_context: {
     title: "Get SignalSurf MCP Context",
     description:
-      "Return authorized product ids, user, role, scopes, and capability context bound to this MCP connection.",
+      "Return authorized product ids and names, user, role, scopes, and capability context bound to this MCP connection.",
     requiredCapability: "context.read",
     surferSurface: "connection context",
     publicStatus: "supported",

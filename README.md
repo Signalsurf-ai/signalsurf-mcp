@@ -22,7 +22,8 @@ not need this repository, a Supabase key, or a local server.
    review requested scopes, and approve.
 4. The MCP client receives OAuth tokens through its callback and can use
    SignalSurf tools. If you approve multiple products, the agent should call
-   `get_context` first and pass `productId` to product-scoped tool calls.
+   `get_context` first, choose from the returned `products[].name` list, and
+   pass that product's `productId` to product-scoped tool calls.
 
 The hosted MCP currently supports product-scoped Surf Point CRUD and table row
 read/create/update/delete. It is a safe public subset of Surfer, the agent in
@@ -212,7 +213,7 @@ requirement, and it grants no tool capability by itself.
 ```text
 MCP client
   -> stdio or Streamable HTTP transport
-  -> token auth resolves { productId, productIds, userId, role, scopes }
+  -> token auth resolves { productId, productIds, products, userId, role, scopes }
   -> MCP tool/resource handlers
   -> SignalSurf repository
   -> Supabase service-role client with explicit product-scope checks
@@ -237,10 +238,12 @@ in-memory session state and makes bearer-token product scoping straightforward.
 
 Context:
 
-- `get_context`: returns authorized product ids, optional user, role, token
-  name, and scope/capability context for the current connection. Agents should
-  call this before writes. If `productIds` contains more than one id, pass the
-  intended `productId` to every product-scoped tool call.
+- `get_context`: returns authorized products with human-readable names,
+  optional workspace names, ids, optional user, role, token name, and
+  scope/capability context for the current connection. Agents should call this
+  before writes. If `productIds` contains more than one id, choose the intended
+  product from `products[]` and pass its `productId` to every product-scoped
+  tool call.
 
 Surf points:
 
@@ -289,8 +292,9 @@ Resources:
 - `signalsurf://databases` for single-product tokens
 - `signalsurf://databases/{databaseId}/rows` for single-product tokens
 
-For multi-product OAuth tokens, only `signalsurf://context` is listed. Use tools
-with an explicit `productId` to read or modify product data.
+For multi-product OAuth tokens, only `signalsurf://context` is listed. Read its
+`products[]` list to see product names and workspace names, then use tools with
+an explicit `productId` to read or modify product data.
 
 Schema limits:
 

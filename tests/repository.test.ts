@@ -12,6 +12,9 @@ const context: SignalSurfContext = {
   tokenName: "test-agent",
 }
 
+const secondProductId = "00000000-0000-4000-8000-000000000002"
+const org1 = "00000000-0000-4000-8000-000000000701"
+const org2 = "00000000-0000-4000-8000-000000000702"
 const db1 = "00000000-0000-4000-8000-000000000201"
 const db2 = "00000000-0000-4000-8000-000000000202"
 const otherProductDb = "00000000-0000-4000-8000-000000000299"
@@ -193,6 +196,28 @@ function makeDb() {
         updated_at: "2026-06-01T00:00:00Z",
       },
     ],
+    products: [
+      {
+        id: context.productId,
+        name: "Primary Product",
+        organization_id: org1,
+      },
+      {
+        id: secondProductId,
+        name: "Second Product",
+        organization_id: org2,
+      },
+    ],
+    organizations: [
+      {
+        id: org1,
+        name: "Primary Workspace",
+      },
+      {
+        id: org2,
+        name: "Second Workspace",
+      },
+    ],
     surf_jobs: [
       {
         id: "job-1",
@@ -256,6 +281,14 @@ describe("SignalSurfRepository", () => {
 
     expect(hostedContext).toMatchObject({
       productId: context.productId,
+      products: [
+        {
+          productId: context.productId,
+          name: "Primary Product",
+          organizationId: org1,
+          organizationName: "Primary Workspace",
+        },
+      ],
       role: "editor",
       tokenName: "hosted-agent",
     })
@@ -282,10 +315,7 @@ describe("SignalSurfRepository", () => {
         client_id: "ssmcp_client_multi",
         user_id: context.userId,
         product_id: context.productId,
-        product_ids: [
-          context.productId,
-          "00000000-0000-4000-8000-000000000002",
-        ],
+        product_ids: [context.productId, secondProductId],
         scope: "mcp:surf_points.read mcp:tables.read offline_access",
         resource: "https://mcp.signalsurf.ai/mcp",
         access_token_sha256: sha256Hex("oauth-token"),
@@ -301,7 +331,19 @@ describe("SignalSurfRepository", () => {
 
     expect(oauthContext).toMatchObject({
       productId: context.productId,
-      productIds: [context.productId, "00000000-0000-4000-8000-000000000002"],
+      productIds: [context.productId, secondProductId],
+      products: [
+        {
+          productId: context.productId,
+          name: "Primary Product",
+          organizationName: "Primary Workspace",
+        },
+        {
+          productId: secondProductId,
+          name: "Second Product",
+          organizationName: "Second Workspace",
+        },
+      ],
       role: "viewer",
       tokenName: "OAuth: Typeless",
     })

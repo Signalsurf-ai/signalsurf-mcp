@@ -6,6 +6,7 @@ import {
 import {
   assertCanUseCapability,
   authorizedProductIds,
+  authorizedProducts,
   canUseCapability,
   listContextCapabilities,
   resolveProductContext,
@@ -51,7 +52,7 @@ export function createSignalSurfMcpServer(
         tools: {},
       },
       instructions:
-        "Use these tools to work with SignalSurf products authorized for this MCP token. Call get_context first; when productIds contains multiple products, pass productId to every product-scoped tool call.",
+        "Use these tools to work with SignalSurf products authorized for this MCP token. Call get_context first; choose products by products[].name and pass products[].productId to every product-scoped tool call when multiple products are authorized.",
     }
   )
 
@@ -97,9 +98,12 @@ function registerTools(
   registerPublicTool("get_context", undefined, async () =>
     runJsonTool(async () => {
       assertToolAllowed("get_context")
+      const productIds = authorizedProductIds(context)
+      const products = authorizedProducts(context)
       return {
         productId: context.productId,
-        productIds: authorizedProductIds(context),
+        productIds,
+        products,
         userId: context.userId ?? null,
         role: context.role,
         tokenName: context.tokenName ?? null,
@@ -224,6 +228,7 @@ function registerResources(
   context: SignalSurfContext
 ) {
   const contextProductIds = authorizedProductIds(context)
+  const contextProducts = authorizedProducts(context)
 
   server.registerResource(
     "signalsurf_context",
@@ -238,6 +243,7 @@ function registerResources(
       return jsonResource(uri.href, {
         productId: context.productId,
         productIds: contextProductIds,
+        products: contextProducts,
         userId: context.userId ?? null,
         role: context.role,
         tokenName: context.tokenName ?? null,

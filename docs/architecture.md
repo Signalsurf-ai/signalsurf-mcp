@@ -19,6 +19,9 @@ The server always resolves a `SignalSurfContext` before any tool runs:
 
 - `productId`: primary product boundary for single-product calls
 - `productIds`: optional list of all products granted to the current OAuth token
+- `products`: authorized product metadata in the same order as `productIds`,
+  including `productId`, human-readable `name`, optional `organizationId`, and
+  optional `organizationName`
 - `userId`: optional user context, currently used for surf point delete cleanup
 - `role`: `viewer`, `editor`, or `owner`
 - `tokenName`: optional source label for MCP row mutations
@@ -85,9 +88,10 @@ Each static token entry binds one caller to exactly one product:
 }
 ```
 
-Agents should call `get_context` first and verify `productIds`, `role`, and
+Agents should call `get_context` first and verify `products`, `role`, and
 `tokenName` before making writes. If `productIds` contains more than one id,
-agents must pass the intended `productId` to product-scoped tools.
+agents should choose from the human-readable product/workspace names in
+`products[]` and pass the intended `productId` to product-scoped tools.
 
 Hosted token revocation is immediate: SignalSurf Web sets `revoked_at`, and
 database auth only resolves rows where `revoked_at IS NULL`.
@@ -161,6 +165,10 @@ Resources are read-only JSON context surfaces:
 - `signalsurf://surf-points`
 - `signalsurf://databases`
 - `signalsurf://databases/{databaseId}/rows`
+
+`signalsurf://context` includes the same `products[]` metadata as
+`get_context`, so clients that prefer resources over tools can still show
+human-readable product and workspace names.
 
 The database-row template expands current-product databases into concrete
 resources so clients that only show `resources/list` can discover row resources.

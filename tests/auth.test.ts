@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   assertCanUseCapability,
   assertCanWrite,
+  authorizedProducts,
   listContextCapabilities,
   resolveProductContext,
   resolveStdioContext,
@@ -141,6 +142,39 @@ describe("auth", () => {
     expect(() =>
       resolveProductContext(context, "00000000-0000-4000-8000-000000000099")
     ).toThrow("not authorized")
+  })
+
+  it("returns ordered authorized product metadata with id fallbacks", () => {
+    expect(
+      authorizedProducts({
+        productId: "00000000-0000-4000-8000-000000000001",
+        productIds: [
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000002",
+        ],
+        products: [
+          {
+            productId: "00000000-0000-4000-8000-000000000002",
+            name: "Second Product",
+            organizationName: "Demo Workspace",
+          },
+        ],
+        role: "editor",
+      })
+    ).toEqual([
+      {
+        productId: "00000000-0000-4000-8000-000000000001",
+        name: "00000000-0000-4000-8000-000000000001",
+        organizationId: null,
+        organizationName: null,
+      },
+      {
+        productId: "00000000-0000-4000-8000-000000000002",
+        name: "Second Product",
+        organizationId: null,
+        organizationName: "Demo Workspace",
+      },
+    ])
   })
 
   it("uses SIGNALSURF_MCP_TOKEN before direct stdio context", () => {

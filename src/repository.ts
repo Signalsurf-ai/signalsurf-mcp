@@ -4,6 +4,7 @@ import type {
   EntryRow,
   JsonRecord,
   SignalSurfContext,
+  SignalSurfProductContext,
   SupabaseLike,
   SurfPointRow,
 } from "./types.js"
@@ -102,6 +103,17 @@ type McpOAuthClientRow = {
   client_id: string
   client_name: string | null
   revoked_at: string | null
+}
+
+type ProductContextRow = {
+  id: string
+  name: string | null
+  organization_id?: string | null
+}
+
+type OrganizationContextRow = {
+  id: string
+  name: string | null
 }
 
 type CreateTableRowInput = {
@@ -261,6 +273,7 @@ export class SignalSurfRepository {
 
     return {
       productId: row.product_id,
+      products: await this.resolveProductContexts([row.product_id]),
       role: row.role,
       tokenName: row.name ?? undefined,
     }
@@ -319,10 +332,12 @@ export class SignalSurfRepository {
     if (grantedCapabilitiesForScopes(scopes).length === 0) {
       return null
     }
+    const productIds = oauthTokenProductIds(row)
 
     return {
       productId: row.product_id,
-      productIds: oauthTokenProductIds(row),
+      productIds,
+      products: await this.resolveProductContexts(productIds),
       userId: row.user_id,
       role: scopesImplyWriteAccess(scopes) ? "editor" : "viewer",
       tokenName: client.client_name
@@ -330,6 +345,68 @@ export class SignalSurfRepository {
         : "OAuth MCP client",
       scopes,
     }
+  }
+
+  private async resolveProductContexts(
+    productIds: string[]
+  ): Promise<SignalSurfProductContext[]> {
+    const uniqueProductIds = uniqueIds(productIds.filter(Boolean))
+    if (uniqueProductIds.length === 0) return []
+
+    const { data, error } = await this.db
+      .from("products")
+      .select("id, name, organization_id")
+      .in("id", uniqueProductIds)
+
+    requireNoDbError(error, "Failed to resolve SignalSurf product names")
+
+    const products = (data ?? []) as ProductContextRow[]
+    const productsById = new Map(
+      products.map((product) => [product.id, product])
+    )
+    const organizationIds = uniqueIds(
+      products
+        .map((product) => product.organization_id)
+        .filter((id): id is string => Boolean(id))
+    )
+    const organizationsById = await this.resolveOrganizationsById(
+      organizationIds
+    )
+
+    return uniqueProductIds.map((productId) => {
+      const product = productsById.get(productId)
+      const organizationId = product?.organization_id ?? null
+      const organization = organizationId
+        ? organizationsById.get(organizationId)
+        : null
+
+      return {
+        productId,
+        name: product?.name?.trim() || productId,
+        organizationId,
+        organizationName: organization?.name ?? null,
+      }
+    })
+  }
+
+  private async resolveOrganizationsById(
+    organizationIds: string[]
+  ): Promise<Map<string, OrganizationContextRow>> {
+    if (organizationIds.length === 0) return new Map()
+
+    const { data, error } = await this.db
+      .from("organizations")
+      .select("id, name")
+      .in("id", organizationIds)
+
+    requireNoDbError(error, "Failed to resolve SignalSurf workspace names")
+
+    return new Map(
+      ((data ?? []) as OrganizationContextRow[]).map((organization) => [
+        organization.id,
+        organization,
+      ])
+    )
   }
 
   async listSurfPoints(

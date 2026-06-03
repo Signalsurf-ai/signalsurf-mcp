@@ -284,6 +284,18 @@ describe("MCP server", () => {
     const multiProductContext: SignalSurfContext = {
       ...context,
       productIds: [context.productId, secondProductId],
+      products: [
+        {
+          productId: context.productId,
+          name: "Primary Product",
+          organizationName: "Primary Workspace",
+        },
+        {
+          productId: secondProductId,
+          name: "Second Product",
+          organizationName: "Second Workspace",
+        },
+      ],
     }
     const server = createSignalSurfMcpServer({
       context: multiProductContext,
@@ -308,9 +320,22 @@ describe("MCP server", () => {
       contextResult.content?.[0]?.type === "text"
         ? contextResult.content[0].text
         : ""
-    expect(JSON.parse(contextText).data.productIds).toEqual([
+    const parsedContext = JSON.parse(contextText).data
+    expect(parsedContext.productIds).toEqual([
       context.productId,
       secondProductId,
+    ])
+    expect(parsedContext.products).toMatchObject([
+      {
+        productId: context.productId,
+        name: "Primary Product",
+        organizationName: "Primary Workspace",
+      },
+      {
+        productId: secondProductId,
+        name: "Second Product",
+        organizationName: "Second Workspace",
+      },
     ])
 
     const missingProduct = await client.callTool({
@@ -347,9 +372,20 @@ describe("MCP server", () => {
     })
     const contextResourceText =
       contextResource.contents?.[0]?.text?.toString() ?? ""
-    expect(JSON.parse(contextResourceText).productIds).toEqual([
+    const parsedContextResource = JSON.parse(contextResourceText)
+    expect(parsedContextResource.productIds).toEqual([
       context.productId,
       secondProductId,
+    ])
+    expect(parsedContextResource.products).toMatchObject([
+      {
+        productId: context.productId,
+        name: "Primary Product",
+      },
+      {
+        productId: secondProductId,
+        name: "Second Product",
+      },
     ])
   })
 })

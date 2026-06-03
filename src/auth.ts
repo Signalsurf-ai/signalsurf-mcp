@@ -7,7 +7,11 @@ import {
   requiredScopesForCapability,
   scopesGrantCapability,
 } from "./capabilities.js"
-import type { AccessRole, SignalSurfContext } from "./types.js"
+import type {
+  AccessRole,
+  SignalSurfContext,
+  SignalSurfProductContext,
+} from "./types.js"
 import { UserFacingError } from "./errors.js"
 
 const roleRank: Record<AccessRole, number> = {
@@ -231,11 +235,31 @@ export function authorizedProductIds(context: SignalSurfContext): string[] {
   return [...new Set(ids.filter(Boolean))]
 }
 
+export function authorizedProducts(
+  context: SignalSurfContext
+): SignalSurfProductContext[] {
+  const productIds = authorizedProductIds(context)
+  const productsById = new Map(
+    (context.products ?? []).map((product) => [product.productId, product])
+  )
+
+  return productIds.map((productId) => {
+    const product = productsById.get(productId)
+    return {
+      productId,
+      name: product?.name?.trim() || productId,
+      organizationId: product?.organizationId ?? null,
+      organizationName: product?.organizationName ?? null,
+    }
+  })
+}
+
 export function resolveProductContext(
   context: SignalSurfContext,
   requestedProductId?: string
 ): SignalSurfContext {
   const productIds = authorizedProductIds(context)
+  const products = authorizedProducts(context)
   if (!requestedProductId) {
     if (productIds.length > 1) {
       throw new UserFacingError(
@@ -243,7 +267,7 @@ export function resolveProductContext(
         { code: "BAD_REQUEST", status: 400 }
       )
     }
-    return { ...context, productId: productIds[0]!, productIds }
+    return { ...context, productId: productIds[0]!, productIds, products }
   }
 
   if (!productIds.includes(requestedProductId)) {
@@ -253,5 +277,5 @@ export function resolveProductContext(
     )
   }
 
-  return { ...context, productId: requestedProductId, productIds }
+  return { ...context, productId: requestedProductId, productIds, products }
 }

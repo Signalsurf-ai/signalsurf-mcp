@@ -38,7 +38,7 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 
 | Tool                | Required capability  | Destructive | Notes                                                                            |
 | ------------------- | -------------------- | ----------- | -------------------------------------------------------------------------------- |
-| `get_context`       | `context.read`       | No          | Returns authorized product ids, user, role, scopes, and per-tool access booleans |
+| `get_context`       | `context.read`       | No          | Returns authorized product ids/names, workspace names, user, role, scopes, and per-tool access booleans |
 | `list_surf_points`  | `surf_points.read`   | No          | Lists non-deleted Surf Points for one authorized product                         |
 | `create_surf_point` | `surf_points.write`  | No          | Creates a Surf Point in one authorized product                                   |
 | `update_surf_point` | `surf_points.write`  | No          | Mutates Surf Point metadata, prompts, targets, or JSON config                    |
@@ -51,8 +51,9 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `delete_table_rows` | `tables.delete`      | Yes         | Hard-deletes rows after product-scope verification                               |
 
 OAuth tokens can authorize multiple products. Agents should call `get_context`
-first; when multiple `productIds` are returned, every product-scoped tool call
-must include the intended `productId`. Static fallback tokens remain
+first; when multiple `productIds` are returned, choose from `products[]` using
+the human-readable product and workspace names, then include the intended
+`productId` in every product-scoped tool call. Static fallback tokens remain
 single-product scoped.
 
 `tools/list` advertises this public contract consistently. A caller whose token

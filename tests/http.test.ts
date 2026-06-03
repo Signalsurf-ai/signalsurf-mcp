@@ -557,6 +557,28 @@ describe("HTTP transport", () => {
           revoked_at: null,
         },
       ],
+      products: [
+        {
+          id: productId,
+          name: "Primary Product",
+          organization_id: "00000000-0000-4000-8000-000000000701",
+        },
+        {
+          id: secondProductId,
+          name: "Second Product",
+          organization_id: "00000000-0000-4000-8000-000000000702",
+        },
+      ],
+      organizations: [
+        {
+          id: "00000000-0000-4000-8000-000000000701",
+          name: "Primary Workspace",
+        },
+        {
+          id: "00000000-0000-4000-8000-000000000702",
+          name: "Second Workspace",
+        },
+      ],
       playbooks: [
         {
           id: "00000000-0000-4000-8000-000000000301",
@@ -598,6 +620,32 @@ describe("HTTP transport", () => {
       () => new SignalSurfRepository(db as any)
     )
     listeners.push(server)
+
+    const contextResponse = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: callToolBody("get_context"),
+    })
+
+    expect(contextResponse.status).toBe(200)
+    const contextBody = await readMcpJson(contextResponse)
+    const contextContent = JSON.parse(contextBody.result.content[0].text)
+    expect(contextContent.data.products).toMatchObject([
+      {
+        productId,
+        name: "Primary Product",
+        organizationName: "Primary Workspace",
+      },
+      {
+        productId: secondProductId,
+        name: "Second Product",
+        organizationName: "Second Workspace",
+      },
+    ])
 
     const missingProduct = await fetch(url, {
       method: "POST",
