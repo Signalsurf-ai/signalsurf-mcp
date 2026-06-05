@@ -6,10 +6,20 @@ const productTargetSchema = {
   productId: uuidSchema.optional(),
 }
 
+export const toolOutputSchema = {
+  ok: z.boolean(),
+  data: z.unknown().optional(),
+}
+
 export const listSurfPointsSchema = {
   ...productTargetSchema,
   includeInactive: z.boolean().default(true).optional(),
   limit: z.number().int().min(1).max(200).default(100).optional(),
+}
+
+export const getSurfPointSchema = {
+  ...productTargetSchema,
+  surfPointId: uuidSchema,
 }
 
 export const createSurfPointSchema = {
@@ -56,6 +66,39 @@ export const updateSurfPointSchema = {
   configPatch: jsonObjectSchema.optional(),
 }
 
+export const runSurfPointSchema = {
+  ...productTargetSchema,
+  surfPointId: uuidSchema,
+  idempotencyKey: z.string().trim().min(1).max(200).optional(),
+  allowInactive: z.boolean().default(false).optional(),
+  dedupePending: z.boolean().default(true).optional(),
+}
+
+export const getSurfJobSchema = {
+  ...productTargetSchema,
+  jobId: uuidSchema,
+}
+
+export const waitForSurfJobSchema = {
+  ...productTargetSchema,
+  jobId: uuidSchema,
+  timeoutMs: z.number().int().min(0).max(120000).default(30000).optional(),
+  pollIntervalMs: z.number().int().min(100).max(10000).default(1000).optional(),
+}
+
+export const listSurfJobsSchema = {
+  ...productTargetSchema,
+  surfPointId: uuidSchema.optional(),
+  status: z.string().trim().min(1).max(50).optional(),
+  limit: z.number().int().min(1).max(200).default(50).optional(),
+  offset: z.number().int().min(0).default(0).optional(),
+}
+
+export const cancelSurfJobSchema = {
+  ...productTargetSchema,
+  jobId: uuidSchema,
+}
+
 export const deleteSurfPointSchema = {
   ...productTargetSchema,
   surfPointIds: z.array(uuidSchema).min(1).max(50),
@@ -66,6 +109,34 @@ export const listDatabasesSchema = {
   includeSystem: z.boolean().default(false).optional(),
   limit: z.number().int().min(1).max(200).default(100).optional(),
 }
+
+const tableFilterSchema = z.object({
+  field: z.string().trim().min(1).max(100),
+  op: z.enum([
+    "eq",
+    "neq",
+    "in",
+    "not_in",
+    "contains",
+    "starts_with",
+    "is_empty",
+    "is_not_empty",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "between",
+    "array_contains",
+    "relation_is",
+    "relation_in",
+  ]),
+  value: z.unknown().optional(),
+})
+
+const tableSortSchema = z.object({
+  field: z.string().trim().min(1).max(100),
+  direction: z.enum(["asc", "desc"]).default("asc").optional(),
+})
 
 export const readTableSchema = {
   ...productTargetSchema,
@@ -78,6 +149,27 @@ export const readTableSchema = {
     .optional(),
   ascending: z.boolean().default(false).optional(),
   dataContains: jsonObjectSchema.optional(),
+  filters: z.array(tableFilterSchema).max(25).optional(),
+  filterLogic: z.enum(["and", "or"]).default("and").optional(),
+  sorts: z.array(tableSortSchema).max(5).optional(),
+  scanLimit: z.number().int().min(1).max(5000).default(1000).optional(),
+}
+
+export const listDatabaseViewsSchema = {
+  ...productTargetSchema,
+  databaseId: uuidSchema,
+}
+
+export const readTableViewSchema = {
+  ...productTargetSchema,
+  databaseId: uuidSchema,
+  viewId: z.string().trim().min(1).max(100),
+  limit: z.number().int().min(1).max(200).default(50).optional(),
+  offset: z.number().int().min(0).default(0).optional(),
+  filters: z.array(tableFilterSchema).max(25).optional(),
+  filterLogic: z.enum(["and", "or"]).default("and").optional(),
+  sorts: z.array(tableSortSchema).max(5).optional(),
+  scanLimit: z.number().int().min(1).max(5000).default(1000).optional(),
 }
 
 export const getTableRowSchema = {
@@ -106,4 +198,92 @@ export const updateTableRowSchema = {
 export const deleteTableRowsSchema = {
   ...productTargetSchema,
   rowIds: z.array(uuidSchema).min(1).max(100),
+}
+
+const databaseFieldSchema = z
+  .object({
+    key: z
+      .string()
+      .trim()
+      .min(1)
+      .max(100)
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
+    type: z.string().trim().min(1).max(100),
+    label: z.string().trim().max(200).optional(),
+    description: z.string().trim().max(2000).optional(),
+  })
+  .catchall(z.unknown())
+
+export const listDatabaseFieldsSchema = {
+  ...productTargetSchema,
+  databaseId: uuidSchema,
+}
+
+export const addDatabaseFieldSchema = {
+  ...productTargetSchema,
+  databaseId: uuidSchema,
+  field: databaseFieldSchema,
+}
+
+export const updateDatabaseFieldSchema = {
+  ...productTargetSchema,
+  databaseId: uuidSchema,
+  fieldKey: z.string().trim().min(1).max(100),
+  patch: jsonObjectSchema,
+}
+
+export const removeDatabaseFieldSchema = {
+  ...productTargetSchema,
+  databaseId: uuidSchema,
+  fieldKey: z.string().trim().min(1).max(100),
+}
+
+export const createRelationFieldSchema = {
+  ...productTargetSchema,
+  databaseId: uuidSchema,
+  key: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
+  label: z.string().trim().max(200).optional(),
+  description: z.string().trim().max(2000).optional(),
+  targetDatabaseId: uuidSchema,
+  relationType: z.string().trim().max(100).default("item_ref").optional(),
+  displayField: z.string().trim().max(100).optional(),
+}
+
+export const listSurfPointSourcesSchema = {
+  ...productTargetSchema,
+  surfPointId: uuidSchema,
+}
+
+export const setSurfPointSourceActiveSchema = {
+  ...productTargetSchema,
+  sourceId: uuidSchema,
+  isActive: z.boolean(),
+}
+
+export const listProductToolsSchema = {
+  ...productTargetSchema,
+  includeDisabled: z.boolean().default(false).optional(),
+  limit: z.number().int().min(1).max(200).default(100).optional(),
+}
+
+export const listSurfPointToolsSchema = {
+  ...productTargetSchema,
+  surfPointId: uuidSchema,
+}
+
+export const attachSurfPointToolSchema = {
+  ...productTargetSchema,
+  surfPointId: uuidSchema,
+  toolId: uuidSchema,
+}
+
+export const detachSurfPointToolSchema = {
+  ...productTargetSchema,
+  surfPointId: uuidSchema,
+  toolId: uuidSchema,
 }

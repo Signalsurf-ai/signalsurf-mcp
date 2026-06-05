@@ -14,6 +14,7 @@ const context: SignalSurfContext = {
 }
 const secondProductId = "00000000-0000-4000-8000-000000000002"
 const databaseId = "00000000-0000-4000-8000-000000000201"
+const surfPointId = "00000000-0000-4000-8000-000000000101"
 
 let cleanup: Array<() => Promise<void>> = []
 
@@ -27,7 +28,7 @@ describe("MCP server", () => {
     const db = new FakeSupabase({
       playbooks: [
         {
-          id: "00000000-0000-4000-8000-000000000101",
+          id: surfPointId,
           product_id: context.productId,
           name: "Active",
           description: null,
@@ -71,7 +72,33 @@ describe("MCP server", () => {
       entries: [],
       surf_jobs: [],
       user_preferences: [],
-      sources: [],
+      sources: [
+        {
+          id: "00000000-0000-4000-8000-000000000801",
+          playbook_id: surfPointId,
+          name: "Threads search",
+          type: "pull",
+          pull_config: {
+            endpoint_id: "threads-keyword-search",
+            schedule: "0 */6 * * *",
+          },
+          metadata: { provider: "threads" },
+          is_active: true,
+          updated_at: "2026-06-01T00:00:00Z",
+          credentials: { token: "secret" },
+        },
+      ],
+      product_tools: [
+        {
+          id: "00000000-0000-4000-8000-000000000901",
+          product_id: context.productId,
+          tool_type: "slack",
+          config: { nickname: "Slack alerts", token: "secret" },
+          is_enabled: true,
+          created_at: "2026-06-01T00:00:00Z",
+          updated_at: "2026-06-01T00:00:00Z",
+        },
+      ],
     })
     const server = createSignalSurfMcpServer({
       context,
@@ -102,16 +129,76 @@ describe("MCP server", () => {
     const text =
       result.content?.[0]?.type === "text" ? result.content[0].text : ""
     expect(JSON.parse(text).data.surfPoints[0].name).toBe("Active")
+    expect(result.structuredContent).toMatchObject({
+      ok: true,
+      data: {
+        surfPoints: [{ name: "Active" }],
+      },
+    })
 
     const resources = await client.listResources()
     expect(resources.resources.map((resource) => resource.uri)).toEqual(
       expect.arrayContaining([
         "signalsurf://context",
         "signalsurf://surf-points",
+        `signalsurf://surf-points/${surfPointId}`,
+        `signalsurf://surf-points/${surfPointId}/sources`,
+        `signalsurf://surf-points/${surfPointId}/tools`,
+        "signalsurf://product-tools",
         "signalsurf://databases",
         `signalsurf://databases/${databaseId}/rows`,
       ])
     )
+
+    const surfPointResource = await client.readResource({
+      uri: `signalsurf://surf-points/${surfPointId}`,
+    })
+    const surfPointResourceText =
+      surfPointResource.contents?.[0]?.text?.toString() ?? ""
+    expect(JSON.parse(surfPointResourceText)).toMatchObject({
+      surfPoint: {
+        surfPointId,
+        name: "Active",
+      },
+    })
+
+    const sourcesResource = await client.readResource({
+      uri: `signalsurf://surf-points/${surfPointId}/sources`,
+    })
+    const sourcesResourceText =
+      sourcesResource.contents?.[0]?.text?.toString() ?? ""
+    const parsedSourcesResource = JSON.parse(sourcesResourceText)
+    expect(parsedSourcesResource.sources).toMatchObject([
+      {
+        surfPointId,
+        isActive: true,
+      },
+    ])
+    expect(parsedSourcesResource.sources[0]).not.toHaveProperty("credentials")
+
+    const toolsResource = await client.readResource({
+      uri: `signalsurf://surf-points/${surfPointId}/tools`,
+    })
+    const toolsResourceText =
+      toolsResource.contents?.[0]?.text?.toString() ?? ""
+    expect(JSON.parse(toolsResourceText)).toMatchObject({
+      surfPointId,
+      toolIds: [],
+    })
+
+    const productToolsResource = await client.readResource({
+      uri: "signalsurf://product-tools",
+    })
+    const productToolsResourceText =
+      productToolsResource.contents?.[0]?.text?.toString() ?? ""
+    const parsedProductToolsResource = JSON.parse(productToolsResourceText)
+    expect(parsedProductToolsResource.tools).toMatchObject([
+      {
+        toolType: "slack",
+        name: "Slack alerts",
+      },
+    ])
+    expect(parsedProductToolsResource.tools[0]).not.toHaveProperty("config")
   })
 
   it("advertises the stable public tool contract and denies viewer writes", async () => {
@@ -198,7 +285,22 @@ describe("MCP server", () => {
       create_table_row: true,
       update_table_row: true,
       delete_table_rows: false,
+      get_surf_point: false,
       create_surf_point: false,
+      run_surf_point: false,
+      cancel_surf_job: false,
+      get_surf_job: false,
+      wait_for_surf_job: false,
+      list_surf_jobs: false,
+      list_database_fields: false,
+      add_database_field: false,
+      create_relation_field: false,
+      list_surf_point_sources: false,
+      set_surf_point_source_active: false,
+      list_product_tools: false,
+      list_surf_point_tools: false,
+      attach_surf_point_tool: false,
+      detach_surf_point_tool: false,
     })
 
     const tools = await client.listTools()
@@ -218,6 +320,23 @@ describe("MCP server", () => {
       details: {
         oauthError: "insufficient_scope",
         requiredScopes: ["mcp:surf_points.write"],
+      },
+    })
+
+    const deniedRun = await client.callTool({
+      name: "run_surf_point",
+      arguments: {
+        surfPointId: "00000000-0000-4000-8000-000000000101",
+      },
+    })
+    expect(deniedRun.isError).toBe(true)
+    const deniedRunText =
+      deniedRun.content?.[0]?.type === "text" ? deniedRun.content[0].text : ""
+    expect(JSON.parse(deniedRunText)).toMatchObject({
+      code: "INSUFFICIENT_SCOPE",
+      details: {
+        oauthError: "insufficient_scope",
+        requiredScopes: ["mcp:surf_points.execute"],
       },
     })
     expect(db.tables.playbooks).toHaveLength(0)
@@ -284,6 +403,18 @@ describe("MCP server", () => {
     const multiProductContext: SignalSurfContext = {
       ...context,
       productIds: [context.productId, secondProductId],
+      products: [
+        {
+          productId: context.productId,
+          name: "Primary Product",
+          organizationName: "Primary Workspace",
+        },
+        {
+          productId: secondProductId,
+          name: "Second Product",
+          organizationName: "Second Workspace",
+        },
+      ],
     }
     const server = createSignalSurfMcpServer({
       context: multiProductContext,
@@ -308,9 +439,22 @@ describe("MCP server", () => {
       contextResult.content?.[0]?.type === "text"
         ? contextResult.content[0].text
         : ""
-    expect(JSON.parse(contextText).data.productIds).toEqual([
+    const parsedContext = JSON.parse(contextText).data
+    expect(parsedContext.productIds).toEqual([
       context.productId,
       secondProductId,
+    ])
+    expect(parsedContext.products).toMatchObject([
+      {
+        productId: context.productId,
+        name: "Primary Product",
+        organizationName: "Primary Workspace",
+      },
+      {
+        productId: secondProductId,
+        name: "Second Product",
+        organizationName: "Second Workspace",
+      },
     ])
 
     const missingProduct = await client.callTool({
@@ -347,9 +491,20 @@ describe("MCP server", () => {
     })
     const contextResourceText =
       contextResource.contents?.[0]?.text?.toString() ?? ""
-    expect(JSON.parse(contextResourceText).productIds).toEqual([
+    const parsedContextResource = JSON.parse(contextResourceText)
+    expect(parsedContextResource.productIds).toEqual([
       context.productId,
       secondProductId,
+    ])
+    expect(parsedContextResource.products).toMatchObject([
+      {
+        productId: context.productId,
+        name: "Primary Product",
+      },
+      {
+        productId: secondProductId,
+        name: "Second Product",
+      },
     ])
   })
 })

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   assertCanUseCapability,
   assertCanWrite,
+  authorizedProducts,
   listContextCapabilities,
   resolveProductContext,
   resolveStdioContext,
@@ -82,6 +83,15 @@ describe("auth", () => {
     expect(() => assertCanUseCapability(context, "surf_points.write")).toThrow(
       "Token scope does not allow"
     )
+    expect(() =>
+      assertCanUseCapability(context, "surf_points.execute")
+    ).toThrow("Token scope does not allow")
+    expect(() => assertCanUseCapability(context, "schemas.write")).toThrow(
+      "Token scope does not allow"
+    )
+    expect(() => assertCanUseCapability(context, "sources.write")).toThrow(
+      "Token scope does not allow"
+    )
     expect(listContextCapabilities(context)).toEqual([
       "context.read",
       "tables.read",
@@ -112,11 +122,16 @@ describe("auth", () => {
       "context.read",
       "surf_points.read",
       "surf_points.write",
+      "surf_points.execute",
       "surf_points.delete",
       "tables.read",
       "tables.write",
-      "tables.delete",
-    ])
+        "tables.delete",
+        "schemas.read",
+        "schemas.write",
+        "sources.read",
+        "sources.write",
+      ])
   })
 
   it("requires explicit productId for multi-product contexts", () => {
@@ -141,6 +156,39 @@ describe("auth", () => {
     expect(() =>
       resolveProductContext(context, "00000000-0000-4000-8000-000000000099")
     ).toThrow("not authorized")
+  })
+
+  it("returns ordered authorized product metadata with id fallbacks", () => {
+    expect(
+      authorizedProducts({
+        productId: "00000000-0000-4000-8000-000000000001",
+        productIds: [
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000002",
+        ],
+        products: [
+          {
+            productId: "00000000-0000-4000-8000-000000000002",
+            name: "Second Product",
+            organizationName: "Demo Workspace",
+          },
+        ],
+        role: "editor",
+      })
+    ).toEqual([
+      {
+        productId: "00000000-0000-4000-8000-000000000001",
+        name: "00000000-0000-4000-8000-000000000001",
+        organizationId: null,
+        organizationName: null,
+      },
+      {
+        productId: "00000000-0000-4000-8000-000000000002",
+        name: "Second Product",
+        organizationId: null,
+        organizationName: "Demo Workspace",
+      },
+    ])
   })
 
   it("uses SIGNALSURF_MCP_TOKEN before direct stdio context", () => {

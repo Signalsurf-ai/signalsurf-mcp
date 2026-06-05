@@ -19,6 +19,9 @@ The server always resolves a `SignalSurfContext` before any tool runs:
 
 - `productId`: primary product boundary for single-product calls
 - `productIds`: optional list of all products granted to the current OAuth token
+- `products`: authorized product metadata in the same order as `productIds`,
+  including `productId`, human-readable `name`, optional `organizationId`, and
+  optional `organizationName`
 - `userId`: optional user context, currently used for surf point delete cleanup
 - `role`: `viewer`, `editor`, or `owner`
 - `tokenName`: optional source label for MCP row mutations
@@ -85,9 +88,10 @@ Each static token entry binds one caller to exactly one product:
 }
 ```
 
-Agents should call `get_context` first and verify `productIds`, `role`, and
+Agents should call `get_context` first and verify `products`, `role`, and
 `tokenName` before making writes. If `productIds` contains more than one id,
-agents must pass the intended `productId` to product-scoped tools.
+agents should choose from the human-readable product/workspace names in
+`products[]` and pass the intended `productId` to product-scoped tools.
 
 Hosted token revocation is immediate: SignalSurf Web sets `revoked_at`, and
 database auth only resolves rows where `revoked_at IS NULL`.
@@ -110,7 +114,7 @@ not match `SIGNALSURF_MCP_RESOURCE_URL`.
 The public scope and tool contract lives in `src/capabilities.ts` and is
 documented in `docs/capabilities.md`. Broad legacy scopes remain for client
 compatibility, while granular scopes support least-privilege access to Surf
-Points, table reads, table writes, and table deletes.
+Points, execution, table data, schemas, and safe source controls.
 
 ## Product Scope Guards
 
@@ -125,6 +129,8 @@ service-role access behind explicit product checks:
   whose `database_ids` contains the target row database
 - Relation fields: `item_ref` values must point to existing rows in
   product-owned databases
+- Sources: `sources.playbook_id` must resolve to a non-deleted product surf point
+  before source metadata is read or source active state is changed
 
 Rows without `database_id` are intentionally inaccessible through MCP because
 they cannot be product-scoped safely.
@@ -134,6 +140,20 @@ they cannot be product-scoped safely.
 Surf point deletion is a soft delete. It sets `deleted_at`, cancels pending
 `surf_jobs`, and repairs `user_preferences.current_playbook_id` when the token
 has `userId`.
+
+Surf point execution is asynchronous. `run_surf_point` validates that the
+playbook belongs to the selected product, rejects inactive surf points unless
+explicitly overridden, finds active pull sources, and inserts one
+`surf_jobs.job_type = "extract"` row per source with the required
+`product_id`, `user_id`, `playbook_id`, `source_id`, and worker payload fields.
+That matches SignalSurf Web's Surf Now contract and lets the existing
+`trigger_surf_worker_on_insert` database trigger wake `webhook-surf-worker`.
+Existing pending/processing extract jobs are deduplicated by source by default.
+`get_surf_job` and `list_surf_jobs` expose status after validating the job's
+`playbook_id` belongs to the selected product. `cancel_surf_job` only updates
+pending jobs; running/processing jobs are not forcefully interrupted through MCP.
+`wait_for_surf_job` is a bounded polling helper for agents that need to trigger
+a surf point and then observe completion. It does not run a worker itself.
 
 Row creation stamps provenance server-side:
 
@@ -149,9 +169,33 @@ Row data updates call `update_entry_with_source`; note updates call
 `update_entry_note_with_source`. Direct table updates are limited to metadata
 that cannot be handled by those RPCs.
 
+Schema mutation tools update `databases.schema` after product-scope validation.
+They do not backfill, rewrite, or delete existing row data. Relation creation
+adds an `item_ref` schema field and validates that `target_database_id` belongs
+to the same authorized product before writing.
+
+Source controls intentionally expose only safe metadata (`id`, `playbook_id`,
+name, type, endpoint, schedule, URL, provider, `is_active`, timestamps). Public
+MCP tools do not expose source config secrets, credentials, headers, request
+bodies, auth settings, or arbitrary source creation. Surf point tool attachment
+is modeled as idempotent updates to `tool_config.auto_tool_ids` and validates
+the requested id against `product_tools` in the authorized product.
+
+Basic `read_table` calls use database-side pagination and JSON containment.
+When callers pass UI-style `filters` or data-field `sorts`, the repository reads
+a bounded page of source rows (`scanLimit`, default 1000, max 5000) and evaluates
+operators in the MCP process. This keeps JSON number, date, array, text, and
+relation comparisons predictable. Responses include `sourceTotalCount`,
+`scannedCount`, and `hasMoreToScan` so agents can raise `scanLimit` or narrow
+filters when needed.
+
 `dataPatch`, `toolConfigPatch`, `variablesPatch`, and `configPatch` are shallow
 merges. Clients that need nested merge semantics should read the current object
 and send a full replacement.
+
+Tool calls return backwards-compatible text JSON and MCP `structuredContent`.
+The public tool registry advertises a shared output envelope `{ ok, data }` so
+newer clients can consume structured output without parsing text.
 
 ## Resources
 
@@ -159,8 +203,18 @@ Resources are read-only JSON context surfaces:
 
 - `signalsurf://context`
 - `signalsurf://surf-points`
+- `signalsurf://surf-points/{surfPointId}`
+- `signalsurf://surf-points/{surfPointId}/sources`
+- `signalsurf://surf-points/{surfPointId}/tools`
+- `signalsurf://product-tools`
+- `signalsurf://surf-jobs`
+- `signalsurf://surf-jobs/{jobId}`
 - `signalsurf://databases`
 - `signalsurf://databases/{databaseId}/rows`
+
+`signalsurf://context` includes the same `products[]` metadata as
+`get_context`, so clients that prefer resources over tools can still show
+human-readable product and workspace names.
 
 The database-row template expands current-product databases into concrete
 resources so clients that only show `resources/list` can discover row resources.

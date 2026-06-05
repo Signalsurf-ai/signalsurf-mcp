@@ -1,8 +1,16 @@
 export type AccessRole = "viewer" | "editor" | "owner"
 
+export type SignalSurfProductContext = {
+  productId: string
+  name: string
+  organizationId?: string | null
+  organizationName?: string | null
+}
+
 export type SignalSurfContext = {
   productId: string
   productIds?: string[]
+  products?: SignalSurfProductContext[]
   userId?: string
   role: AccessRole
   tokenName?: string
