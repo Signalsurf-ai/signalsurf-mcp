@@ -20,7 +20,9 @@ import { jsonResource, runJsonTool } from "./mcp-results.js"
 import { SignalSurfRepository } from "./repository.js"
 import {
   attachSurfPointToolSchema,
+  createProductSchema,
   createSurfPointSchema,
+  createTableSchema,
   createTableRowSchema,
   addDatabaseFieldSchema,
   cancelSurfJobSchema,
@@ -47,6 +49,7 @@ import {
   updateDatabaseFieldSchema,
   toolOutputSchema,
   updateSurfPointSchema,
+  updateTableSchema,
   updateTableRowSchema,
   waitForSurfJobSchema,
 } from "./schemas.js"
@@ -143,6 +146,7 @@ function registerTools(
           read: canUseCapability(context, "context.read"),
           execute: canUseCapability(context, "surf_points.execute"),
           write:
+            canUseCapability(context, "products.write") ||
             canUseCapability(context, "surf_points.execute") ||
             canUseCapability(context, "surf_points.write") ||
             canUseCapability(context, "surf_points.delete") ||
@@ -152,6 +156,13 @@ function registerTools(
             canUseCapability(context, "sources.write"),
         },
       }
+    })
+  )
+
+  registerPublicTool("create_product", createProductSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("create_product")
+      return repository.createProduct(context, args)
     })
   )
 
@@ -250,6 +261,20 @@ function registerTools(
     runJsonTool(async () => {
       assertToolAllowed("list_databases")
       return repository.listDatabases(toolContext(args), args)
+    })
+  )
+
+  registerPublicTool("create_table", createTableSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("create_table")
+      return repository.createTable(toolContext(args), args)
+    })
+  )
+
+  registerPublicTool("update_table", updateTableSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("update_table")
+      return repository.updateTable(toolContext(args), args)
     })
   )
 

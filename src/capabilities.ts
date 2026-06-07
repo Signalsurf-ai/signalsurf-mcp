@@ -3,6 +3,7 @@ export const MCP_LEGACY_WRITE_SCOPE = "mcp:write"
 export const MCP_OFFLINE_ACCESS_SCOPE = "offline_access"
 
 export const MCP_GRANULAR_SCOPES = [
+  "mcp:products.write",
   "mcp:surf_points.read",
   "mcp:surf_points.write",
   "mcp:surf_points.execute",
@@ -30,6 +31,7 @@ export const MCP_RESOURCE_SCOPES = [
 ] as const
 
 export const MCP_DEFAULT_RESOURCE_SCOPES = [
+  "mcp:products.write",
   "mcp:surf_points.read",
   "mcp:surf_points.write",
   "mcp:surf_points.execute",
@@ -47,6 +49,7 @@ export type McpScope = (typeof MCP_SUPPORTED_SCOPES)[number]
 
 export type McpCapability =
   | "context.read"
+  | "products.write"
   | "surf_points.read"
   | "surf_points.write"
   | "surf_points.execute"
@@ -61,6 +64,7 @@ export type McpCapability =
 
 export type PublicMcpToolName =
   | "get_context"
+  | "create_product"
   | "list_surf_points"
   | "get_surf_point"
   | "create_surf_point"
@@ -72,6 +76,8 @@ export type PublicMcpToolName =
   | "cancel_surf_job"
   | "delete_surf_point"
   | "list_databases"
+  | "create_table"
+  | "update_table"
   | "list_database_views"
   | "read_table"
   | "read_table_view"
@@ -142,6 +148,15 @@ export const PUBLIC_MCP_TOOLS = {
     surferSurface: "connection context",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
+  },
+  create_product: {
+    title: "Create Product",
+    description:
+      "Create a new SignalSurf product for the authenticated user and expand the active hosted OAuth grant so the product can be used by follow-up MCP tool calls.",
+    requiredCapability: "products.write",
+    surferSurface: "product setup",
+    publicStatus: "supported",
+    annotations: CREATE_ANNOTATIONS,
   },
   list_surf_points: {
     title: "List Surf Points",
@@ -241,6 +256,24 @@ export const PUBLIC_MCP_TOOLS = {
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
+  },
+  create_table: {
+    title: "Create Table",
+    description:
+      "Create a SignalSurf database/table with optional custom schema, saved-view config, and folder placement in an authorized product.",
+    requiredCapability: "schemas.write",
+    surferSurface: "manage_projects/manage_databases",
+    publicStatus: "supported",
+    annotations: CREATE_ANNOTATIONS,
+  },
+  update_table: {
+    title: "Update Table",
+    description:
+      "Update SignalSurf database/table metadata, custom schema, saved-view config, and folder placement after product-scope verification.",
+    requiredCapability: "schemas.write",
+    surferSurface: "manage_projects/manage_databases",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
   },
   list_database_views: {
     title: "List Database Views",
@@ -420,6 +453,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   ],
   [MCP_LEGACY_WRITE_SCOPE]: [
     "context.read",
+    "products.write",
     "surf_points.read",
     "surf_points.write",
     "surf_points.execute",
@@ -433,6 +467,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "sources.write",
   ],
   [MCP_OFFLINE_ACCESS_SCOPE]: [],
+  "mcp:products.write": ["context.read", "products.write"],
   "mcp:surf_points.read": ["context.read", "surf_points.read"],
   "mcp:surf_points.write": [
     "context.read",
@@ -460,6 +495,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
 
 const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "context.read": [MCP_LEGACY_READ_SCOPE],
+  "products.write": ["mcp:products.write"],
   "surf_points.read": ["mcp:surf_points.read"],
   "surf_points.write": ["mcp:surf_points.write"],
   "surf_points.execute": ["mcp:surf_points.execute"],

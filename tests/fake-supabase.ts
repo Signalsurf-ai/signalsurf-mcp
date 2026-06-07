@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+
 type Row = Record<string, any>
 
 type TableStore = Record<string, Row[]>
@@ -46,6 +48,83 @@ export class FakeSupabase {
     this.rpcCalls.push({ name, args })
     const configuredError = this.options.rpcErrors?.[name]
     if (configuredError) return { data: null, error: configuredError }
+    if (name === "create_product_for_mcp") {
+      const userId = args.p_user_id as string | undefined
+      const productName = String(args.p_name ?? "").trim()
+      if (!userId) return { data: null, error: { message: "user id required" } }
+      if (!productName)
+        return { data: null, error: { message: "product name required" } }
+
+      let organizationId = args.p_organization_id as string | undefined
+      if (!organizationId) {
+        const member = this.tables.organization_members?.find(
+          (row) => row.user_id === userId
+        )
+        organizationId = member?.organization_id
+      }
+      if (!organizationId) {
+        organizationId = randomUUID()
+        this.tables.organizations ??= []
+        this.tables.organizations.push({
+          id: organizationId,
+          owner_id: userId,
+          name: "Personal Workspace",
+          created_at: "rpc-created",
+          updated_at: "rpc-created",
+        })
+      }
+
+      const membership = this.tables.organization_members?.find(
+        (row) => row.organization_id === organizationId && row.user_id === userId
+      )
+      if (args.p_organization_id && !["owner", "editor"].includes(membership?.role)) {
+        return { data: null, error: { message: "organization access denied" } }
+      }
+
+      const product = {
+        id: randomUUID(),
+        organization_id: organizationId,
+        owner_id: userId,
+        name: productName,
+        created_at: "rpc-created",
+        updated_at: "rpc-created",
+      }
+      this.tables.products ??= []
+      this.tables.products.push(product)
+
+      this.upsertRow(
+        "organization_members",
+        {
+          organization_id: organizationId,
+          user_id: userId,
+          role: "owner",
+          updated_at: "rpc-created",
+        },
+        ["organization_id", "user_id"]
+      )
+      this.upsertRow(
+        "product_members",
+        {
+          product_id: product.id,
+          user_id: userId,
+          role: "owner",
+          display_order: args.p_display_order ?? 0,
+          updated_at: "rpc-created",
+        },
+        ["product_id", "user_id"]
+      )
+      this.upsertRow(
+        "product_goals",
+        {
+          product_id: product.id,
+          user_id: userId,
+          updated_at: "rpc-created",
+        },
+        ["product_id"]
+      )
+
+      return { data: product, error: null }
+    }
     if (name === "update_entry_with_source") {
       const row = this.tables.entries.find((entry) => entry.id === args.p_entry_id)
       if (!row) return { data: null, error: { message: "Entry not found" } }
@@ -62,6 +141,21 @@ export class FakeSupabase {
     }
     return { data: null, error: null }
   }
+
+  upsertRow(table: string, value: Row, conflictKeys: string[]) {
+    if (!this.tables[table]) this.tables[table] = []
+    const rows = this.tables[table]
+    const existing = rows.find((row) =>
+      conflictKeys.every((key) => row[key] === value[key])
+    )
+    if (existing) {
+      Object.assign(existing, clone(value))
+      return existing
+    }
+    const inserted = clone(value)
+    rows.push(inserted)
+    return inserted
+  }
 }
 
 class FakeQuery implements PromiseLike<any> {
@@ -69,6 +163,7 @@ class FakeQuery implements PromiseLike<any> {
   private op:
     | { type: "select"; count?: "exact" }
     | { type: "insert"; values: Row | Row[] }
+    | { type: "upsert"; values: Row | Row[]; conflictKeys: string[] }
     | { type: "update"; values: Row }
     | { type: "delete"; count?: "exact" } = { type: "select" }
   private singleMode: "single" | "maybeSingle" | null = null
@@ -90,6 +185,16 @@ class FakeQuery implements PromiseLike<any> {
 
   insert(values: Row | Row[]) {
     this.op = { type: "insert", values }
+    return this
+  }
+
+  upsert(values: Row | Row[], options?: { onConflict?: string }) {
+    const conflictKeys =
+      options?.onConflict
+        ?.split(",")
+        .map((key) => key.trim())
+        .filter(Boolean) ?? ["id"]
+    this.op = { type: "upsert", values, conflictKeys }
     return this
   }
 
@@ -170,6 +275,15 @@ class FakeQuery implements PromiseLike<any> {
       const inserted = values.map((value) => clone(value))
       rows.push(...inserted)
       return this.finalize(inserted)
+    }
+
+    if (this.op.type === "upsert") {
+      const values = Array.isArray(this.op.values) ? this.op.values : [this.op.values]
+      const conflictKeys = this.op.conflictKeys
+      const upserted = values.map((value) =>
+        this.db.upsertRow(this.table, value, conflictKeys)
+      )
+      return this.finalize(upserted)
     }
 
     const matching = rows.filter((row) => matches(row, this.filters))

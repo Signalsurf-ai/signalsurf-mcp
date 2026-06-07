@@ -282,6 +282,9 @@ describe("MCP server", () => {
         : ""
     const contextBody = JSON.parse(contextText).data
     expect(contextBody.capabilities.tools).toMatchObject({
+      create_product: false,
+      create_table: false,
+      update_table: false,
       create_table_row: true,
       update_table_row: true,
       delete_table_rows: false,
