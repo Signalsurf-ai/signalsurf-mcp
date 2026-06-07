@@ -28,6 +28,9 @@ const source1 = "00000000-0000-4000-8000-000000000801"
 const otherProductSource = "00000000-0000-4000-8000-000000000802"
 const tool1 = "00000000-0000-4000-8000-000000000901"
 const tool2 = "00000000-0000-4000-8000-000000000902"
+const accountListProfile1 = "00000000-0000-4000-8000-000000000a01"
+const archivedAccountListProfile = "00000000-0000-4000-8000-000000000a02"
+const otherProductAccountListProfile = "00000000-0000-4000-8000-000000000a99"
 const pendingJob = "00000000-0000-4000-8000-000000000401"
 const otherProductJob = "00000000-0000-4000-8000-000000000402"
 const completedJob = "00000000-0000-4000-8000-000000000403"
@@ -347,6 +350,75 @@ function makeDb() {
         is_enabled: true,
         created_at: "2026-06-01T00:00:00Z",
         updated_at: "2026-06-01T00:00:00Z",
+      },
+    ],
+    account_list_profiles: [
+      {
+        id: accountListProfile1,
+        product_id: context.productId,
+        name: "Seed SaaS GTM",
+        description: "Founder-led GTM buyers",
+        status: "active",
+        source: "manual",
+        profile_version: 2,
+        config: {
+          enabled: true,
+          providers: ["apollo", "bycrawl"],
+          previewLimit: 100,
+          company: {
+            fundingStages: ["Seed", "Series A"],
+            companyTypes: ["B2B", "SaaS"],
+          },
+          people: {
+            seniorities: ["VP", "Head"],
+            functions: ["Sales", "RevOps"],
+          },
+        },
+        sample_accounts: ["Linear"],
+        reject_accounts: ["Agencies"],
+        ai_prompt: null,
+        ai_summary: null,
+        created_by: context.userId,
+        created_at: "2026-06-01T00:00:00Z",
+        updated_at: "2026-06-03T00:00:00Z",
+      },
+      {
+        id: archivedAccountListProfile,
+        product_id: context.productId,
+        name: "Archived ICP",
+        description: null,
+        status: "archived",
+        source: "ai_draft",
+        profile_version: 1,
+        config: {
+          providers: ["crunchbase"],
+        },
+        sample_accounts: [],
+        reject_accounts: [],
+        ai_prompt: "old prompt",
+        ai_summary: "old summary",
+        created_by: context.userId,
+        created_at: "2026-06-01T00:00:00Z",
+        updated_at: "2026-06-02T00:00:00Z",
+      },
+      {
+        id: otherProductAccountListProfile,
+        product_id: "00000000-0000-4000-8000-000000000099",
+        name: "Other Product ICP",
+        description: null,
+        status: "active",
+        source: "manual",
+        profile_version: 1,
+        config: {
+          providers: ["pdl"],
+        },
+        sample_accounts: [],
+        reject_accounts: [],
+        ai_prompt: null,
+        ai_summary: null,
+        created_by: null,
+        created_at: "2026-06-01T00:00:00Z",
+        updated_at: "2026-06-04T00:00:00Z",
       },
     ],
   })
@@ -929,6 +1001,178 @@ describe("SignalSurfRepository", () => {
         surfPointId: surfPoint1,
         toolId: "00000000-0000-4000-8000-000000000903",
       })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" })
+  })
+
+  it("lists product-scoped account list profiles", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    const active = await repo.listAccountListProfiles(context)
+
+    expect(active).toMatchObject({
+      totalCount: 1,
+      profiles: [
+        {
+          profileId: accountListProfile1,
+          productId: context.productId,
+          name: "Seed SaaS GTM",
+          status: "active",
+          source: "manual",
+          profileVersion: 2,
+          accountList: {
+            providers: ["apollo", "bycrawl"],
+            company: {
+              fundingStages: ["Seed", "Series A"],
+            },
+          },
+          sampleAccounts: ["Linear"],
+          rejectAccounts: ["Agencies"],
+        },
+      ],
+    })
+
+    const all = await repo.listAccountListProfiles(context, {
+      includeArchived: true,
+    })
+    expect(
+      all.profiles.map((profile: { profileId: string }) => profile.profileId)
+    ).toEqual([accountListProfile1, archivedAccountListProfile])
+  })
+
+  it("creates account list profiles with structured ICP config", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    const result = await repo.saveAccountListProfile(context, {
+      name: "Enterprise RevOps",
+      description: "Find companies expanding outbound",
+      source: "manual",
+      accountList: {
+        enabled: true,
+        providers: ["apollo", "crunchbase", "bycrawl"],
+        previewLimit: 75,
+        company: {
+          fundingStages: ["Series A"],
+          technologies: ["HubSpot"],
+        },
+        people: {
+          seniorities: ["VP", "Head"],
+          functions: ["Sales", "RevOps"],
+          emailStatuses: ["verified"],
+        },
+        liveSignals: {
+          queries: ["hiring SDR"],
+          includeJobBoards: true,
+        },
+      },
+      sampleAccounts: ["Linear"],
+      rejectAccounts: ["Agencies"],
+    })
+
+    expect(result).toMatchObject({
+      created: true,
+      profile: {
+        profileId: expect.any(String),
+        productId: context.productId,
+        name: "Enterprise RevOps",
+        profileVersion: 1,
+        accountList: {
+          providers: ["apollo", "crunchbase", "bycrawl"],
+          company: {
+            technologies: ["HubSpot"],
+          },
+          people: {
+            emailStatuses: ["verified"],
+          },
+        },
+        createdBy: context.userId,
+      },
+    })
+    expect(db.tables.account_list_profiles.at(-1)).toMatchObject({
+      id: result.profileId,
+      product_id: context.productId,
+      name: "Enterprise RevOps",
+      status: "active",
+      source: "manual",
+      profile_version: 1,
+      created_by: context.userId,
+      config: {
+        liveSignals: {
+          includeJobBoards: true,
+        },
+      },
+    })
+  })
+
+  it("updates and archives account list profiles without crossing product scope", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    const updated = await repo.saveAccountListProfile(context, {
+      id: accountListProfile1,
+      name: "Seed SaaS RevOps",
+      description: null,
+      source: "ai_draft",
+      accountList: {
+        enabled: true,
+        providers: ["pdl"],
+        people: {
+          functions: ["RevOps"],
+        },
+      },
+      aiPrompt: "focus on revenue operations",
+      aiSummary: "Tighter RevOps ICP",
+    })
+
+    expect(updated).toMatchObject({
+      created: false,
+      profile: {
+        profileId: accountListProfile1,
+        name: "Seed SaaS RevOps",
+        description: null,
+        source: "ai_draft",
+        profileVersion: 3,
+        accountList: {
+          providers: ["pdl"],
+        },
+        aiPrompt: "focus on revenue operations",
+      },
+    })
+
+    const stored = db.tables.account_list_profiles.find(
+      (profile) => profile.id === accountListProfile1
+    )
+    expect(stored).toMatchObject({
+      created_by: context.userId,
+      profile_version: 3,
+      config: {
+        providers: ["pdl"],
+      },
+    })
+
+    const archived = await repo.archiveAccountListProfile(
+      context,
+      accountListProfile1
+    )
+    expect(archived).toMatchObject({
+      archived: true,
+      profile: {
+        profileId: accountListProfile1,
+        status: "archived",
+      },
+    })
+
+    await expect(
+      repo.saveAccountListProfile(context, {
+        id: otherProductAccountListProfile,
+        name: "Denied",
+        accountList: {},
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" })
+
+    await expect(
+      repo.archiveAccountListProfile(context, otherProductAccountListProfile)
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 

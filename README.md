@@ -27,10 +27,10 @@ not need this repository, a Supabase key, or a local server.
 
 The hosted MCP currently supports product creation, product-scoped Surf Point
 CRUD, table create/update, table schema edits, Surf Point execution, source
-creation/configuration/deletion, tool attachment, and table row
-read/create/update/delete. It is a safe
-public subset of Surfer, the agent in SignalSurf Web's right panel; it does not
-expose every internal chat tool.
+creation/configuration/deletion, source toggles, tool attachment, reusable
+Account List / ICP profiles, and table row read/create/update/delete. It is a
+safe public subset of Surfer, the agent in SignalSurf Web's right panel; it
+does not expose every internal chat tool.
 
 Example:
 
@@ -189,8 +189,9 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - `list_database_fields`, `add_database_field`, `update_database_field`, `remove_database_field`, `create_relation_field`
 - `list_surf_point_sources`, `create_surf_point_source`, `update_surf_point_source`, `delete_surf_point_source`, `set_surf_point_source_active`
 - `list_product_tools`, `list_surf_point_tools`, `attach_surf_point_tool`, `detach_surf_point_tool`
+- `list_account_list_profiles`, `save_account_list_profile`, `archive_account_list_profile`
 - Resources for context; single-product tokens also expose surf point, database,
-  surf job, and database-row resources
+  surf job, database-row, and account-list-profile resources
 
 All product-scoped tools execute against one `productId`. A single-product token
 can omit `productId`; a multi-product OAuth token must pass `productId` to every
@@ -216,6 +217,8 @@ instead of hiding them behind broad write access:
 - `mcp:schemas.write`
 - `mcp:sources.read`
 - `mcp:sources.write`
+- `mcp:account_lists.read`
+- `mcp:account_lists.write`
 
 OAuth tokens may also carry `offline_access` for refresh-token support. The MCP
 resource server accepts that scope but does not advertise it as a resource
@@ -363,6 +366,17 @@ Sources and surf point tools:
   idempotently. Attach/detach validates that the tool exists in the authorized
   product.
 
+Account List / ICP profiles:
+
+- `list_account_list_profiles`: lists reusable ICP profiles for Account List
+  sourcing. Archived profiles are hidden by default.
+- `save_account_list_profile`: creates or updates a profile with the structured
+  `accountList` config used by SignalSurf Web: provider selection, company
+  filters, people filters, live-signal filters, sample accounts, and reject
+  accounts. Updating a profile increments `profile_version`.
+- `archive_account_list_profile`: soft-archives one reusable profile after
+  product-scope validation.
+
 Roles:
 
 - `viewer`: can read tools and resources only
@@ -383,6 +397,7 @@ Resources:
 - `signalsurf://surf-points/{surfPointId}/sources` for single-product tokens
 - `signalsurf://surf-points/{surfPointId}/tools` for single-product tokens
 - `signalsurf://product-tools` for single-product tokens
+- `signalsurf://account-list-profiles` for single-product tokens
 - `signalsurf://surf-jobs` for single-product tokens
 - `signalsurf://surf-jobs/{jobId}` for single-product tokens
 - `signalsurf://databases` for single-product tokens

@@ -15,6 +15,8 @@ export const MCP_GRANULAR_SCOPES = [
   "mcp:schemas.write",
   "mcp:sources.read",
   "mcp:sources.write",
+  "mcp:account_lists.read",
+  "mcp:account_lists.write",
 ] as const
 
 export const MCP_SUPPORTED_SCOPES = [
@@ -43,6 +45,8 @@ export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "mcp:schemas.write",
   "mcp:sources.read",
   "mcp:sources.write",
+  "mcp:account_lists.read",
+  "mcp:account_lists.write",
 ] as const
 
 export type McpScope = (typeof MCP_SUPPORTED_SCOPES)[number]
@@ -61,6 +65,8 @@ export type McpCapability =
   | "schemas.write"
   | "sources.read"
   | "sources.write"
+  | "account_lists.read"
+  | "account_lists.write"
 
 export type PublicMcpToolName =
   | "get_context"
@@ -99,6 +105,9 @@ export type PublicMcpToolName =
   | "list_surf_point_tools"
   | "attach_surf_point_tool"
   | "detach_surf_point_tool"
+  | "list_account_list_profiles"
+  | "save_account_list_profile"
+  | "archive_account_list_profile"
 
 type PublicMcpToolDefinition = {
   title: string
@@ -467,6 +476,33 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
+  list_account_list_profiles: {
+    title: "List Account List ICP Profiles",
+    description:
+      "List reusable Account List / ICP Builder profiles for an authorized product. Pass productId when this connection can access multiple products.",
+    requiredCapability: "account_lists.read",
+    surferSurface: "account_list_icp_builder",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  save_account_list_profile: {
+    title: "Save Account List ICP Profile",
+    description:
+      "Create or update a reusable Account List / ICP Builder profile with structured provider, company, people, and live-signal filters for an authorized product.",
+    requiredCapability: "account_lists.write",
+    surferSurface: "account_list_icp_builder",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  archive_account_list_profile: {
+    title: "Archive Account List ICP Profile",
+    description:
+      "Soft-archive a reusable Account List / ICP Builder profile after verifying it belongs to an authorized product.",
+    requiredCapability: "account_lists.write",
+    surferSurface: "account_list_icp_builder",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
 } as const satisfies Record<PublicMcpToolName, PublicMcpToolDefinition>
 
 export const PUBLIC_MCP_TOOL_NAMES = Object.keys(
@@ -480,6 +516,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "tables.read",
     "schemas.read",
     "sources.read",
+    "account_lists.read",
   ],
   [MCP_LEGACY_WRITE_SCOPE]: [
     "context.read",
@@ -495,6 +532,8 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "schemas.write",
     "sources.read",
     "sources.write",
+    "account_lists.read",
+    "account_lists.write",
   ],
   [MCP_OFFLINE_ACCESS_SCOPE]: [],
   "mcp:products.write": ["context.read", "products.write"],
@@ -521,6 +560,12 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   "mcp:schemas.write": ["context.read", "schemas.read", "schemas.write"],
   "mcp:sources.read": ["context.read", "sources.read"],
   "mcp:sources.write": ["context.read", "sources.read", "sources.write"],
+  "mcp:account_lists.read": ["context.read", "account_lists.read"],
+  "mcp:account_lists.write": [
+    "context.read",
+    "account_lists.read",
+    "account_lists.write",
+  ],
 }
 
 const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
@@ -537,6 +582,8 @@ const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "schemas.write": ["mcp:schemas.write"],
   "sources.read": ["mcp:sources.read"],
   "sources.write": ["mcp:sources.write"],
+  "account_lists.read": ["mcp:account_lists.read"],
+  "account_lists.write": ["mcp:account_lists.write"],
 }
 
 export function parseStoredScopes(scope: string | undefined | null): string[] {

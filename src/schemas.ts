@@ -369,3 +369,104 @@ export const detachSurfPointToolSchema = {
   surfPointId: uuidSchema,
   toolId: uuidSchema,
 }
+
+const numericRangeSchema = z.object({
+  min: z.number().optional(),
+  max: z.number().optional(),
+}).passthrough()
+
+const dateRangeSchema = z.object({
+  min: z.string().optional(),
+  max: z.string().optional(),
+}).passthrough()
+
+const companyIcpFiltersSchema = z.object({
+  keywords: z.array(z.string()).optional(),
+  industries: z.array(z.string()).optional(),
+  companyTypes: z.array(z.string()).optional(),
+  companyAttributes: z.array(z.string()).optional(),
+  technologies: z.array(z.string()).optional(),
+  locations: z.array(z.string()).optional(),
+  excludeLocations: z.array(z.string()).optional(),
+  excludeDomains: z.array(z.string()).optional(),
+  excludeCompanyNames: z.array(z.string()).optional(),
+  excludeLinkedinUrls: z.array(z.string()).optional(),
+  domains: z.array(z.string()).optional(),
+  employeeCount: numericRangeSchema.optional(),
+  employeeRanges: z.array(numericRangeSchema).optional(),
+  annualRevenueUsd: numericRangeSchema.optional(),
+  fundingRaisedUsd: numericRangeSchema.optional(),
+  latestFundingUsd: numericRangeSchema.optional(),
+  latestFundingDate: dateRangeSchema.optional(),
+  fundingStages: z.array(z.string()).optional(),
+  foundedYear: numericRangeSchema.optional(),
+  hiringTitles: z.array(z.string()).optional(),
+  hiringLocations: z.array(z.string()).optional(),
+  activeJobCount: numericRangeSchema.optional(),
+}).passthrough()
+
+const personIcpFiltersSchema = z.object({
+  titles: z.array(z.string()).optional(),
+  seniorities: z.array(z.string()).optional(),
+  functions: z.array(z.string()).optional(),
+  locations: z.array(z.string()).optional(),
+  includeSimilarTitles: z.boolean().optional(),
+  emailStatuses: z.array(z.string()).optional(),
+  employerLocations: z.array(z.string()).optional(),
+  employerEmployeeCount: numericRangeSchema.optional(),
+  employerAnnualRevenueUsd: numericRangeSchema.optional(),
+  excludeNames: z.array(z.string()).optional(),
+  excludeLinkedinUrls: z.array(z.string()).optional(),
+}).passthrough()
+
+const liveSignalFiltersSchema = z.object({
+  queries: z.array(z.string()).optional(),
+  bycrawlEndpointIds: z.array(z.string()).optional(),
+  locations: z.array(z.string()).optional(),
+  includeLinkedIn: z.boolean().optional(),
+  includeDirectories: z.boolean().optional(),
+  includeJobBoards: z.boolean().optional(),
+}).passthrough()
+
+const accountListProfileSourceSchema = z.enum([
+  "manual",
+  "ai_draft",
+  "onboarding",
+])
+
+const profileExampleListSchema = z.array(z.string().trim().min(1)).max(25)
+
+export const accountListSchema = z.object({
+  enabled: z.boolean().optional(),
+  providers: z
+    .array(z.enum(["apollo", "crunchbase", "pdl", "bycrawl"]))
+    .optional(),
+  previewLimit: z.number().int().min(1).max(1000).optional(),
+  company: companyIcpFiltersSchema.optional(),
+  people: personIcpFiltersSchema.optional(),
+  liveSignals: liveSignalFiltersSchema.optional(),
+}).passthrough()
+
+export const listAccountListProfilesSchema = {
+  ...productTargetSchema,
+  includeArchived: z.boolean().default(false).optional(),
+  limit: z.number().int().min(1).max(100).default(50).optional(),
+}
+
+export const saveAccountListProfileSchema = {
+  ...productTargetSchema,
+  id: uuidSchema.optional(),
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(600).optional().nullable(),
+  source: accountListProfileSourceSchema.default("manual").optional(),
+  accountList: accountListSchema,
+  aiPrompt: z.string().trim().max(4000).optional().nullable(),
+  aiSummary: z.string().trim().max(1200).optional().nullable(),
+  sampleAccounts: profileExampleListSchema.optional(),
+  rejectAccounts: profileExampleListSchema.optional(),
+}
+
+export const archiveAccountListProfileSchema = {
+  ...productTargetSchema,
+  profileId: uuidSchema,
+}

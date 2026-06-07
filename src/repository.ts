@@ -85,6 +85,36 @@ type ListProductToolsInput = {
   limit?: number
 }
 
+type AccountListProvider = "apollo" | "crunchbase" | "pdl" | "bycrawl"
+
+type AccountListConfigInput = JsonRecord & {
+  enabled?: boolean
+  providers?: AccountListProvider[]
+  previewLimit?: number
+  company?: JsonRecord
+  people?: JsonRecord
+  liveSignals?: JsonRecord
+}
+
+type ListAccountListProfilesInput = {
+  includeArchived?: boolean
+  limit?: number
+}
+
+type AccountListProfileSource = "manual" | "ai_draft" | "onboarding"
+
+type SaveAccountListProfileInput = {
+  id?: string
+  name: string
+  description?: string | null
+  source?: AccountListProfileSource
+  accountList: AccountListConfigInput
+  aiPrompt?: string | null
+  aiSummary?: string | null
+  sampleAccounts?: string[]
+  rejectAccounts?: string[]
+}
+
 type ListSurfJobsInput = {
   surfPointId?: string
   status?: string
@@ -362,6 +392,24 @@ type ProductToolRow = {
   updated_at?: string | null
 }
 
+type AccountListProfileRow = {
+  id: string
+  product_id: string
+  name: string
+  description?: string | null
+  status: "active" | "archived" | string
+  source: AccountListProfileSource | string
+  profile_version: number
+  config: JsonRecord | null
+  sample_accounts: unknown
+  reject_accounts: unknown
+  ai_prompt?: string | null
+  ai_summary?: string | null
+  created_by?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
 type CreateTableRowInput = {
   databaseId: string
   data: JsonRecord
@@ -458,6 +506,24 @@ const PRODUCT_TOOL_COLUMNS = [
   "tool_type",
   "config",
   "is_enabled",
+  "created_at",
+  "updated_at",
+].join(", ")
+
+const ACCOUNT_LIST_PROFILE_COLUMNS = [
+  "id",
+  "product_id",
+  "name",
+  "description",
+  "status",
+  "source",
+  "profile_version",
+  "config",
+  "sample_accounts",
+  "reject_accounts",
+  "ai_prompt",
+  "ai_summary",
+  "created_by",
   "created_at",
   "updated_at",
 ].join(", ")
@@ -1204,6 +1270,116 @@ export class SignalSurfRepository {
     return {
       tools: tools.map(formatProductTool),
       totalCount: tools.length,
+    }
+  }
+
+  async listAccountListProfiles(
+    context: SignalSurfContext,
+    input: ListAccountListProfilesInput = {}
+  ) {
+    let query = this.db
+      .from("account_list_profiles")
+      .select(ACCOUNT_LIST_PROFILE_COLUMNS)
+      .eq("product_id", context.productId)
+
+    if (input.includeArchived !== true) query = query.eq("status", "active")
+
+    const { data, error } = await query
+      .order("updated_at", { ascending: false })
+      .limit(input.limit ?? 50)
+
+    requireNoDbError(error, "Failed to list account list profiles")
+    const profiles = (data ?? []) as AccountListProfileRow[]
+    return {
+      profiles: profiles.map(formatAccountListProfile),
+      totalCount: profiles.length,
+    }
+  }
+
+  async saveAccountListProfile(
+    context: SignalSurfContext,
+    input: SaveAccountListProfileInput
+  ) {
+    const now = new Date().toISOString()
+    const basePayload = {
+      name: input.name.trim(),
+      description: readTrimmedString(input.description),
+      status: "active",
+      source: input.source ?? "manual",
+      config: input.accountList,
+      sample_accounts: input.sampleAccounts ?? [],
+      reject_accounts: input.rejectAccounts ?? [],
+      ai_prompt: readTrimmedString(input.aiPrompt),
+      ai_summary: readTrimmedString(input.aiSummary),
+      updated_at: now,
+    }
+
+    if (input.id) {
+      const existing = await this.getAccountListProfileForUpdate(
+        context,
+        input.id
+      )
+      const { data, error } = await this.db
+        .from("account_list_profiles")
+        .update({
+          ...basePayload,
+          profile_version: Math.max(existing.profile_version ?? 1, 1) + 1,
+        })
+        .eq("id", input.id)
+        .eq("product_id", context.productId)
+        .select(ACCOUNT_LIST_PROFILE_COLUMNS)
+        .single()
+
+      requireNoDbError(error, "Failed to update account list profile")
+      return {
+        profile: formatAccountListProfile(data as AccountListProfileRow),
+        profileId: (data as AccountListProfileRow).id,
+        created: false,
+      }
+    }
+
+    const { data, error } = await this.db
+      .from("account_list_profiles")
+      .insert({
+        id: randomUUID(),
+        product_id: context.productId,
+        ...basePayload,
+        profile_version: 1,
+        created_by: context.userId ?? null,
+        created_at: now,
+      })
+      .select(ACCOUNT_LIST_PROFILE_COLUMNS)
+      .single()
+
+    requireNoDbError(error, "Failed to create account list profile")
+    return {
+      profile: formatAccountListProfile(data as AccountListProfileRow),
+      profileId: (data as AccountListProfileRow).id,
+      created: true,
+    }
+  }
+
+  async archiveAccountListProfile(
+    context: SignalSurfContext,
+    profileId: string
+  ) {
+    await this.getAccountListProfileForUpdate(context, profileId)
+
+    const { data, error } = await this.db
+      .from("account_list_profiles")
+      .update({
+        status: "archived",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", profileId)
+      .eq("product_id", context.productId)
+      .select(ACCOUNT_LIST_PROFILE_COLUMNS)
+      .single()
+
+    requireNoDbError(error, "Failed to archive account list profile")
+    return {
+      profile: formatAccountListProfile(data as AccountListProfileRow),
+      archived: true,
     }
   }
 
@@ -2791,6 +2967,30 @@ export class SignalSurfRepository {
     )
   }
 
+  private async getAccountListProfileForUpdate(
+    context: SignalSurfContext,
+    profileId: string
+  ): Promise<AccountListProfileRow> {
+    const { data, error } = await this.db
+      .from("account_list_profiles")
+      .select(ACCOUNT_LIST_PROFILE_COLUMNS)
+      .eq("id", profileId)
+      .eq("product_id", context.productId)
+      .maybeSingle()
+
+    requireNoDbError(error, "Failed to fetch account list profile")
+    if (!data) {
+      throw new UserFacingError(
+        "Account list profile not found or access denied.",
+        {
+          code: "NOT_FOUND",
+          status: 404,
+        }
+      )
+    }
+    return data as AccountListProfileRow
+  }
+
   private async resolveDatabaseIds(
     context: SignalSurfContext,
     databaseIds: string[] | undefined
@@ -3831,6 +4031,27 @@ function assertFieldKeyAvailable(
       code: "CONFLICT",
       status: 409,
     })
+  }
+}
+
+function formatAccountListProfile(row: AccountListProfileRow) {
+  return {
+    id: row.id,
+    profileId: row.id,
+    productId: row.product_id,
+    name: row.name,
+    description: row.description ?? null,
+    status: row.status,
+    source: row.source,
+    profileVersion: row.profile_version ?? 1,
+    accountList: asRecord(row.config),
+    sampleAccounts: uniqueStrings(row.sample_accounts),
+    rejectAccounts: uniqueStrings(row.reject_accounts),
+    aiPrompt: row.ai_prompt ?? null,
+    aiSummary: row.ai_summary ?? null,
+    createdBy: row.created_by ?? null,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
   }
 }
 
