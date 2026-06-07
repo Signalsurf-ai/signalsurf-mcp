@@ -222,6 +222,7 @@ export function listContextCapabilities(
         "tables.read",
         "schemas.read",
         "sources.read",
+        "account_lists.read",
       ]
     : [
         "context.read",
@@ -237,6 +238,8 @@ export function listContextCapabilities(
         "schemas.write",
         "sources.read",
         "sources.write",
+        "account_lists.read",
+        "account_lists.write",
       ]
 }
 
