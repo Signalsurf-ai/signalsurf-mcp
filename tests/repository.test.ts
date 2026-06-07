@@ -240,6 +240,31 @@ function makeDb() {
         name: "Second Workspace",
       },
     ],
+    organization_members: [
+      {
+        organization_id: org1,
+        user_id: context.userId,
+        role: "owner",
+      },
+      {
+        organization_id: org2,
+        user_id: context.userId,
+        role: "viewer",
+      },
+    ],
+    product_members: [
+      {
+        product_id: context.productId,
+        user_id: context.userId,
+        role: "owner",
+      },
+    ],
+    product_goals: [
+      {
+        product_id: context.productId,
+        user_id: context.userId,
+      },
+    ],
     surf_jobs: [
       {
         id: pendingJob,
@@ -813,6 +838,92 @@ describe("SignalSurfRepository", () => {
     })
   })
 
+  it("creates products through hosted OAuth and expands the active grant", async () => {
+    const db = makeDb()
+    const oauthTokenId = "00000000-0000-4000-8000-000000000601"
+    db.tables.mcp_oauth_tokens = [
+      {
+        id: oauthTokenId,
+        product_id: context.productId,
+        product_ids: [context.productId],
+      },
+    ]
+    const oauthContext: SignalSurfContext = {
+      ...context,
+      productIds: [context.productId],
+      products: [
+        {
+          productId: context.productId,
+          name: "Primary Product",
+          organizationId: org1,
+          organizationName: "Primary Workspace",
+        },
+      ],
+      scopes: ["mcp:products.write"],
+      authKind: "oauth",
+      oauthTokenId,
+    }
+    const repo = new SignalSurfRepository(db as any)
+
+    const result = await repo.createProduct(oauthContext, {
+      name: "Agent-created Product",
+      displayOrder: 3,
+    })
+
+    expect(result.product).toMatchObject({
+      productId: expect.any(String),
+      name: "Agent-created Product",
+      organizationId: org1,
+      organizationName: "Primary Workspace",
+      ownerId: context.userId,
+    })
+    expect(db.tables.products.at(-1)).toMatchObject({
+      id: result.productId,
+      organization_id: org1,
+      owner_id: context.userId,
+      name: "Agent-created Product",
+    })
+    expect(db.tables.product_members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          product_id: result.productId,
+          user_id: context.userId,
+          role: "owner",
+          display_order: 3,
+        }),
+      ])
+    )
+    expect(db.tables.product_goals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          product_id: result.productId,
+          user_id: context.userId,
+        }),
+      ])
+    )
+    expect(db.tables.mcp_oauth_tokens[0].product_ids).toEqual([
+      context.productId,
+      result.productId,
+    ])
+    expect(oauthContext.productIds).toEqual([
+      context.productId,
+      result.productId,
+    ])
+    expect(oauthContext.products?.at(-1)).toMatchObject({
+      productId: result.productId,
+      name: "Agent-created Product",
+    })
+  })
+
+  it("rejects product creation outside hosted OAuth grants", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.createProduct(context, { name: "Manual token product" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" })
+  })
+
   it("creates prompt templates from scoring rubric and surf prompt", async () => {
     const db = makeDb()
     db.tables.databases = db.tables.databases.filter((row) => row.id === db1)
@@ -1034,6 +1145,88 @@ describe("SignalSurfRepository", () => {
       removesRowData: false,
       fields: [{ key: "parent" }],
     })
+  })
+
+  it("creates and updates tables with custom schema", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    const created = await repo.createTable(context, {
+      name: "Agent Accounts",
+      itemType: "account",
+      schema: {
+        fields: [
+          { key: "name", type: "text", label: "Name" },
+          {
+            key: "owner",
+            type: "item_ref",
+            target_database_id: db2,
+            label: "Owner",
+          },
+        ],
+      },
+      viewConfigs: {
+        saved_views: [{ id: "default", name: "All accounts" }],
+      },
+      displayOrder: 8,
+    })
+
+    expect(created.database).toMatchObject({
+      databaseId: expect.any(String),
+      name: "Agent Accounts",
+      itemType: "account",
+      displayOrder: 8,
+      schema: {
+        fields: [
+          { key: "name", type: "text" },
+          { key: "owner", target_database_id: db2 },
+        ],
+      },
+    })
+
+    const updated = await repo.updateTable(context, {
+      databaseId: created.database.databaseId,
+      name: "Agent Accounts v2",
+      schemaPatch: {
+        fields: [
+          { key: "name", type: "text", label: "Company Name" },
+          { key: "priority", type: "enum", options: ["P0", "P1"] },
+        ],
+      },
+    })
+
+    expect(updated).toMatchObject({
+      changedFields: ["name", "schema"],
+      database: {
+        name: "Agent Accounts v2",
+        schema: {
+          fields: [
+            { key: "name", label: "Company Name" },
+            { key: "priority", type: "enum" },
+          ],
+        },
+      },
+    })
+  })
+
+  it("rejects table schemas that reference another product", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.createTable(context, {
+        name: "Bad relations",
+        schema: {
+          fields: [
+            {
+              key: "external",
+              type: "item_ref",
+              target_database_id: otherProductDb,
+            },
+          ],
+        },
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
   it("creates relation fields only to product-owned databases", async () => {

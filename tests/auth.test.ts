@@ -80,6 +80,9 @@ describe("auth", () => {
     expect(() => assertCanUseCapability(context, "tables.delete")).toThrow(
       "Token scope does not allow"
     )
+    expect(() => assertCanUseCapability(context, "products.write")).toThrow(
+      "Token scope does not allow"
+    )
     expect(() => assertCanUseCapability(context, "surf_points.write")).toThrow(
       "Token scope does not allow"
     )
@@ -120,6 +123,7 @@ describe("auth", () => {
       })
     ).toEqual([
       "context.read",
+      "products.write",
       "surf_points.read",
       "surf_points.write",
       "surf_points.execute",

@@ -25,6 +25,12 @@ type ListSurfPointsInput = {
   limit?: number
 }
 
+type CreateProductInput = {
+  name: string
+  organizationId?: string
+  displayOrder?: number
+}
+
 type CreateSurfPointInput = {
   name: string
   description?: string
@@ -126,6 +132,32 @@ type ListDatabasesInput = {
   limit?: number
 }
 
+type CreateTableInput = {
+  name: string
+  description?: string | null
+  icon?: string | null
+  color?: string | null
+  schema?: JsonRecord
+  itemType?: string | null
+  viewConfigs?: JsonRecord
+  folderId?: string | null
+  displayOrder?: number
+}
+
+type UpdateTableInput = {
+  databaseId: string
+  name?: string
+  description?: string | null
+  icon?: string | null
+  color?: string | null
+  schema?: JsonRecord | null
+  schemaPatch?: JsonRecord
+  itemType?: string | null
+  viewConfigs?: JsonRecord | null
+  folderId?: string | null
+  displayOrder?: number
+}
+
 type ReadTableInput = {
   databaseId: string
   limit?: number
@@ -217,6 +249,15 @@ type ProductContextRow = {
   id: string
   name: string | null
   organization_id?: string | null
+}
+
+type ProductRow = {
+  id: string
+  name: string
+  organization_id: string
+  owner_id: string
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 type ProductOwnerRow = {
@@ -327,6 +368,7 @@ const DATABASE_COLUMNS = [
   "item_type",
   "system_type",
   "view_configs",
+  "folder_id",
   "display_order",
   "created_at",
   "updated_at",
@@ -538,6 +580,7 @@ export class SignalSurfRepository {
       products: await this.resolveProductContexts([row.product_id]),
       role: row.role,
       tokenName: row.name ?? undefined,
+      authKind: "manual",
     }
   }
 
@@ -606,6 +649,8 @@ export class SignalSurfRepository {
         ? `OAuth: ${client.client_name}`
         : "OAuth MCP client",
       scopes,
+      authKind: "oauth",
+      oauthTokenId: row.id,
     }
   }
 
@@ -681,6 +726,81 @@ export class SignalSurfRepository {
       .maybeSingle()
     requireNoDbError(error, "Failed to resolve product owner")
     return ((data as ProductOwnerRow | null)?.owner_id as string | null) ?? null
+  }
+
+  async createProduct(context: SignalSurfContext, input: CreateProductInput) {
+    if (context.authKind !== "oauth" || !context.oauthTokenId) {
+      throw new UserFacingError(
+        "create_product requires a hosted OAuth MCP connection so the active grant can be expanded to the new product.",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+    if (!context.userId) {
+      throw new UserFacingError(
+        "create_product requires an authenticated SignalSurf user.",
+        { code: "FORBIDDEN", status: 403 }
+      )
+    }
+
+    const currentProduct = (context.products ?? []).find(
+      (product) => product.productId === context.productId
+    )
+    const organizationId =
+      input.organizationId ?? currentProduct?.organizationId ?? null
+
+    const { data, error } = await this.db.rpc("create_product_for_mcp", {
+      p_user_id: context.userId,
+      p_name: input.name.trim(),
+      p_organization_id: organizationId,
+      p_display_order: input.displayOrder ?? 0,
+    })
+
+    requireNoDbError(error, "Failed to create product")
+    if (!data) {
+      throw new UserFacingError("Failed to create product.", {
+        code: "DATABASE_ERROR",
+        status: 500,
+      })
+    }
+
+    const product = data as ProductRow
+    const productContexts = await this.resolveProductContexts([product.id])
+    const productContext = productContexts[0] ?? {
+      productId: product.id,
+      name: product.name,
+      organizationId: product.organization_id,
+      organizationName: null,
+    }
+
+    const productIds = await this.expandOAuthGrantProducts(context, product.id)
+    upsertContextProduct(context, productContext, productIds)
+
+    return {
+      product: formatProduct(product, productContext),
+      productId: product.id,
+      productIds,
+      products: context.products ?? [productContext],
+    }
+  }
+
+  private async expandOAuthGrantProducts(
+    context: SignalSurfContext,
+    productId: string
+  ): Promise<string[]> {
+    const productIds = uniqueIds([
+      context.productId,
+      ...(context.productIds ?? []),
+      productId,
+    ])
+    const { error } = await this.db
+      .from("mcp_oauth_tokens")
+      .update({
+        product_ids: productIds,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", context.oauthTokenId)
+    requireNoDbError(error, "Failed to expand OAuth product grant")
+    return productIds
   }
 
   async listSurfPoints(
@@ -1304,6 +1424,118 @@ export class SignalSurfRepository {
     }
   }
 
+  async createTable(context: SignalSurfContext, input: CreateTableInput) {
+    if (input.folderId) {
+      await this.assertDatabaseFolderBelongsToProduct(context, input.folderId)
+    }
+    const schema = input.schema ?? { fields: [] }
+    await this.validateDatabaseSchemaReferences(context, schema)
+
+    const now = new Date().toISOString()
+    const { data, error } = await this.db
+      .from("databases")
+      .insert({
+        id: randomUUID(),
+        product_id: context.productId,
+        name: input.name.trim(),
+        description: input.description?.trim() || null,
+        icon: input.icon ?? null,
+        color: input.color ?? null,
+        schema,
+        item_type: input.itemType?.trim() || null,
+        system_type: null,
+        view_configs: input.viewConfigs ?? {},
+        folder_id: input.folderId ?? null,
+        display_order: input.displayOrder ?? 0,
+        created_at: now,
+        updated_at: now,
+      })
+      .select(DATABASE_COLUMNS)
+      .single()
+
+    if (error?.code === "23505") {
+      throw new UserFacingError("A table with this name already exists.", {
+        code: "CONFLICT",
+        status: 409,
+      })
+    }
+    requireNoDbError(error, "Failed to create table")
+    return { database: formatDatabase(data as DatabaseRow) }
+  }
+
+  async updateTable(context: SignalSurfContext, input: UpdateTableInput) {
+    const existing = await this.getDatabaseAndValidateProduct(
+      context,
+      input.databaseId
+    )
+    if (input.schema !== undefined && input.schemaPatch !== undefined) {
+      throw new UserFacingError("Pass either schema or schemaPatch, not both.", {
+        code: "BAD_REQUEST",
+        status: 400,
+      })
+    }
+    if (input.folderId) {
+      await this.assertDatabaseFolderBelongsToProduct(context, input.folderId)
+    }
+
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    }
+
+    if (input.name !== undefined) updateData.name = input.name.trim()
+    if (input.description !== undefined)
+      updateData.description = input.description?.trim() || null
+    if (input.icon !== undefined) updateData.icon = input.icon
+    if (input.color !== undefined) updateData.color = input.color
+    if (input.itemType !== undefined)
+      updateData.item_type = input.itemType?.trim() || null
+    if (input.viewConfigs !== undefined) updateData.view_configs = input.viewConfigs
+    if (input.folderId !== undefined) updateData.folder_id = input.folderId
+    if (input.displayOrder !== undefined)
+      updateData.display_order = input.displayOrder
+
+    if (input.schema !== undefined) {
+      const nextSchema = input.schema ?? {}
+      await this.validateDatabaseSchemaReferences(context, nextSchema)
+      updateData.schema = nextSchema
+    }
+    if (input.schemaPatch !== undefined) {
+      const nextSchema = { ...asRecord(existing.schema), ...input.schemaPatch }
+      await this.validateDatabaseSchemaReferences(context, nextSchema)
+      updateData.schema = nextSchema
+    }
+
+    const changedKeys = Object.keys(updateData).filter(
+      (key) => key !== "updated_at"
+    )
+    if (changedKeys.length === 0) {
+      throw new UserFacingError("No fields to update.", {
+        code: "BAD_REQUEST",
+        status: 400,
+      })
+    }
+
+    const { data, error } = await this.db
+      .from("databases")
+      .update(updateData)
+      .eq("id", input.databaseId)
+      .eq("product_id", context.productId)
+      .select(DATABASE_COLUMNS)
+      .single()
+
+    if (error?.code === "23505") {
+      throw new UserFacingError("A table with this name already exists.", {
+        code: "CONFLICT",
+        status: 409,
+      })
+    }
+    requireNoDbError(error, "Failed to update table")
+    return {
+      database: formatDatabase(data as DatabaseRow),
+      changedFields: changedKeys,
+    }
+  }
+
   async readTable(context: SignalSurfContext, input: ReadTableInput) {
     await this.assertDatabaseBelongsToProduct(context, input.databaseId)
 
@@ -1825,6 +2057,49 @@ export class SignalSurfRepository {
     await this.assertDatabaseIdsBelongToProduct(context, [databaseId])
   }
 
+  private async validateDatabaseSchemaReferences(
+    context: SignalSurfContext,
+    schema: JsonRecord
+  ): Promise<void> {
+    const fields = schemaFields(schema)
+    const seenFieldKeys = new Set<string>()
+    for (const field of fields) {
+      validateDatabaseField(field)
+      const key = String(field.key)
+      if (seenFieldKeys.has(key)) {
+        throw new UserFacingError(`Database field "${key}" already exists.`, {
+          code: "CONFLICT",
+          status: 409,
+        })
+      }
+      seenFieldKeys.add(key)
+      if (field.type !== "item_ref") continue
+      const targetDatabaseId = firstString(
+        field.target_database_id,
+        field.targetDatabaseId
+      )
+      if (targetDatabaseId) {
+        await this.assertDatabaseBelongsToProduct(context, targetDatabaseId)
+      }
+    }
+
+    const relations = Array.isArray(schema.relations)
+      ? (schema.relations as unknown[])
+      : []
+    for (const relation of relations) {
+      const record = asRecord(relation)
+      const targetDatabaseId = firstString(
+        record.target_database_id,
+        record.targetDatabaseId,
+        record.database_id,
+        record.databaseId
+      )
+      if (targetDatabaseId) {
+        await this.assertDatabaseBelongsToProduct(context, targetDatabaseId)
+      }
+    }
+  }
+
   private async getDatabaseAndValidateProduct(
     context: SignalSurfContext,
     databaseId: string
@@ -2139,6 +2414,25 @@ export class SignalSurfRepository {
     }
   }
 
+  private async assertDatabaseFolderBelongsToProduct(
+    context: SignalSurfContext,
+    folderId: string
+  ): Promise<void> {
+    const { data, error } = await this.db
+      .from("database_folders")
+      .select("id")
+      .eq("id", folderId)
+      .eq("product_id", context.productId)
+      .maybeSingle()
+    requireNoDbError(error, "Failed to validate table folder access")
+    if (!data) {
+      throw new UserFacingError("Table folder not found or access denied.", {
+        code: "NOT_FOUND",
+        status: 404,
+      })
+    }
+  }
+
   private async getSurfPointsByIds(
     context: SignalSurfContext,
     ids: string[]
@@ -2304,6 +2598,27 @@ function errorOrNull(
     return { message: record.message, code: record.code }
   }
   return { message: String(error) }
+}
+
+function upsertContextProduct(
+  context: SignalSurfContext,
+  product: SignalSurfProductContext,
+  productIds: string[]
+): void {
+  context.productIds = productIds
+  const productsById = new Map(
+    (context.products ?? []).map((item) => [item.productId, item])
+  )
+  productsById.set(product.productId, product)
+  context.products = productIds.map(
+    (productId) =>
+      productsById.get(productId) ?? {
+        productId,
+        name: productId,
+        organizationId: null,
+        organizationName: null,
+      }
+  )
 }
 
 function extractSavedViews(viewConfigs: JsonRecord | null) {
@@ -2798,6 +3113,22 @@ function formatProductTool(row: ProductToolRow) {
   }
 }
 
+function formatProduct(
+  row: ProductRow,
+  productContext?: SignalSurfProductContext
+) {
+  return {
+    id: row.id,
+    productId: row.id,
+    name: row.name,
+    organizationId: productContext?.organizationId ?? row.organization_id,
+    organizationName: productContext?.organizationName ?? null,
+    ownerId: row.owner_id,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  }
+}
+
 function formatDatabase(row: DatabaseRow) {
   return {
     id: row.id,
@@ -2810,6 +3141,7 @@ function formatDatabase(row: DatabaseRow) {
     itemType: row.item_type,
     systemType: row.system_type,
     viewConfigs: row.view_configs ?? {},
+    folderId: row.folder_id ?? null,
     displayOrder: row.display_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

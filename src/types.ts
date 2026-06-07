@@ -15,6 +15,8 @@ export type SignalSurfContext = {
   role: AccessRole
   tokenName?: string
   scopes?: string[]
+  authKind?: "env" | "manual" | "oauth"
+  oauthTokenId?: string
 }
 
 export type JsonRecord = Record<string, unknown>
@@ -55,6 +57,7 @@ export type DatabaseRow = {
   item_type: string | null
   system_type: string | null
   view_configs: JsonRecord | null
+  folder_id?: string | null
   display_order: number
   created_at: string
   updated_at: string

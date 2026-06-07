@@ -22,7 +22,8 @@ The server always resolves a `SignalSurfContext` before any tool runs:
 - `products`: authorized product metadata in the same order as `productIds`,
   including `productId`, human-readable `name`, optional `organizationId`, and
   optional `organizationName`
-- `userId`: optional user context, currently used for surf point delete cleanup
+- `userId`: optional user context, used for hosted OAuth product creation and
+  surf point delete cleanup
 - `role`: `viewer`, `editor`, or `owner`
 - `tokenName`: optional source label for MCP row mutations
 - `scopes`: optional OAuth/static-token scopes that can narrow role access
@@ -114,7 +115,8 @@ not match `SIGNALSURF_MCP_RESOURCE_URL`.
 The public scope and tool contract lives in `src/capabilities.ts` and is
 documented in `docs/capabilities.md`. Broad legacy scopes remain for client
 compatibility, while granular scopes support least-privilege access to Surf
-Points, execution, table data, schemas, and safe source controls.
+Points, execution, table data, schemas, safe source controls, and product
+creation.
 
 ## Product Scope Guards
 
@@ -123,7 +125,11 @@ service-role access behind explicit product checks:
 
 - Surf points: `playbooks.product_id = context.productId` and
   `deleted_at IS NULL`
+- Products: `create_product` requires hosted OAuth user context and expands only
+  the active OAuth grant after the database creates the product
 - Databases: `databases.product_id = context.productId`
+- Table creation/update: full custom schemas are accepted only after every
+  relation target is validated against a product-owned database
 - Rows: each row's `database_id` must resolve to a product-owned database
 - Row attribution: supplied `playbookId` must be a non-deleted product surf point
   whose `database_ids` contains the target row database
@@ -136,6 +142,14 @@ Rows without `database_id` are intentionally inaccessible through MCP because
 they cannot be product-scoped safely.
 
 ## Mutation Semantics
+
+Product creation is hosted-OAuth-only. `create_product` calls SignalSurf Web's
+service-role-only `create_product_for_mcp` RPC, which creates the product,
+seeds owner membership, and seeds `product_goals`. After the product exists, the
+MCP server updates the active OAuth token's `product_ids` grant and mutates the
+current in-process context so follow-up tool calls can use the returned
+`productId`. Manual fallback tokens cannot create products because they have no
+grant record to expand.
 
 Surf point deletion is a soft delete. It sets `deleted_at`, cancels pending
 `surf_jobs`, and repairs `user_preferences.current_playbook_id` when the token
@@ -169,10 +183,13 @@ Row data updates call `update_entry_with_source`; note updates call
 `update_entry_note_with_source`. Direct table updates are limited to metadata
 that cannot be handled by those RPCs.
 
-Schema mutation tools update `databases.schema` after product-scope validation.
-They do not backfill, rewrite, or delete existing row data. Relation creation
-adds an `item_ref` schema field and validates that `target_database_id` belongs
-to the same authorized product before writing.
+Table lifecycle tools update `databases` metadata and `databases.schema` after
+product-scope validation. `create_table` and `update_table` can accept a full
+custom schema or shallow `schemaPatch`; field definitions are validated and
+`item_ref`/relation targets must belong to the same authorized product. Schema
+field tools do not backfill, rewrite, or delete existing row data. Relation
+creation adds an `item_ref` schema field and validates that
+`target_database_id` belongs to the same authorized product before writing.
 
 Source controls intentionally expose only safe metadata (`id`, `playbook_id`,
 name, type, endpoint, schedule, URL, provider, `is_active`, timestamps). Public

@@ -11,6 +11,12 @@ export const toolOutputSchema = {
   data: z.unknown().optional(),
 }
 
+export const createProductSchema = {
+  name: z.string().trim().min(1).max(100),
+  organizationId: uuidSchema.optional(),
+  displayOrder: z.number().int().min(0).max(100000).default(0).optional(),
+}
+
 export const listSurfPointsSchema = {
   ...productTargetSchema,
   includeInactive: z.boolean().default(true).optional(),
@@ -108,6 +114,34 @@ export const listDatabasesSchema = {
   ...productTargetSchema,
   includeSystem: z.boolean().default(false).optional(),
   limit: z.number().int().min(1).max(200).default(100).optional(),
+}
+
+export const createTableSchema = {
+  ...productTargetSchema,
+  name: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(1000).nullish(),
+  icon: z.string().trim().max(50).nullish(),
+  color: z.string().trim().max(20).nullish(),
+  schema: jsonObjectSchema.optional(),
+  itemType: z.string().trim().max(100).nullish(),
+  viewConfigs: jsonObjectSchema.optional(),
+  folderId: uuidSchema.nullish(),
+  displayOrder: z.number().int().min(0).max(100000).default(0).optional(),
+}
+
+export const updateTableSchema = {
+  ...productTargetSchema,
+  databaseId: uuidSchema,
+  name: z.string().trim().min(1).max(100).optional(),
+  description: z.string().trim().max(1000).nullable().optional(),
+  icon: z.string().trim().max(50).nullable().optional(),
+  color: z.string().trim().max(20).nullable().optional(),
+  schema: jsonObjectSchema.nullable().optional(),
+  schemaPatch: jsonObjectSchema.optional(),
+  itemType: z.string().trim().max(100).nullable().optional(),
+  viewConfigs: jsonObjectSchema.nullable().optional(),
+  folderId: uuidSchema.nullable().optional(),
+  displayOrder: z.number().int().min(0).max(100000).optional(),
 }
 
 const tableFilterSchema = z.object({

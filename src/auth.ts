@@ -225,6 +225,7 @@ export function listContextCapabilities(
       ]
     : [
         "context.read",
+        "products.write",
         "surf_points.read",
         "surf_points.write",
         "surf_points.execute",

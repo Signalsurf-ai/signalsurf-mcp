@@ -25,9 +25,11 @@ not need this repository, a Supabase key, or a local server.
    `get_context` first, choose from the returned `products[].name` list, and
    pass that product's `productId` to product-scoped tool calls.
 
-The hosted MCP currently supports product-scoped Surf Point CRUD and table row
-read/create/update/delete. It is a safe public subset of Surfer, the agent in
-SignalSurf Web's right panel; it does not expose every internal chat tool.
+The hosted MCP currently supports product creation, product-scoped Surf Point
+CRUD, table create/update, table schema edits, Surf Point execution, source
+toggles, tool attachment, and table row read/create/update/delete. It is a safe
+public subset of Surfer, the agent in SignalSurf Web's right panel; it does not
+expose every internal chat tool.
 
 Example:
 
@@ -179,8 +181,9 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 
 ## What It Exposes
 
+- `create_product`
 - `list_surf_points`, `get_surf_point`, `create_surf_point`, `update_surf_point`, `run_surf_point`, `get_surf_job`, `wait_for_surf_job`, `list_surf_jobs`, `cancel_surf_job`, `delete_surf_point`
-- `list_databases`, `list_database_views`, `read_table`, `read_table_view`, `get_table_row`
+- `list_databases`, `create_table`, `update_table`, `list_database_views`, `read_table`, `read_table_view`, `get_table_row`
 - `create_table_row`, `update_table_row`, `delete_table_rows`
 - `list_database_fields`, `add_database_field`, `update_database_field`, `remove_database_field`, `create_relation_field`
 - `list_surf_point_sources`, `set_surf_point_source_active`
@@ -200,6 +203,7 @@ or granular scopes. The protected resource metadata advertises the granular
 SignalSurf resource scopes so the consent screen can name each capability
 instead of hiding them behind broad write access:
 
+- `mcp:products.write`
 - `mcp:surf_points.read`
 - `mcp:surf_points.write`
 - `mcp:surf_points.execute`
@@ -253,6 +257,13 @@ Context:
   product from `products[]` and pass its `productId` to every product-scoped
   tool call.
 
+Products:
+
+- `create_product`: creates a new SignalSurf product through the hosted OAuth
+  connection, seeds owner membership and product goals, then expands the active
+  OAuth grant to include the returned `productId`. Follow-up calls should pass
+  that returned `productId` explicitly.
+
 Surf points:
 
 - `list_surf_points`: returns non-deleted surf points. Use
@@ -282,6 +293,10 @@ Tables:
 
 - `list_databases`: lists databases for the selected product. System databases
   are hidden unless `includeSystem=true`.
+- `create_table`: creates a product table with optional custom schema, saved
+  view config, item type, display order, and existing table folder placement.
+- `update_table`: updates table metadata, custom schema, saved view config,
+  item type, display order, or folder placement.
 - `read_table`: reads rows with pagination and optional JSON containment filter.
   It also supports UI-style `filters`, `filterLogic`, and data-field `sorts`.
   Advanced filters are evaluated over a bounded scan (`scanLimit`, default
@@ -306,6 +321,9 @@ Schema:
 
 - `list_database_fields`: returns schema fields and relation definitions for a
   database.
+- `create_table` / `update_table`: accept a complete `schema` object or
+  `schemaPatch`; `item_ref` fields and relation targets must point at databases
+  in the same authorized product.
 - `add_database_field` / `update_database_field` / `remove_database_field`:
   mutate database schema only. They do not backfill or delete row data.
 - `create_relation_field`: adds an `item_ref` field after verifying the target
@@ -334,8 +352,9 @@ Roles:
 
 OAuth scopes can narrow those role grants. For example, an editor OAuth token
 with `mcp:tables.write` can create and update rows but cannot delete rows or
-create Surf Points. Manual fallback tokens without `scopes` keep the legacy
-role-only behavior.
+create Surf Points. Product creation additionally requires hosted OAuth because
+the active grant must be expanded to the new product. Manual fallback tokens
+without `scopes` keep the legacy role-only behavior.
 
 Resources:
 
