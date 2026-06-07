@@ -76,7 +76,7 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `list_surf_point_sources`      | `sources.read`        | No          | Lists safe source metadata only; config and credentials are not exposed                                 |
 | `create_surf_point_source`     | `sources.write`       | No          | Creates a source/signal for a Surf Point with typed config and product-scope validation                 |
 | `update_surf_point_source`     | `sources.write`       | No          | Updates source name, active state, typed config, `pull_config`, `metadata`, or `data_schema`            |
-| `delete_surf_point_source`     | `sources.write`       | Yes         | Deletes sources after product-scope validation and removes pending jobs for those source ids            |
+| `delete_surf_point_source`     | `sources.write`       | Yes         | Deletes sources after product-scope validation and removes non-terminal jobs for those source ids       |
 | `set_surf_point_source_active` | `sources.write`       | No          | Enables or pauses a source after product-scope validation                                               |
 | `list_product_tools`           | `surf_points.read`    | No          | Lists safe product tool metadata; config secrets are not exposed                                        |
 | `list_surf_point_tools`        | `surf_points.read`    | No          | Lists tool ids from `tool_config.auto_tool_ids`                                                         |

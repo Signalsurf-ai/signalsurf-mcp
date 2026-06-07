@@ -938,14 +938,24 @@ function inferSourceType(row: SourceRow): string | null {
   return row.type ?? null
 }
 
+const ACTIVE_SURF_JOB_STATUSES = [
+  "pending",
+  "queued",
+  "running",
+  "processing",
+  "in_progress",
+]
+
+function isActiveSurfJobStatus(status: string): boolean {
+  return ACTIVE_SURF_JOB_STATUSES.includes(status.trim().toLowerCase())
+}
+
 function isTerminalSurfJobStatus(status: string): boolean {
-  return ![
-    "pending",
-    "queued",
-    "running",
-    "processing",
-    "in_progress",
-  ].includes(status.trim().toLowerCase())
+  return !isActiveSurfJobStatus(status)
+}
+
+function readSourceEndpointId(source: SourceRow): string | null {
+  return readTrimmedString(asRecord(source.pull_config).endpoint_id)
 }
 
 export class SignalSurfRepository {
@@ -2491,13 +2501,18 @@ export class SignalSurfRepository {
     return readTrimmedString((data as { name?: string | null }).name) ?? ""
   }
 
-  private async deleteSourceRows(sourceIds: string[]): Promise<number> {
+  private async deleteSourceRows(
+    context: SignalSurfContext,
+    sources: SourceRow[]
+  ): Promise<number> {
+    const sourceIds = uniqueIds(sources.map((source) => source.id))
     if (sourceIds.length === 0) return 0
 
     const { error: jobError } = await this.db
       .from("surf_jobs")
       .delete({ count: "exact" })
       .in("source_id", sourceIds)
+      .in("status", ACTIVE_SURF_JOB_STATUSES)
     requireNoDbError(errorOrNull(jobError), "Failed to delete source jobs")
 
     const { count, error } = await this.db
@@ -2505,6 +2520,27 @@ export class SignalSurfRepository {
       .delete({ count: "exact" })
       .in("id", sourceIds)
     requireNoDbError(errorOrNull(error), "Failed to delete surf point sources")
+
+    const cleanupTargets = new Map<
+      string,
+      { surfPointId: string; endpointId: string }
+    >()
+    for (const source of sources) {
+      const endpointId = readSourceEndpointId(source)
+      if (!endpointId) continue
+      cleanupTargets.set(`${source.playbook_id}:${endpointId}`, {
+        surfPointId: source.playbook_id,
+        endpointId,
+      })
+    }
+    for (const target of cleanupTargets.values()) {
+      await this.disableOrphanedPlatformSourceConfig(
+        context,
+        target.surfPointId,
+        target.endpointId
+      )
+    }
+
     return count ?? sourceIds.length
   }
 
@@ -2533,7 +2569,50 @@ export class SignalSurfRepository {
       )
     }
 
-    return this.deleteSourceRows(existingSources.map((source) => source.id))
+    return this.deleteSourceRows(context, existingSources)
+  }
+
+  private async disableOrphanedPlatformSourceConfig(
+    context: SignalSurfContext,
+    surfPointId: string,
+    endpointId: string | null
+  ): Promise<void> {
+    if (!endpointId) return
+
+    const remainingSources = await this.listSourceRowsForSurfPoint(
+      context,
+      surfPointId
+    )
+    if (
+      remainingSources.some(
+        (source) => readSourceEndpointId(source) === endpointId
+      )
+    ) {
+      return
+    }
+
+    const now = new Date().toISOString()
+    const { error: searchConfigError } = await this.db
+      .from("platform_search_config")
+      .update({ is_enabled: false, updated_at: now })
+      .eq("product_id", context.productId)
+      .eq("playbook_id", surfPointId)
+      .eq("platform", endpointId)
+    requireNoDbError(
+      errorOrNull(searchConfigError),
+      "Failed to disable orphaned platform source keywords"
+    )
+
+    const { error: trackedAccountsError } = await this.db
+      .from("tracked_accounts")
+      .update({ is_enabled: false, updated_at: now })
+      .eq("product_id", context.productId)
+      .eq("playbook_id", surfPointId)
+      .eq("platform", endpointId)
+    requireNoDbError(
+      errorOrNull(trackedAccountsError),
+      "Failed to disable orphaned platform tracked accounts"
+    )
   }
 
   private async syncPlatformSourceConfig(
@@ -2741,6 +2820,7 @@ export class SignalSurfRepository {
     }
 
     const source = await this.getSourceForUpdate(context, input.sourceId)
+    const previousEndpointId = readSourceEndpointId(source)
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     }
@@ -2843,12 +2923,21 @@ export class SignalSurfRepository {
 
     requireNoDbError(error, "Failed to update surf point source")
     const updatedSource = data as SourceRow
+    const nextEndpointId = readSourceEndpointId(updatedSource)
+
+    if (previousEndpointId && previousEndpointId !== nextEndpointId) {
+      await this.disableOrphanedPlatformSourceConfig(
+        context,
+        source.playbook_id,
+        previousEndpointId
+      )
+    }
 
     if (configForPlatformSync) {
       await this.syncPlatformSourceConfig(
         context,
         updatedSource.playbook_id,
-        readTrimmedString(asRecord(updatedSource.pull_config).endpoint_id),
+        nextEndpointId,
         configForPlatformSync
       )
     }
@@ -2892,7 +2981,7 @@ export class SignalSurfRepository {
       await this.assertSurfPointBelongsToProduct(context, source.playbook_id)
     }
 
-    const deletedCount = await this.deleteSourceRows(sourceIds)
+    const deletedCount = await this.deleteSourceRows(context, sources)
     return {
       sourceIds,
       deletedCount,

@@ -825,8 +825,79 @@ describe("SignalSurfRepository", () => {
     ])
   })
 
+  it("disables orphaned platform config when source endpoints change", async () => {
+    const db = makeDb()
+    db.tables.platform_search_config = [
+      {
+        product_id: context.productId,
+        playbook_id: surfPoint1,
+        platform: "threads-keyword-search",
+        is_enabled: true,
+        keywords: ["old"],
+      },
+    ]
+    db.tables.tracked_accounts = [
+      {
+        product_id: context.productId,
+        playbook_id: surfPoint1,
+        platform: "threads-keyword-search",
+        username: "old-account",
+        is_enabled: true,
+      },
+    ]
+    const repo = new SignalSurfRepository(db as any)
+
+    await repo.updateSurfPointSource(context, {
+      sourceId: source1,
+      sourceType: "platform",
+      config: {
+        endpointId: "x-post-search",
+        keywords: ["x402"],
+        trackedAccounts: ["@blockrun"],
+      },
+    })
+
+    expect(db.tables.platform_search_config).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          platform: "threads-keyword-search",
+          is_enabled: false,
+        }),
+        expect.objectContaining({
+          platform: "x-post-search",
+          is_enabled: true,
+          keywords: ["x402"],
+        }),
+      ])
+    )
+    expect(db.tables.tracked_accounts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          platform: "threads-keyword-search",
+          username: "old-account",
+          is_enabled: false,
+        }),
+        expect.objectContaining({
+          platform: "x-post-search",
+          username: "blockrun",
+          is_enabled: true,
+        }),
+      ])
+    )
+  })
+
   it("enforces internal trigger exclusivity and supports explicit replacement", async () => {
     const db = makeDb()
+    db.tables.surf_jobs.push({
+      id: completedJob,
+      product_id: context.productId,
+      user_id: context.userId,
+      playbook_id: surfPoint1,
+      source_id: source1,
+      job_type: "extract",
+      status: "completed",
+      created_at: "2026-06-02T00:00:00Z",
+    })
     const repo = new SignalSurfRepository(db as any)
 
     await expect(
@@ -864,7 +935,12 @@ describe("SignalSurfRepository", () => {
       },
     })
     expect(db.tables.sources.find((source) => source.id === source1)).toBeFalsy()
-    expect(db.tables.surf_jobs).toHaveLength(0)
+    expect(db.tables.surf_jobs).toEqual([
+      expect.objectContaining({
+        id: completedJob,
+        status: "completed",
+      }),
+    ])
     expect(db.tables.sources.find((source) => source.id === otherProductSource))
       .toBeTruthy()
     expect(
@@ -884,6 +960,34 @@ describe("SignalSurfRepository", () => {
 
   it("deletes surf point sources after product-scope validation", async () => {
     const db = makeDb()
+    db.tables.platform_search_config = [
+      {
+        product_id: context.productId,
+        playbook_id: surfPoint1,
+        platform: "threads-keyword-search",
+        is_enabled: true,
+        keywords: ["old"],
+      },
+    ]
+    db.tables.tracked_accounts = [
+      {
+        product_id: context.productId,
+        playbook_id: surfPoint1,
+        platform: "threads-keyword-search",
+        username: "old-account",
+        is_enabled: true,
+      },
+    ]
+    db.tables.surf_jobs.push({
+      id: completedJob,
+      product_id: context.productId,
+      user_id: context.userId,
+      playbook_id: surfPoint1,
+      source_id: source1,
+      job_type: "extract",
+      status: "completed",
+      created_at: "2026-06-02T00:00:00Z",
+    })
     const repo = new SignalSurfRepository(db as any)
 
     await expect(
@@ -901,7 +1005,21 @@ describe("SignalSurfRepository", () => {
       deletedCount: 1,
     })
     expect(db.tables.sources.find((source) => source.id === source1)).toBeFalsy()
-    expect(db.tables.surf_jobs).toHaveLength(0)
+    expect(db.tables.surf_jobs).toEqual([
+      expect.objectContaining({
+        id: completedJob,
+        status: "completed",
+      }),
+    ])
+    expect(db.tables.platform_search_config[0]).toMatchObject({
+      platform: "threads-keyword-search",
+      is_enabled: false,
+    })
+    expect(db.tables.tracked_accounts[0]).toMatchObject({
+      platform: "threads-keyword-search",
+      username: "old-account",
+      is_enabled: false,
+    })
   })
 
   it("lists safe product tool metadata without leaking config secrets", async () => {

@@ -352,7 +352,7 @@ Sources and surf point tools:
   such as headers, bodies, and auth may be written but is not returned by list
   responses.
 - `delete_surf_point_source`: deletes one or more sources after product-scope
-  validation and removes pending jobs for those source ids.
+  validation and removes non-terminal jobs for those source ids.
 - Internal trigger source types (`item-created`, `item-updated`,
   `manual-trigger`, `on-schedule`) are exclusive. A Surf Point can have one
   internal trigger and no external discovery sources alongside it. Pass

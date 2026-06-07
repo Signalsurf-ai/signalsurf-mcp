@@ -425,7 +425,7 @@ export const PUBLIC_MCP_TOOLS = {
   delete_surf_point_source: {
     title: "Delete Surf Point Source",
     description:
-      "Hard-delete one or more sources/signals after product-scope validation and remove pending jobs for those source ids.",
+      "Hard-delete one or more sources/signals after product-scope validation and remove non-terminal jobs for those source ids.",
     requiredCapability: "sources.write",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
