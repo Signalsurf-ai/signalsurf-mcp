@@ -325,12 +325,12 @@ export const detachSurfPointToolSchema = {
 const numericRangeSchema = z.object({
   min: z.number().optional(),
   max: z.number().optional(),
-})
+}).passthrough()
 
 const dateRangeSchema = z.object({
   min: z.string().optional(),
   max: z.string().optional(),
-})
+}).passthrough()
 
 const companyIcpFiltersSchema = z.object({
   keywords: z.array(z.string()).optional(),
@@ -355,7 +355,7 @@ const companyIcpFiltersSchema = z.object({
   hiringTitles: z.array(z.string()).optional(),
   hiringLocations: z.array(z.string()).optional(),
   activeJobCount: numericRangeSchema.optional(),
-})
+}).passthrough()
 
 const personIcpFiltersSchema = z.object({
   titles: z.array(z.string()).optional(),
@@ -369,7 +369,7 @@ const personIcpFiltersSchema = z.object({
   employerAnnualRevenueUsd: numericRangeSchema.optional(),
   excludeNames: z.array(z.string()).optional(),
   excludeLinkedinUrls: z.array(z.string()).optional(),
-})
+}).passthrough()
 
 const liveSignalFiltersSchema = z.object({
   queries: z.array(z.string()).optional(),
@@ -378,7 +378,7 @@ const liveSignalFiltersSchema = z.object({
   includeLinkedIn: z.boolean().optional(),
   includeDirectories: z.boolean().optional(),
   includeJobBoards: z.boolean().optional(),
-})
+}).passthrough()
 
 const accountListProfileSourceSchema = z.enum([
   "manual",
@@ -397,7 +397,7 @@ export const accountListSchema = z.object({
   company: companyIcpFiltersSchema.optional(),
   people: personIcpFiltersSchema.optional(),
   liveSignals: liveSignalFiltersSchema.optional(),
-})
+}).passthrough()
 
 export const listAccountListProfilesSchema = {
   ...productTargetSchema,

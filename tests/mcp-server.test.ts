@@ -446,13 +446,24 @@ describe("MCP server", () => {
           enabled: true,
           providers: ["apollo", "bycrawl"],
           previewLimit: 50,
+          customProfileMode: "named-account-motion",
           company: {
             fundingStages: ["Series A"],
             technologies: ["HubSpot"],
+            partnerTier: ["strategic"],
+            latestFundingDate: {
+              min: "2025-01-01",
+              freshnessWindow: "18m",
+            },
           },
           people: {
             functions: ["RevOps"],
             emailStatuses: ["verified"],
+            buyingCommittee: ["revenue-ops"],
+          },
+          liveSignals: {
+            queries: ["hiring SDR"],
+            intentWindows: ["30d"],
           },
         },
         sampleAccounts: ["Linear"],
@@ -467,8 +478,19 @@ describe("MCP server", () => {
       name: "Series A RevOps",
       accountList: {
         providers: ["apollo", "bycrawl"],
+        customProfileMode: "named-account-motion",
+        company: {
+          partnerTier: ["strategic"],
+          latestFundingDate: {
+            freshnessWindow: "18m",
+          },
+        },
         people: {
           emailStatuses: ["verified"],
+          buyingCommittee: ["revenue-ops"],
+        },
+        liveSignals: {
+          intentWindows: ["30d"],
         },
       },
     })
@@ -484,6 +506,9 @@ describe("MCP server", () => {
       {
         profileId: savedProfile.profileId,
         name: "Series A RevOps",
+        accountList: {
+          customProfileMode: "named-account-motion",
+        },
       },
     ])
 
