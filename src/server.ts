@@ -19,6 +19,7 @@ import {
 import { jsonResource, runJsonTool } from "./mcp-results.js"
 import { SignalSurfRepository } from "./repository.js"
 import {
+  archiveAccountListProfileSchema,
   attachSurfPointToolSchema,
   createProductSchema,
   createSurfPointSchema,
@@ -33,6 +34,7 @@ import {
   getSurfPointSchema,
   getSurfJobSchema,
   getTableRowSchema,
+  listAccountListProfilesSchema,
   listDatabasesSchema,
   listDatabaseViewsSchema,
   listDatabaseFieldsSchema,
@@ -45,6 +47,7 @@ import {
   readTableSchema,
   readTableViewSchema,
   runSurfPointSchema,
+  saveAccountListProfileSchema,
   setSurfPointSourceActiveSchema,
   updateDatabaseFieldSchema,
   toolOutputSchema,
@@ -153,7 +156,8 @@ function registerTools(
             canUseCapability(context, "tables.write") ||
             canUseCapability(context, "tables.delete") ||
             canUseCapability(context, "schemas.write") ||
-            canUseCapability(context, "sources.write"),
+            canUseCapability(context, "sources.write") ||
+            canUseCapability(context, "account_lists.write"),
         },
       }
     })
@@ -451,6 +455,39 @@ function registerTools(
         return repository.detachSurfPointTool(toolContext(args), args)
       })
   )
+
+  registerPublicTool(
+    "list_account_list_profiles",
+    listAccountListProfilesSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("list_account_list_profiles")
+        return repository.listAccountListProfiles(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "save_account_list_profile",
+    saveAccountListProfileSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("save_account_list_profile")
+        return repository.saveAccountListProfile(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "archive_account_list_profile",
+    archiveAccountListProfileSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("archive_account_list_profile")
+        return repository.archiveAccountListProfile(
+          toolContext(args),
+          args.profileId
+        )
+      })
+  )
 }
 
 function registerResources(
@@ -652,6 +689,29 @@ function registerResources(
         await repository.listProductTools(resolveProductContext(context), {
           limit: 200,
         })
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_account_list_profiles",
+    "signalsurf://account-list-profiles",
+    {
+      title: "SignalSurf Account List ICP Profiles",
+      description: "Reusable Account List / ICP Builder profiles.",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      assertCanUseCapability(context, "account_lists.read")
+      return jsonResource(
+        uri.href,
+        await repository.listAccountListProfiles(
+          resolveProductContext(context),
+          {
+            includeArchived: true,
+            limit: 100,
+          }
+        )
       )
     }
   )

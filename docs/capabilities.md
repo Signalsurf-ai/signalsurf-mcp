@@ -17,7 +17,7 @@ mirror of every internal Surfer tool in SignalSurf Web.
 
 | Scope                     | Capability grant                                                                  |
 | ------------------------- | --------------------------------------------------------------------------------- |
-| `mcp:read`                | `context.read`, `surf_points.read`, `tables.read`, `schemas.read`, `sources.read` |
+| `mcp:read`                | `context.read`, `surf_points.read`, `tables.read`, `schemas.read`, `sources.read`, `account_lists.read` |
 | `mcp:write`               | All current read, write, execute, and delete capabilities                         |
 | `mcp:products.write`      | `context.read`, `products.write`                                                  |
 | `mcp:surf_points.read`    | `context.read`, `surf_points.read`                                                |
@@ -31,6 +31,8 @@ mirror of every internal Surfer tool in SignalSurf Web.
 | `mcp:schemas.write`       | `context.read`, `schemas.read`, `schemas.write`                                   |
 | `mcp:sources.read`        | `context.read`, `sources.read`                                                    |
 | `mcp:sources.write`       | `context.read`, `sources.read`, `sources.write`                                   |
+| `mcp:account_lists.read`  | `context.read`, `account_lists.read`                                              |
+| `mcp:account_lists.write` | `context.read`, `account_lists.read`, `account_lists.write`                       |
 | `offline_access`          | No tool capability; allows OAuth refresh in SignalSurf Web                        |
 
 The protected resource metadata and `WWW-Authenticate` scope hints include only
@@ -77,6 +79,9 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `list_surf_point_tools`        | `surf_points.read`    | No          | Lists tool ids from `tool_config.auto_tool_ids`                                                         |
 | `attach_surf_point_tool`       | `surf_points.write`   | No          | Adds one tool id to `tool_config.auto_tool_ids` idempotently                                            |
 | `detach_surf_point_tool`       | `surf_points.write`   | No          | Removes one tool id from `tool_config.auto_tool_ids` idempotently                                       |
+| `list_account_list_profiles`   | `account_lists.read`  | No          | Lists reusable Account List / ICP Builder profiles                                                      |
+| `save_account_list_profile`    | `account_lists.write` | No          | Creates or updates a structured Account List / ICP Builder profile                                      |
+| `archive_account_list_profile` | `account_lists.write` | No          | Soft-archives a reusable Account List / ICP Builder profile                                             |
 
 OAuth tokens can authorize multiple products. Agents should call `get_context`
 first; when multiple `productIds` are returned, choose from `products[]` using
