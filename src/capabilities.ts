@@ -5,10 +5,15 @@ export const MCP_OFFLINE_ACCESS_SCOPE = "offline_access"
 export const MCP_GRANULAR_SCOPES = [
   "mcp:surf_points.read",
   "mcp:surf_points.write",
+  "mcp:surf_points.execute",
   "mcp:surf_points.delete",
   "mcp:tables.read",
   "mcp:tables.write",
   "mcp:tables.delete",
+  "mcp:schemas.read",
+  "mcp:schemas.write",
+  "mcp:sources.read",
+  "mcp:sources.write",
 ] as const
 
 export const MCP_SUPPORTED_SCOPES = [
@@ -27,10 +32,15 @@ export const MCP_RESOURCE_SCOPES = [
 export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "mcp:surf_points.read",
   "mcp:surf_points.write",
+  "mcp:surf_points.execute",
   "mcp:surf_points.delete",
   "mcp:tables.read",
   "mcp:tables.write",
   "mcp:tables.delete",
+  "mcp:schemas.read",
+  "mcp:schemas.write",
+  "mcp:sources.read",
+  "mcp:sources.write",
 ] as const
 
 export type McpScope = (typeof MCP_SUPPORTED_SCOPES)[number]
@@ -39,23 +49,47 @@ export type McpCapability =
   | "context.read"
   | "surf_points.read"
   | "surf_points.write"
+  | "surf_points.execute"
   | "surf_points.delete"
   | "tables.read"
   | "tables.write"
   | "tables.delete"
+  | "schemas.read"
+  | "schemas.write"
+  | "sources.read"
+  | "sources.write"
 
 export type PublicMcpToolName =
   | "get_context"
   | "list_surf_points"
+  | "get_surf_point"
   | "create_surf_point"
   | "update_surf_point"
+  | "run_surf_point"
+  | "get_surf_job"
+  | "wait_for_surf_job"
+  | "list_surf_jobs"
+  | "cancel_surf_job"
   | "delete_surf_point"
   | "list_databases"
+  | "list_database_views"
   | "read_table"
+  | "read_table_view"
   | "get_table_row"
   | "create_table_row"
   | "update_table_row"
   | "delete_table_rows"
+  | "list_database_fields"
+  | "add_database_field"
+  | "update_database_field"
+  | "remove_database_field"
+  | "create_relation_field"
+  | "list_surf_point_sources"
+  | "set_surf_point_source_active"
+  | "list_product_tools"
+  | "list_surf_point_tools"
+  | "attach_surf_point_tool"
+  | "detach_surf_point_tool"
 
 type PublicMcpToolDefinition = {
   title: string
@@ -118,6 +152,15 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
+  get_surf_point: {
+    title: "Get Surf Point",
+    description:
+      "Read one SignalSurf surf point after verifying it belongs to an authorized product.",
+    requiredCapability: "surf_points.read",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
   create_surf_point: {
     title: "Create Surf Point",
     description:
@@ -133,6 +176,51 @@ export const PUBLIC_MCP_TOOLS = {
       "Modify surf point metadata, prompt fields, target databases, and JSON config for an authorized product. Pass productId when this connection can access multiple products.",
     requiredCapability: "surf_points.write",
     surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  run_surf_point: {
+    title: "Run Surf Point",
+    description:
+      "Queue an authorized surf point for execution by creating a pending SignalSurf surf job. Pass productId when this connection can access multiple products.",
+    requiredCapability: "surf_points.execute",
+    surferSurface: "run_surf_point",
+    publicStatus: "supported",
+    annotations: CREATE_ANNOTATIONS,
+  },
+  get_surf_job: {
+    title: "Get Surf Job",
+    description:
+      "Read one SignalSurf surf job after verifying the job belongs to a surf point in an authorized product.",
+    requiredCapability: "surf_points.read",
+    surferSurface: "run_surf_point",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  wait_for_surf_job: {
+    title: "Wait For Surf Job",
+    description:
+      "Poll one SignalSurf surf job until it leaves an active status or the timeout expires.",
+    requiredCapability: "surf_points.read",
+    surferSurface: "run_surf_point",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  list_surf_jobs: {
+    title: "List Surf Jobs",
+    description:
+      "List SignalSurf surf jobs for an authorized product, optionally filtered by surfPointId or status.",
+    requiredCapability: "surf_points.read",
+    surferSurface: "run_surf_point",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  cancel_surf_job: {
+    title: "Cancel Surf Job",
+    description:
+      "Cancel a pending SignalSurf surf job after verifying it belongs to an authorized product.",
+    requiredCapability: "surf_points.execute",
+    surferSurface: "run_surf_point",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
@@ -154,10 +242,28 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
+  list_database_views: {
+    title: "List Database Views",
+    description:
+      "List saved views configured for a SignalSurf database/table in an authorized product.",
+    requiredCapability: "tables.read",
+    surferSurface: "manage_projects/manage_databases",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
   read_table: {
     title: "Read Table",
     description:
-      "Read rows from a SignalSurf database/table in an authorized product. Pass productId when this connection can access multiple products. Supports pagination and exact JSON containment filters.",
+      "Read rows from a SignalSurf database/table in an authorized product. Pass productId when this connection can access multiple products. Supports pagination, JSON containment filters, and UI-style data filters/sorts.",
+    requiredCapability: "tables.read",
+    surferSurface: "manage_data",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  read_table_view: {
+    title: "Read Table View",
+    description:
+      "Read rows using a database saved view, with optional additional filters and sorts.",
     requiredCapability: "tables.read",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -199,6 +305,105 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: DELETE_ANNOTATIONS,
   },
+  list_database_fields: {
+    title: "List Database Fields",
+    description:
+      "List schema fields and relation definitions for an authorized SignalSurf database/table.",
+    requiredCapability: "schemas.read",
+    surferSurface: "manage_projects/manage_databases",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  add_database_field: {
+    title: "Add Database Field",
+    description:
+      "Add one schema field to an authorized SignalSurf database/table. This changes schema only; existing row data is not backfilled.",
+    requiredCapability: "schemas.write",
+    surferSurface: "manage_projects/manage_databases",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  update_database_field: {
+    title: "Update Database Field",
+    description:
+      "Patch one schema field in an authorized SignalSurf database/table.",
+    requiredCapability: "schemas.write",
+    surferSurface: "manage_projects/manage_databases",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  remove_database_field: {
+    title: "Remove Database Field",
+    description:
+      "Remove one schema field from an authorized SignalSurf database/table. This changes schema only and does not delete row data.",
+    requiredCapability: "schemas.write",
+    surferSurface: "manage_projects/manage_databases",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  create_relation_field: {
+    title: "Create Relation Field",
+    description:
+      "Create an item_ref relation field from one authorized database to another product-owned database.",
+    requiredCapability: "schemas.write",
+    surferSurface: "manage_projects/manage_databases",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  list_surf_point_sources: {
+    title: "List Surf Point Sources",
+    description:
+      "List safe source metadata for an authorized surf point. Source config and credentials are not exposed.",
+    requiredCapability: "sources.read",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  set_surf_point_source_active: {
+    title: "Set Surf Point Source Active",
+    description:
+      "Enable or pause one source after verifying its surf point belongs to an authorized product.",
+    requiredCapability: "sources.write",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  list_product_tools: {
+    title: "List Product Tools",
+    description:
+      "List safe product tool metadata that can be attached to surf points. Tool config secrets are not exposed.",
+    requiredCapability: "surf_points.read",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  list_surf_point_tools: {
+    title: "List Surf Point Tools",
+    description:
+      "List tool ids attached to a surf point through toolConfig.auto_tool_ids.",
+    requiredCapability: "surf_points.read",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  attach_surf_point_tool: {
+    title: "Attach Surf Point Tool",
+    description:
+      "Attach one tool id to a surf point by adding it to toolConfig.auto_tool_ids.",
+    requiredCapability: "surf_points.write",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  detach_surf_point_tool: {
+    title: "Detach Surf Point Tool",
+    description:
+      "Detach one tool id from a surf point by removing it from toolConfig.auto_tool_ids.",
+    requiredCapability: "surf_points.write",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
 } as const satisfies Record<PublicMcpToolName, PublicMcpToolDefinition>
 
 export const PUBLIC_MCP_TOOL_NAMES = Object.keys(
@@ -206,15 +411,26 @@ export const PUBLIC_MCP_TOOL_NAMES = Object.keys(
 ) as PublicMcpToolName[]
 
 const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
-  [MCP_LEGACY_READ_SCOPE]: ["context.read", "surf_points.read", "tables.read"],
+  [MCP_LEGACY_READ_SCOPE]: [
+    "context.read",
+    "surf_points.read",
+    "tables.read",
+    "schemas.read",
+    "sources.read",
+  ],
   [MCP_LEGACY_WRITE_SCOPE]: [
     "context.read",
     "surf_points.read",
     "surf_points.write",
+    "surf_points.execute",
     "surf_points.delete",
     "tables.read",
     "tables.write",
     "tables.delete",
+    "schemas.read",
+    "schemas.write",
+    "sources.read",
+    "sources.write",
   ],
   [MCP_OFFLINE_ACCESS_SCOPE]: [],
   "mcp:surf_points.read": ["context.read", "surf_points.read"],
@@ -222,6 +438,11 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "context.read",
     "surf_points.read",
     "surf_points.write",
+  ],
+  "mcp:surf_points.execute": [
+    "context.read",
+    "surf_points.read",
+    "surf_points.execute",
   ],
   "mcp:surf_points.delete": [
     "context.read",
@@ -231,16 +452,25 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   "mcp:tables.read": ["context.read", "tables.read"],
   "mcp:tables.write": ["context.read", "tables.read", "tables.write"],
   "mcp:tables.delete": ["context.read", "tables.read", "tables.delete"],
+  "mcp:schemas.read": ["context.read", "schemas.read"],
+  "mcp:schemas.write": ["context.read", "schemas.read", "schemas.write"],
+  "mcp:sources.read": ["context.read", "sources.read"],
+  "mcp:sources.write": ["context.read", "sources.read", "sources.write"],
 }
 
 const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "context.read": [MCP_LEGACY_READ_SCOPE],
   "surf_points.read": ["mcp:surf_points.read"],
   "surf_points.write": ["mcp:surf_points.write"],
+  "surf_points.execute": ["mcp:surf_points.execute"],
   "surf_points.delete": ["mcp:surf_points.delete"],
   "tables.read": ["mcp:tables.read"],
   "tables.write": ["mcp:tables.write"],
   "tables.delete": ["mcp:tables.delete"],
+  "schemas.read": ["mcp:schemas.read"],
+  "schemas.write": ["mcp:schemas.write"],
+  "sources.read": ["mcp:sources.read"],
+  "sources.write": ["mcp:sources.write"],
 }
 
 export function parseStoredScopes(scope: string | undefined | null): string[] {

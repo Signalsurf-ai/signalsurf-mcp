@@ -2,8 +2,15 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 
 import { errorToObject } from "./errors.js"
 
+function asStructuredContent(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : { value }
+}
+
 export function jsonResult(value: unknown): CallToolResult {
   return {
+    structuredContent: asStructuredContent(value),
     content: [
       {
         type: "text",

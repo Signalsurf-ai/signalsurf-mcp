@@ -179,11 +179,14 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 
 ## What It Exposes
 
-- `list_surf_points`, `create_surf_point`, `update_surf_point`, `delete_surf_point`
-- `list_databases`, `read_table`, `get_table_row`
+- `list_surf_points`, `get_surf_point`, `create_surf_point`, `update_surf_point`, `run_surf_point`, `get_surf_job`, `wait_for_surf_job`, `list_surf_jobs`, `cancel_surf_job`, `delete_surf_point`
+- `list_databases`, `list_database_views`, `read_table`, `read_table_view`, `get_table_row`
 - `create_table_row`, `update_table_row`, `delete_table_rows`
+- `list_database_fields`, `add_database_field`, `update_database_field`, `remove_database_field`, `create_relation_field`
+- `list_surf_point_sources`, `set_surf_point_source_active`
+- `list_product_tools`, `list_surf_point_tools`, `attach_surf_point_tool`, `detach_surf_point_tool`
 - Resources for context; single-product tokens also expose surf point, database,
-  and database-row resources
+  surf job, and database-row resources
 
 All product-scoped tools execute against one `productId`. A single-product token
 can omit `productId`; a multi-product OAuth token must pass `productId` to every
@@ -199,10 +202,15 @@ instead of hiding them behind broad write access:
 
 - `mcp:surf_points.read`
 - `mcp:surf_points.write`
+- `mcp:surf_points.execute`
 - `mcp:surf_points.delete`
 - `mcp:tables.read`
 - `mcp:tables.write`
 - `mcp:tables.delete`
+- `mcp:schemas.read`
+- `mcp:schemas.write`
+- `mcp:sources.read`
+- `mcp:sources.write`
 
 OAuth tokens may also carry `offline_access` for refresh-token support. The MCP
 resource server accepts that scope but does not advertise it as a resource
@@ -249,12 +257,25 @@ Surf points:
 
 - `list_surf_points`: returns non-deleted surf points. Use
   `includeInactive=false` to hide paused surf points.
+- `get_surf_point`: reads one surf point after product-scope validation.
 - `create_surf_point`: creates a playbook/surf point. If the product has exactly
   one user-facing database, that database is used by default. If the product has
   multiple databases, pass `databaseIds`. Pass `databaseIds: []` only for an
   intentional action-only surf point.
 - `update_surf_point`: updates metadata, prompt fields, target databases, and
   JSON config. Patch fields such as `toolConfigPatch` are shallow merges.
+- `run_surf_point`: queues an active surf point for asynchronous execution by
+  creating one pending `extract` surf job per active pull source, matching
+  SignalSurf Web's Surf Now worker contract. Existing pending/processing jobs
+  are deduplicated by source by default. Pass `idempotencyKey` when an agent may
+  retry the same intended run.
+- `get_surf_job` / `list_surf_jobs`: reads async execution status after product
+  scope validation.
+- `wait_for_surf_job`: polls one surf job until it leaves an active status
+  (`pending`, `queued`, `running`, `processing`, or `in_progress`) or until the
+  timeout expires. It does not run a worker itself.
+- `cancel_surf_job`: cancels a pending surf job. Running jobs are not forcefully
+  interrupted through MCP.
 - `delete_surf_point`: soft-deletes surf points and cancels pending jobs.
 
 Tables:
@@ -262,6 +283,13 @@ Tables:
 - `list_databases`: lists databases for the selected product. System databases
   are hidden unless `includeSystem=true`.
 - `read_table`: reads rows with pagination and optional JSON containment filter.
+  It also supports UI-style `filters`, `filterLogic`, and data-field `sorts`.
+  Advanced filters are evaluated over a bounded scan (`scanLimit`, default
+  1000, max 5000) so array, date, number, text, and relation comparisons behave
+  consistently across JSON fields. Results include `scannedCount` and
+  `hasMoreToScan` when a wider scan may be needed.
+- `list_database_views` / `read_table_view`: lists saved views from database
+  `viewConfigs` and reads rows using compatible saved-view filters/sorts.
 - `get_table_row`: reads one row after verifying its database belongs to the
   token product.
 - `create_table_row`: inserts a row. If `playbookId` is supplied, that surf point
@@ -273,6 +301,30 @@ Tables:
   `item_ref` fields are validated against the database schema and must point to
   rows in the same product.
 - `delete_table_rows`: hard-deletes table rows after every row is product-scoped.
+
+Schema:
+
+- `list_database_fields`: returns schema fields and relation definitions for a
+  database.
+- `add_database_field` / `update_database_field` / `remove_database_field`:
+  mutate database schema only. They do not backfill or delete row data.
+- `create_relation_field`: adds an `item_ref` field after verifying the target
+  database belongs to the same authorized product.
+
+Sources and surf point tools:
+
+- `list_surf_point_sources`: returns safe source metadata only:
+  `sourceId`, `surfPointId`, name, type, endpoint, schedule, URL, provider,
+  `isActive`, and timestamps. Source config, credentials, headers, bodies, auth
+  settings, and provider payloads are not exposed through MCP.
+- `set_surf_point_source_active`: enables or pauses one source after verifying
+  its surf point belongs to the authorized product.
+- `list_product_tools`: returns safe product tool metadata from
+  `product_tools`; config secrets are not exposed.
+- `list_surf_point_tools`, `attach_surf_point_tool`, and
+  `detach_surf_point_tool`: manage `tool_config.auto_tool_ids` on a surf point
+  idempotently. Attach/detach validates that the tool exists in the authorized
+  product.
 
 Roles:
 
@@ -289,6 +341,12 @@ Resources:
 
 - `signalsurf://context`
 - `signalsurf://surf-points` for single-product tokens
+- `signalsurf://surf-points/{surfPointId}` for single-product tokens
+- `signalsurf://surf-points/{surfPointId}/sources` for single-product tokens
+- `signalsurf://surf-points/{surfPointId}/tools` for single-product tokens
+- `signalsurf://product-tools` for single-product tokens
+- `signalsurf://surf-jobs` for single-product tokens
+- `signalsurf://surf-jobs/{jobId}` for single-product tokens
 - `signalsurf://databases` for single-product tokens
 - `signalsurf://databases/{databaseId}/rows` for single-product tokens
 

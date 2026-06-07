@@ -216,15 +216,26 @@ export function listContextCapabilities(
     )
   }
   return context.role === "viewer"
-    ? ["context.read", "surf_points.read", "tables.read"]
+    ? [
+        "context.read",
+        "surf_points.read",
+        "tables.read",
+        "schemas.read",
+        "sources.read",
+      ]
     : [
         "context.read",
         "surf_points.read",
         "surf_points.write",
+        "surf_points.execute",
         "surf_points.delete",
         "tables.read",
         "tables.write",
         "tables.delete",
+        "schemas.read",
+        "schemas.write",
+        "sources.read",
+        "sources.write",
       ]
 }
 

@@ -83,6 +83,15 @@ describe("auth", () => {
     expect(() => assertCanUseCapability(context, "surf_points.write")).toThrow(
       "Token scope does not allow"
     )
+    expect(() =>
+      assertCanUseCapability(context, "surf_points.execute")
+    ).toThrow("Token scope does not allow")
+    expect(() => assertCanUseCapability(context, "schemas.write")).toThrow(
+      "Token scope does not allow"
+    )
+    expect(() => assertCanUseCapability(context, "sources.write")).toThrow(
+      "Token scope does not allow"
+    )
     expect(listContextCapabilities(context)).toEqual([
       "context.read",
       "tables.read",
@@ -113,11 +122,16 @@ describe("auth", () => {
       "context.read",
       "surf_points.read",
       "surf_points.write",
+      "surf_points.execute",
       "surf_points.delete",
       "tables.read",
       "tables.write",
-      "tables.delete",
-    ])
+        "tables.delete",
+        "schemas.read",
+        "schemas.write",
+        "sources.read",
+        "sources.write",
+      ])
   })
 
   it("requires explicit productId for multi-product contexts", () => {

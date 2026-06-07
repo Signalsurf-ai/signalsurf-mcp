@@ -19,16 +19,36 @@ import {
 import { jsonResource, runJsonTool } from "./mcp-results.js"
 import { SignalSurfRepository } from "./repository.js"
 import {
+  attachSurfPointToolSchema,
   createSurfPointSchema,
   createTableRowSchema,
+  addDatabaseFieldSchema,
+  cancelSurfJobSchema,
+  createRelationFieldSchema,
   deleteSurfPointSchema,
   deleteTableRowsSchema,
+  detachSurfPointToolSchema,
+  getSurfPointSchema,
+  getSurfJobSchema,
   getTableRowSchema,
   listDatabasesSchema,
+  listDatabaseViewsSchema,
+  listDatabaseFieldsSchema,
+  listProductToolsSchema,
+  listSurfPointSourcesSchema,
+  listSurfPointToolsSchema,
+  removeDatabaseFieldSchema,
+  listSurfJobsSchema,
   listSurfPointsSchema,
   readTableSchema,
+  readTableViewSchema,
+  runSurfPointSchema,
+  setSurfPointSourceActiveSchema,
+  updateDatabaseFieldSchema,
+  toolOutputSchema,
   updateSurfPointSchema,
   updateTableRowSchema,
+  waitForSurfJobSchema,
 } from "./schemas.js"
 import type { SignalSurfContext } from "./types.js"
 
@@ -72,6 +92,7 @@ function registerTools(
       title: definition.title,
       description: definition.description,
       annotations: definition.annotations,
+      outputSchema: toolOutputSchema,
     }
     return inputSchema ? { ...config, inputSchema } : config
   }
@@ -120,11 +141,15 @@ function registerTools(
             ])
           ),
           read: canUseCapability(context, "context.read"),
+          execute: canUseCapability(context, "surf_points.execute"),
           write:
+            canUseCapability(context, "surf_points.execute") ||
             canUseCapability(context, "surf_points.write") ||
             canUseCapability(context, "surf_points.delete") ||
             canUseCapability(context, "tables.write") ||
-            canUseCapability(context, "tables.delete"),
+            canUseCapability(context, "tables.delete") ||
+            canUseCapability(context, "schemas.write") ||
+            canUseCapability(context, "sources.write"),
         },
       }
     })
@@ -138,6 +163,13 @@ function registerTools(
         assertToolAllowed("list_surf_points")
         return repository.listSurfPoints(toolContext(args), args)
       })
+  )
+
+  registerPublicTool("get_surf_point", getSurfPointSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("get_surf_point")
+      return repository.getSurfPoint(toolContext(args), args.surfPointId)
+    })
   )
 
   registerPublicTool(
@@ -161,6 +193,50 @@ function registerTools(
   )
 
   registerPublicTool(
+    "run_surf_point",
+    runSurfPointSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("run_surf_point")
+        return repository.runSurfPoint(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool("get_surf_job", getSurfJobSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("get_surf_job")
+      return repository.getSurfJob(toolContext(args), args.jobId)
+    })
+  )
+
+  registerPublicTool(
+    "wait_for_surf_job",
+    waitForSurfJobSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("wait_for_surf_job")
+        return repository.waitForSurfJob(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool("list_surf_jobs", listSurfJobsSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("list_surf_jobs")
+      return repository.listSurfJobs(toolContext(args), args)
+    })
+  )
+
+  registerPublicTool(
+    "cancel_surf_job",
+    cancelSurfJobSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("cancel_surf_job")
+        return repository.cancelSurfJob(toolContext(args), args.jobId)
+      })
+  )
+
+  registerPublicTool(
     "delete_surf_point",
     deleteSurfPointSchema,
     async (args: any) =>
@@ -177,10 +253,27 @@ function registerTools(
     })
   )
 
+  registerPublicTool(
+    "list_database_views",
+    listDatabaseViewsSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("list_database_views")
+        return repository.listDatabaseViews(toolContext(args), args.databaseId)
+      })
+  )
+
   registerPublicTool("read_table", readTableSchema, async (args: any) =>
     runJsonTool(async () => {
       assertToolAllowed("read_table")
       return repository.readTable(toolContext(args), args)
+    })
+  )
+
+  registerPublicTool("read_table_view", readTableViewSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("read_table_view")
+      return repository.readTableView(toolContext(args), args)
     })
   )
 
@@ -218,6 +311,119 @@ function registerTools(
       runJsonTool(async () => {
         assertToolAllowed("delete_table_rows")
         return repository.deleteTableRows(toolContext(args), args.rowIds)
+      })
+  )
+
+  registerPublicTool(
+    "list_database_fields",
+    listDatabaseFieldsSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("list_database_fields")
+        return repository.listDatabaseFields(toolContext(args), args.databaseId)
+      })
+  )
+
+  registerPublicTool(
+    "add_database_field",
+    addDatabaseFieldSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("add_database_field")
+        return repository.addDatabaseField(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "update_database_field",
+    updateDatabaseFieldSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("update_database_field")
+        return repository.updateDatabaseField(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "remove_database_field",
+    removeDatabaseFieldSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("remove_database_field")
+        return repository.removeDatabaseField(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "create_relation_field",
+    createRelationFieldSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("create_relation_field")
+        return repository.createRelationField(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "list_surf_point_sources",
+    listSurfPointSourcesSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("list_surf_point_sources")
+        return repository.listSurfPointSources(
+          toolContext(args),
+          args.surfPointId
+        )
+      })
+  )
+
+  registerPublicTool(
+    "set_surf_point_source_active",
+    setSurfPointSourceActiveSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("set_surf_point_source_active")
+        return repository.setSurfPointSourceActive(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "list_product_tools",
+    listProductToolsSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("list_product_tools")
+        return repository.listProductTools(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "list_surf_point_tools",
+    listSurfPointToolsSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("list_surf_point_tools")
+        return repository.listSurfPointTools(toolContext(args), args.surfPointId)
+      })
+  )
+
+  registerPublicTool(
+    "attach_surf_point_tool",
+    attachSurfPointToolSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("attach_surf_point_tool")
+        return repository.attachSurfPointTool(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "detach_surf_point_tool",
+    detachSurfPointToolSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("detach_surf_point_tool")
+        return repository.detachSurfPointTool(toolContext(args), args)
       })
   )
 }
@@ -270,6 +476,217 @@ function registerResources(
         await repository.listSurfPoints(resolveProductContext(context), {
           limit: 200,
         })
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_surf_point",
+    new ResourceTemplate("signalsurf://surf-points/{surfPointId}", {
+      list: async () => {
+        if (!canUseCapability(context, "surf_points.read")) {
+          return { resources: [] }
+        }
+        const { surfPoints } = await repository.listSurfPoints(
+          resolveProductContext(context),
+          {
+            limit: 200,
+          }
+        )
+        return {
+          resources: surfPoints.map(
+            (surfPoint: { surfPointId: string; name: string }) => ({
+              uri: `signalsurf://surf-points/${surfPoint.surfPointId}`,
+              name: `Surf Point: ${surfPoint.name}`,
+              title: surfPoint.name,
+              description: `SignalSurf surf point ${surfPoint.name}`,
+              mimeType: "application/json",
+            })
+          ),
+        }
+      },
+    }),
+    {
+      title: "SignalSurf Surf Point",
+      description: "One surf point by surfPointId.",
+      mimeType: "application/json",
+    },
+    async (uri, variables) => {
+      assertCanUseCapability(context, "surf_points.read")
+      return jsonResource(
+        uri.href,
+        await repository.getSurfPoint(
+          resolveProductContext(context),
+          String(variables.surfPointId ?? "")
+        )
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_surf_point_sources",
+    new ResourceTemplate("signalsurf://surf-points/{surfPointId}/sources", {
+      list: async () => {
+        if (
+          !canUseCapability(context, "sources.read") ||
+          !canUseCapability(context, "surf_points.read")
+        ) {
+          return { resources: [] }
+        }
+        const { surfPoints } = await repository.listSurfPoints(
+          resolveProductContext(context),
+          {
+            limit: 200,
+          }
+        )
+        return {
+          resources: surfPoints.map(
+            (surfPoint: { surfPointId: string; name: string }) => ({
+              uri: `signalsurf://surf-points/${surfPoint.surfPointId}/sources`,
+              name: `Sources: ${surfPoint.name}`,
+              title: `${surfPoint.name} Sources`,
+              description: `Safe source metadata for SignalSurf surf point ${surfPoint.name}`,
+              mimeType: "application/json",
+            })
+          ),
+        }
+      },
+    }),
+    {
+      title: "SignalSurf Surf Point Sources",
+      description: "Safe source metadata for one surf point.",
+      mimeType: "application/json",
+    },
+    async (uri, variables) => {
+      assertCanUseCapability(context, "sources.read")
+      return jsonResource(
+        uri.href,
+        await repository.listSurfPointSources(
+          resolveProductContext(context),
+          String(variables.surfPointId ?? "")
+        )
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_surf_point_tools",
+    new ResourceTemplate("signalsurf://surf-points/{surfPointId}/tools", {
+      list: async () => {
+        if (!canUseCapability(context, "surf_points.read")) {
+          return { resources: [] }
+        }
+        const { surfPoints } = await repository.listSurfPoints(
+          resolveProductContext(context),
+          {
+            limit: 200,
+          }
+        )
+        return {
+          resources: surfPoints.map(
+            (surfPoint: { surfPointId: string; name: string }) => ({
+              uri: `signalsurf://surf-points/${surfPoint.surfPointId}/tools`,
+              name: `Tools: ${surfPoint.name}`,
+              title: `${surfPoint.name} Tools`,
+              description: `Tool ids attached to SignalSurf surf point ${surfPoint.name}`,
+              mimeType: "application/json",
+            })
+          ),
+        }
+      },
+    }),
+    {
+      title: "SignalSurf Surf Point Tools",
+      description: "Tool ids attached to one surf point.",
+      mimeType: "application/json",
+    },
+    async (uri, variables) => {
+      assertCanUseCapability(context, "surf_points.read")
+      return jsonResource(
+        uri.href,
+        await repository.listSurfPointTools(
+          resolveProductContext(context),
+          String(variables.surfPointId ?? "")
+        )
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_product_tools",
+    "signalsurf://product-tools",
+    {
+      title: "SignalSurf Product Tools",
+      description: "Safe product tool metadata for the current product.",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      assertCanUseCapability(context, "surf_points.read")
+      return jsonResource(
+        uri.href,
+        await repository.listProductTools(resolveProductContext(context), {
+          limit: 200,
+        })
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_surf_jobs",
+    "signalsurf://surf-jobs",
+    {
+      title: "SignalSurf Surf Jobs",
+      description: "Recent surf point execution jobs for the current product.",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      assertCanUseCapability(context, "surf_points.read")
+      return jsonResource(
+        uri.href,
+        await repository.listSurfJobs(resolveProductContext(context), {
+          limit: 100,
+        })
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_surf_job",
+    new ResourceTemplate("signalsurf://surf-jobs/{jobId}", {
+      list: async () => {
+        if (!canUseCapability(context, "surf_points.read")) {
+          return { resources: [] }
+        }
+        const { jobs } = await repository.listSurfJobs(
+          resolveProductContext(context),
+          {
+            limit: 100,
+          }
+        )
+        return {
+          resources: jobs.map((job: { jobId: string; status: string }) => ({
+            uri: `signalsurf://surf-jobs/${job.jobId}`,
+            name: `Surf Job: ${job.jobId}`,
+            title: `Surf Job ${job.jobId}`,
+            description: `SignalSurf surf job with status ${job.status}`,
+            mimeType: "application/json",
+          })),
+        }
+      },
+    }),
+    {
+      title: "SignalSurf Surf Job",
+      description: "One surf point execution job by job id.",
+      mimeType: "application/json",
+    },
+    async (uri, variables) => {
+      assertCanUseCapability(context, "surf_points.read")
+      return jsonResource(
+        uri.href,
+        await repository.getSurfJob(
+          resolveProductContext(context),
+          String(variables.jobId ?? "")
+        )
       )
     }
   )
