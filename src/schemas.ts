@@ -6,6 +6,22 @@ const productTargetSchema = {
   productId: uuidSchema.optional(),
 }
 
+export const sourceTypeSchema = z.enum([
+  "platform",
+  "custom-pull",
+  "rss",
+  "webhook",
+  "web-monitor",
+  "github",
+  "coingecko",
+  "hackernews",
+  "producthunt",
+  "item-created",
+  "item-updated",
+  "manual-trigger",
+  "on-schedule",
+])
+
 export const toolOutputSchema = {
   ok: z.boolean(),
   data: z.unknown().optional(),
@@ -291,6 +307,38 @@ export const createRelationFieldSchema = {
 export const listSurfPointSourcesSchema = {
   ...productTargetSchema,
   surfPointId: uuidSchema,
+}
+
+export const createSurfPointSourceSchema = {
+  ...productTargetSchema,
+  surfPointId: uuidSchema,
+  sourceType: sourceTypeSchema,
+  name: z.string().trim().min(1).max(200).optional(),
+  config: jsonObjectSchema.optional(),
+  dataSchema: jsonObjectSchema.optional(),
+  isActive: z.boolean().default(true).optional(),
+  replaceExisting: z.boolean().default(false).optional(),
+}
+
+export const updateSurfPointSourceSchema = {
+  ...productTargetSchema,
+  sourceId: uuidSchema,
+  sourceType: sourceTypeSchema.optional(),
+  name: z.string().trim().min(1).max(200).nullable().optional(),
+  isActive: z.boolean().optional(),
+  config: jsonObjectSchema.optional(),
+  pullConfig: jsonObjectSchema.nullable().optional(),
+  pullConfigPatch: jsonObjectSchema.optional(),
+  metadata: jsonObjectSchema.nullable().optional(),
+  metadataPatch: jsonObjectSchema.optional(),
+  dataSchema: jsonObjectSchema.nullable().optional(),
+  replaceExisting: z.boolean().default(false).optional(),
+}
+
+export const deleteSurfPointSourceSchema = {
+  ...productTargetSchema,
+  sourceId: uuidSchema.optional(),
+  sourceIds: z.array(uuidSchema).min(1).max(50).optional(),
 }
 
 export const setSurfPointSourceActiveSchema = {

@@ -27,7 +27,8 @@ not need this repository, a Supabase key, or a local server.
 
 The hosted MCP currently supports product creation, product-scoped Surf Point
 CRUD, table create/update, table schema edits, Surf Point execution, source
-toggles, tool attachment, and table row read/create/update/delete. It is a safe
+creation/configuration/deletion, tool attachment, and table row
+read/create/update/delete. It is a safe
 public subset of Surfer, the agent in SignalSurf Web's right panel; it does not
 expose every internal chat tool.
 
@@ -186,7 +187,7 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - `list_databases`, `create_table`, `update_table`, `list_database_views`, `read_table`, `read_table_view`, `get_table_row`
 - `create_table_row`, `update_table_row`, `delete_table_rows`
 - `list_database_fields`, `add_database_field`, `update_database_field`, `remove_database_field`, `create_relation_field`
-- `list_surf_point_sources`, `set_surf_point_source_active`
+- `list_surf_point_sources`, `create_surf_point_source`, `update_surf_point_source`, `delete_surf_point_source`, `set_surf_point_source_active`
 - `list_product_tools`, `list_surf_point_tools`, `attach_surf_point_tool`, `detach_surf_point_tool`
 - Resources for context; single-product tokens also expose surf point, database,
   surf job, and database-row resources
@@ -332,9 +333,27 @@ Schema:
 Sources and surf point tools:
 
 - `list_surf_point_sources`: returns safe source metadata only:
-  `sourceId`, `surfPointId`, name, type, endpoint, schedule, URL, provider,
-  `isActive`, and timestamps. Source config, credentials, headers, bodies, auth
-  settings, and provider payloads are not exposed through MCP.
+  `sourceId`, `surfPointId`, name, database type, public `sourceType`,
+  endpoint, schedule, URL, provider, event type, database id,
+  `webhookSecretConfigured`, `isActive`, and timestamps. Source config,
+  credentials, headers, bodies, auth settings, and provider payloads are not
+  exposed through MCP.
+- `create_surf_point_source`: creates a SignalSurf source/signal for a Surf
+  Point. Supported `sourceType` values are `platform`, `custom-pull`, `rss`,
+  `webhook`, `web-monitor`, `github`, `coingecko`, `hackernews`,
+  `producthunt`, `item-created`, `item-updated`, `manual-trigger`, and
+  `on-schedule`. Platform sources also write `keywords` and `trackedAccounts`
+  into the product search-config tables.
+- `update_surf_point_source`: updates source name, active state, typed source
+  config, `pull_config`, `metadata`, or `data_schema`. Secret-bearing config
+  such as headers, bodies, and auth may be written but is not returned by list
+  responses.
+- `delete_surf_point_source`: deletes one or more sources after product-scope
+  validation and removes pending jobs for those source ids.
+- Internal trigger source types (`item-created`, `item-updated`,
+  `manual-trigger`, `on-schedule`) are exclusive. A Surf Point can have one
+  internal trigger and no external discovery sources alongside it. Pass
+  `replaceExisting=true` only when intentionally replacing existing sources.
 - `set_surf_point_source_active`: enables or pauses one source after verifying
   its surf point belongs to the authorized product.
 - `list_product_tools`: returns safe product tool metadata from

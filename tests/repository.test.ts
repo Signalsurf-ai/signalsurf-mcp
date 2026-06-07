@@ -651,6 +651,187 @@ describe("SignalSurfRepository", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
+  it("creates and updates typed surf point source config without leaking secrets", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    const created = await repo.createSurfPointSource(context, {
+      surfPointId: surfPoint1,
+      sourceType: "custom-pull",
+      name: "Partner API",
+      config: {
+        url: "https://example.com/api/leads",
+        method: "POST",
+        schedule: "0 */2 * * *",
+        headers: { Authorization: "Bearer secret" },
+        body: { limit: 100 },
+        responsePath: "$.items",
+      },
+    })
+
+    expect(created).toMatchObject({
+      replacedCount: 0,
+      source: {
+        name: "Partner API",
+        sourceType: "custom-pull",
+        type: "pull",
+        url: "https://example.com/api/leads",
+        schedule: "0 */2 * * *",
+      },
+    })
+    expect(created.source).not.toHaveProperty("headers")
+    expect(created.source).not.toHaveProperty("auth")
+    const inserted = db.tables.sources.find(
+      (source) => source.id === created.source.sourceId
+    )
+    expect(inserted).toMatchObject({
+      user_id: context.userId,
+      playbook_id: surfPoint1,
+      pull_config: {
+        method: "POST",
+        response_path: "$.items",
+        headers: { Authorization: "Bearer secret" },
+      },
+    })
+
+    const updated = await repo.updateSurfPointSource(context, {
+      sourceId: created.source.sourceId,
+      pullConfigPatch: { schedule: "0 9 * * *" },
+      metadataPatch: { provider: "partner-api" },
+      isActive: false,
+    })
+
+    expect(updated).toMatchObject({
+      changedFields: ["is_active", "pull_config", "metadata"],
+      source: {
+        sourceId: created.source.sourceId,
+        provider: "partner-api",
+        schedule: "0 9 * * *",
+        isActive: false,
+      },
+    })
+  })
+
+  it("writes platform source search config", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    const created = await repo.createSurfPointSource(context, {
+      surfPointId: surfPoint1,
+      sourceType: "platform",
+      config: {
+        endpointId: "threads-keyword-search",
+        keywords: ["x402", "MCP"],
+        trackedAccounts: ["@blockrun"],
+      },
+    })
+
+    expect(created.source).toMatchObject({
+      sourceId: source1,
+      sourceType: "platform",
+      endpointId: "threads-keyword-search",
+    })
+    expect(created).toMatchObject({ updatedExisting: true })
+    expect(
+      db.tables.sources.filter((source) => source.playbook_id === surfPoint1)
+    ).toHaveLength(1)
+    expect(db.tables.platform_search_config).toMatchObject([
+      {
+        product_id: context.productId,
+        playbook_id: surfPoint1,
+        platform: "threads-keyword-search",
+        keywords: ["x402", "MCP"],
+      },
+    ])
+    expect(db.tables.tracked_accounts).toMatchObject([
+      {
+        product_id: context.productId,
+        playbook_id: surfPoint1,
+        platform: "threads-keyword-search",
+        username: "blockrun",
+      },
+    ])
+  })
+
+  it("enforces internal trigger exclusivity and supports explicit replacement", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.createSurfPointSource(context, {
+        surfPointId: surfPoint1,
+        sourceType: "item-updated",
+        name: "Stage updated",
+        config: {
+          databaseId: db1,
+          triggerColumn: "stage",
+          triggerValue: "qualified",
+        },
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" })
+
+    const created = await repo.createSurfPointSource(context, {
+      surfPointId: surfPoint1,
+      sourceType: "item-updated",
+      name: "Stage updated",
+      config: {
+        databaseId: db1,
+        triggerColumn: "stage",
+        triggerValue: "qualified",
+      },
+      replaceExisting: true,
+    })
+
+    expect(created).toMatchObject({
+      replacedCount: 1,
+      source: {
+        sourceType: "item-updated",
+        type: "internal",
+        eventType: "item_updated",
+        databaseId: db1,
+      },
+    })
+    expect(db.tables.sources.find((source) => source.id === source1)).toBeFalsy()
+    expect(db.tables.surf_jobs).toHaveLength(0)
+    expect(db.tables.sources.find((source) => source.id === otherProductSource))
+      .toBeTruthy()
+    expect(
+      db.tables.sources.find((source) => source.id === created.source.sourceId)
+        ?.metadata
+    ).toMatchObject({
+      source_database_name: "Companies",
+      column_updates: [
+        {
+          column: "stage",
+          valueType: "constant",
+          value: "qualified",
+        },
+      ],
+    })
+  })
+
+  it("deletes surf point sources after product-scope validation", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.deleteSurfPointSource(context, {
+        sourceId: otherProductSource,
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" })
+
+    const deleted = await repo.deleteSurfPointSource(context, {
+      sourceId: source1,
+    })
+
+    expect(deleted).toEqual({
+      sourceIds: [source1],
+      deletedCount: 1,
+    })
+    expect(db.tables.sources.find((source) => source.id === source1)).toBeFalsy()
+    expect(db.tables.surf_jobs).toHaveLength(0)
+  })
+
   it("lists safe product tool metadata without leaking config secrets", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
