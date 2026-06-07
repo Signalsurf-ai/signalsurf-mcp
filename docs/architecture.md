@@ -191,12 +191,19 @@ field tools do not backfill, rewrite, or delete existing row data. Relation
 creation adds an `item_ref` schema field and validates that
 `target_database_id` belongs to the same authorized product before writing.
 
-Source controls intentionally expose only safe metadata (`id`, `playbook_id`,
-name, type, endpoint, schedule, URL, provider, `is_active`, timestamps). Public
-MCP tools do not expose source config secrets, credentials, headers, request
-bodies, auth settings, or arbitrary source creation. Surf point tool attachment
-is modeled as idempotent updates to `tool_config.auto_tool_ids` and validates
-the requested id against `product_tools` in the authorized product.
+Source controls expose safe reads plus product-scoped writes. Reads return
+metadata such as `id`, `playbook_id`, name, database type, public source type,
+endpoint, schedule, URL, provider, event type, watched database id,
+`webhookSecretConfigured`, `is_active`, and timestamps. Public MCP tools can
+create, update, delete, enable, and pause sources after validating that the
+source's Surf Point belongs to the authorized product. Write paths may persist
+secret-bearing config such as headers, request bodies, and auth settings, but
+read paths do not expose those values. Internal trigger source types
+(`item-created`, `item-updated`, `manual-trigger`, `on-schedule`) are exclusive
+with every other source on a Surf Point unless the caller explicitly passes
+`replaceExisting=true`. Surf point tool attachment is modeled as idempotent
+updates to `tool_config.auto_tool_ids` and validates the requested id against
+`product_tools` in the authorized product.
 
 Basic `read_table` calls use database-side pagination and JSON containment.
 When callers pass UI-style `filters` or data-field `sorts`, the repository reads

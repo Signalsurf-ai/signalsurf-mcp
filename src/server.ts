@@ -21,6 +21,7 @@ import { SignalSurfRepository } from "./repository.js"
 import {
   archiveAccountListProfileSchema,
   attachSurfPointToolSchema,
+  createSurfPointSourceSchema,
   createProductSchema,
   createSurfPointSchema,
   createTableSchema,
@@ -28,6 +29,7 @@ import {
   addDatabaseFieldSchema,
   cancelSurfJobSchema,
   createRelationFieldSchema,
+  deleteSurfPointSourceSchema,
   deleteSurfPointSchema,
   deleteTableRowsSchema,
   detachSurfPointToolSchema,
@@ -50,6 +52,7 @@ import {
   saveAccountListProfileSchema,
   setSurfPointSourceActiveSchema,
   updateDatabaseFieldSchema,
+  updateSurfPointSourceSchema,
   toolOutputSchema,
   updateSurfPointSchema,
   updateTableSchema,
@@ -403,6 +406,36 @@ function registerTools(
           toolContext(args),
           args.surfPointId
         )
+      })
+  )
+
+  registerPublicTool(
+    "create_surf_point_source",
+    createSurfPointSourceSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("create_surf_point_source")
+        return repository.createSurfPointSource(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "update_surf_point_source",
+    updateSurfPointSourceSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("update_surf_point_source")
+        return repository.updateSurfPointSource(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "delete_surf_point_source",
+    deleteSurfPointSourceSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("delete_surf_point_source")
+        return repository.deleteSurfPointSource(toolContext(args), args)
       })
   )
 

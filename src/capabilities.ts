@@ -97,6 +97,9 @@ export type PublicMcpToolName =
   | "remove_database_field"
   | "create_relation_field"
   | "list_surf_point_sources"
+  | "create_surf_point_source"
+  | "update_surf_point_source"
+  | "delete_surf_point_source"
   | "set_surf_point_source_active"
   | "list_product_tools"
   | "list_surf_point_tools"
@@ -400,6 +403,33 @@ export const PUBLIC_MCP_TOOLS = {
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
+  },
+  create_surf_point_source: {
+    title: "Create Surf Point Source",
+    description:
+      "Create a SignalSurf source/signal for an authorized surf point. Supports platform, custom-pull, RSS, webhook, web-monitor, GitHub, CoinGecko, Hacker News, Product Hunt, and the four exclusive internal trigger types.",
+    requiredCapability: "sources.write",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: CREATE_ANNOTATIONS,
+  },
+  update_surf_point_source: {
+    title: "Update Surf Point Source",
+    description:
+      "Update one source/signal after verifying its surf point belongs to an authorized product. Supports source name, active state, typed config rebuilds, and safe pull_config/metadata/data_schema replacements or shallow patches.",
+    requiredCapability: "sources.write",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  delete_surf_point_source: {
+    title: "Delete Surf Point Source",
+    description:
+      "Hard-delete one or more sources/signals after product-scope validation and remove non-terminal jobs for those source ids.",
+    requiredCapability: "sources.write",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: DELETE_ANNOTATIONS,
   },
   set_surf_point_source_active: {
     title: "Set Surf Point Source Active",

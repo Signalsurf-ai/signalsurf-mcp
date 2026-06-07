@@ -243,6 +243,50 @@ type SetSurfPointSourceActiveInput = {
   isActive: boolean
 }
 
+type SourceTypeInput =
+  | "platform"
+  | "custom-pull"
+  | "rss"
+  | "webhook"
+  | "web-monitor"
+  | "github"
+  | "coingecko"
+  | "hackernews"
+  | "producthunt"
+  | "item-created"
+  | "item-updated"
+  | "manual-trigger"
+  | "on-schedule"
+
+type CreateSurfPointSourceInput = {
+  surfPointId: string
+  sourceType: SourceTypeInput
+  name?: string
+  config?: JsonRecord
+  dataSchema?: JsonRecord
+  isActive?: boolean
+  replaceExisting?: boolean
+}
+
+type UpdateSurfPointSourceInput = {
+  sourceId: string
+  sourceType?: SourceTypeInput
+  name?: string | null
+  isActive?: boolean
+  config?: JsonRecord
+  pullConfig?: JsonRecord | null
+  pullConfigPatch?: JsonRecord
+  metadata?: JsonRecord | null
+  metadataPatch?: JsonRecord
+  dataSchema?: JsonRecord | null
+  replaceExisting?: boolean
+}
+
+type DeleteSurfPointSourceInput = {
+  sourceId?: string
+  sourceIds?: string[]
+}
+
 type SurfPointToolInput = {
   surfPointId: string
   toolId: string
@@ -330,6 +374,8 @@ type SourceRow = {
   type?: string | null
   pull_config?: JsonRecord | null
   metadata?: JsonRecord | null
+  data_schema?: JsonRecord | null
+  webhook_secret?: string | null
   is_active?: boolean | null
   created_at?: string | null
   updated_at?: string | null
@@ -446,6 +492,8 @@ const SOURCE_COLUMNS = [
   "type",
   "pull_config",
   "metadata",
+  "data_schema",
+  "webhook_secret",
   "is_active",
   "created_at",
   "updated_at",
@@ -588,14 +636,326 @@ function buildSourceSnapshot(source: SourceRow) {
   }
 }
 
+const INTERNAL_SOURCE_TYPES = new Set<SourceTypeInput>([
+  "item-created",
+  "item-updated",
+  "manual-trigger",
+  "on-schedule",
+])
+
+const SOURCE_TYPE_LABELS: Record<SourceTypeInput, string> = {
+  platform: "Platform signal",
+  "custom-pull": "Custom API",
+  rss: "RSS feed",
+  webhook: "Webhook",
+  "web-monitor": "Web monitor",
+  github: "GitHub",
+  coingecko: "CoinGecko",
+  hackernews: "Hacker News",
+  producthunt: "Product Hunt",
+  "item-created": "Item created",
+  "item-updated": "Item updated",
+  "manual-trigger": "Manual trigger",
+  "on-schedule": "Scheduled trigger",
+}
+
+function isInternalSourceType(sourceType: SourceTypeInput): boolean {
+  return INTERNAL_SOURCE_TYPES.has(sourceType)
+}
+
+function isSupportedSourceType(value: string | null): value is SourceTypeInput {
+  return Boolean(value && value in SOURCE_TYPE_LABELS)
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function requireConfigString(
+  config: JsonRecord,
+  key: string,
+  sourceType: SourceTypeInput
+): string {
+  const value = readTrimmedString(config[key])
+  if (!value) {
+    throw new UserFacingError(
+      `Missing config.${key}. ${sourceType} sources require this field.`,
+      { code: "BAD_REQUEST", status: 400 }
+    )
+  }
+  return value
+}
+
+function requireHttpUrl(
+  config: JsonRecord,
+  key: string,
+  sourceType: SourceTypeInput
+): string {
+  const value = requireConfigString(config, key, sourceType)
+  try {
+    const parsed = new URL(value)
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error("unsupported protocol")
+    }
+    return value
+  } catch {
+    throw new UserFacingError(
+      `Invalid config.${key}. ${sourceType} sources require an absolute HTTP(S) URL.`,
+      { code: "BAD_REQUEST", status: 400 }
+    )
+  }
+}
+
+function sourceName(
+  sourceType: SourceTypeInput,
+  name: string | null | undefined,
+  config: JsonRecord
+): string | null {
+  const explicitName = readTrimmedString(name)
+  if (explicitName) return explicitName
+  if (sourceType === "platform") {
+    return readTrimmedString(config.endpointId) ?? SOURCE_TYPE_LABELS[sourceType]
+  }
+  if (sourceType === "custom-pull" || sourceType === "rss") {
+    return readTrimmedString(config.url) ?? SOURCE_TYPE_LABELS[sourceType]
+  }
+  if (sourceType === "web-monitor") {
+    return readTrimmedString(config.url) ?? SOURCE_TYPE_LABELS[sourceType]
+  }
+  return SOURCE_TYPE_LABELS[sourceType]
+}
+
+function buildColumnUpdates(config: JsonRecord): JsonRecord[] {
+  const explicit = config.columnUpdates ?? config.column_updates
+  if (Array.isArray(explicit)) {
+    return explicit
+      .filter((item): item is JsonRecord =>
+        Boolean(item && typeof item === "object" && !Array.isArray(item))
+      )
+      .map((item) => ({ ...item }))
+  }
+
+  const triggerColumn = readTrimmedString(config.triggerColumn) ?? ""
+  const triggerValue = readTrimmedString(config.triggerValue) ?? ""
+  if (triggerColumn || triggerValue) {
+    return [
+      {
+        column: triggerColumn,
+        valueType: "constant",
+        value: triggerValue,
+      },
+    ]
+  }
+
+  return readStringArray(config.watchFields).map((field) => ({
+    column: field,
+    valueType: "constant",
+    value: "",
+  }))
+}
+
+function buildSourceFields(
+  input: {
+    sourceType: SourceTypeInput
+    name?: string | null
+    config?: JsonRecord
+    dataSchema?: JsonRecord | null
+    isActive?: boolean
+  },
+  sourceDatabaseName?: string | null
+) {
+  const config = asRecord(input.config)
+  const pullConfig: JsonRecord = {}
+  const metadata: JsonRecord = {}
+  let dbType = "pull"
+
+  switch (input.sourceType) {
+    case "platform": {
+      pullConfig.endpoint_id = requireConfigString(
+        config,
+        "endpointId",
+        input.sourceType
+      )
+      pullConfig.schedule =
+        readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      for (const key of [
+        "marketplace_location",
+        "marketplace_category",
+        "luma_place_id",
+        "place_id",
+      ]) {
+        const value = readTrimmedString(config[key])
+        if (value) pullConfig[key] = value
+      }
+      break
+    }
+    case "custom-pull": {
+      pullConfig.url = requireHttpUrl(config, "url", input.sourceType)
+      const method = (readTrimmedString(config.method) ?? "GET").toUpperCase()
+      if (!["GET", "POST"].includes(method)) {
+        throw new UserFacingError(
+          "custom-pull config.method must be GET or POST.",
+          { code: "BAD_REQUEST", status: 400 }
+        )
+      }
+      pullConfig.method = method
+      pullConfig.schedule =
+        readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      if (config.headers) pullConfig.headers = config.headers
+      if (config.body) pullConfig.body = config.body
+      if (config.auth) pullConfig.auth = config.auth
+      if (config.responsePath) pullConfig.response_path = config.responsePath
+      if (config.response_path) pullConfig.response_path = config.response_path
+      break
+    }
+    case "rss":
+      pullConfig.url = requireHttpUrl(config, "url", input.sourceType)
+      pullConfig.format = "rss"
+      pullConfig.schedule =
+        readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      break
+    case "webhook":
+      dbType = "webhook"
+      if (config.iconUrl) pullConfig.icon_url = config.iconUrl
+      if (config.icon_url) pullConfig.icon_url = config.icon_url
+      break
+    case "web-monitor":
+      pullConfig.schedule =
+        readTrimmedString(config.schedule) ?? "0 0 * * *"
+      pullConfig.firecrawl_config = {
+        url: requireHttpUrl(config, "url", input.sourceType),
+        prompt: requireConfigString(config, "prompt", input.sourceType),
+        ...(config.includeTags ? { includeTags: config.includeTags } : {}),
+        ...(config.excludeTags ? { excludeTags: config.excludeTags } : {}),
+        ...(config.schema ? { schema: config.schema } : {}),
+      }
+      if (config.watchFields) pullConfig.watch_fields = config.watchFields
+      metadata.provider = "web-monitor"
+      break
+    case "github":
+      pullConfig.events = Array.isArray(config.events)
+        ? config.events
+        : ["push", "issues", "pull_request"]
+      if (config.repository) pullConfig.repository = config.repository
+      metadata.provider = "github"
+      break
+    case "coingecko":
+      pullConfig.coin_id = readTrimmedString(config.coinId) ?? "bitcoin"
+      pullConfig.currency = readTrimmedString(config.currency) ?? "usd"
+      pullConfig.schedule =
+        readTrimmedString(config.schedule) ?? "0 */1 * * *"
+      if (typeof config.thresholdPct === "number") {
+        pullConfig.threshold_pct = config.thresholdPct
+      }
+      metadata.provider = "coingecko"
+      break
+    case "hackernews":
+      pullConfig.endpoint_id = readTrimmedString(config.keyword)
+        ? "hackernews-keyword-search"
+        : "hackernews-stories"
+      pullConfig.schedule =
+        readTrimmedString(config.schedule) ?? "0 */2 * * *"
+      if (config.keyword) pullConfig.keyword = config.keyword
+      metadata.provider = "hackernews"
+      break
+    case "producthunt":
+      pullConfig.endpoint_id = readTrimmedString(config.topic)
+        ? "producthunt-search"
+        : "producthunt-leaderboard"
+      pullConfig.schedule =
+        readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      if (config.topic) pullConfig.topic = config.topic
+      metadata.provider = "producthunt"
+      break
+    case "item-created":
+    case "item-updated": {
+      dbType = "internal"
+      metadata.event_type =
+        input.sourceType === "item-created" ? "item_created" : "item_updated"
+      metadata.database_id = requireConfigString(
+        config,
+        "databaseId",
+        input.sourceType
+      )
+      metadata.source_database_name = sourceDatabaseName ?? ""
+      const columnUpdates = buildColumnUpdates(config)
+      if (columnUpdates.length > 0) metadata.column_updates = columnUpdates
+      break
+    }
+    case "manual-trigger": {
+      dbType = "internal"
+      metadata.event_type = "manual_trigger"
+      const databaseId = readTrimmedString(config.databaseId)
+      if (databaseId) {
+        metadata.database_id = databaseId
+        metadata.source_database_name = sourceDatabaseName ?? ""
+      }
+      break
+    }
+    case "on-schedule":
+      dbType = "internal"
+      metadata.event_type = "scheduled"
+      pullConfig.schedule =
+        readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      break
+  }
+
+  return {
+    name: sourceName(input.sourceType, input.name, config),
+    dbType,
+    pullConfig: Object.keys(pullConfig).length > 0 ? pullConfig : null,
+    metadata: Object.keys(metadata).length > 0 ? metadata : null,
+    dataSchema: input.dataSchema ?? { fields: [] },
+    isActive: input.isActive ?? true,
+  }
+}
+
+function inferSourceType(row: SourceRow): string | null {
+  const pullConfig = asRecord(row.pull_config)
+  const metadata = asRecord(row.metadata)
+  const eventType = readTrimmedString(metadata.event_type)
+  if (row.type === "internal") {
+    if (eventType === "item_created") return "item-created"
+    if (eventType === "item_updated") return "item-updated"
+    if (eventType === "manual_trigger") return "manual-trigger"
+    if (eventType === "scheduled") return "on-schedule"
+    return "internal"
+  }
+  const provider = readTrimmedString(metadata.provider)
+  if (provider === "web-monitor") return "web-monitor"
+  if (provider === "github") return "github"
+  if (provider === "coingecko") return "coingecko"
+  if (provider === "hackernews") return "hackernews"
+  if (provider === "producthunt") return "producthunt"
+  if (row.type === "webhook") return "webhook"
+  if (readTrimmedString(pullConfig.format) === "rss") return "rss"
+  if (readTrimmedString(pullConfig.endpoint_id)) return "platform"
+  if (readTrimmedString(pullConfig.url)) return "custom-pull"
+  return row.type ?? null
+}
+
+const ACTIVE_SURF_JOB_STATUSES = [
+  "pending",
+  "queued",
+  "running",
+  "processing",
+  "in_progress",
+]
+
+function isActiveSurfJobStatus(status: string): boolean {
+  return ACTIVE_SURF_JOB_STATUSES.includes(status.trim().toLowerCase())
+}
+
 function isTerminalSurfJobStatus(status: string): boolean {
-  return ![
-    "pending",
-    "queued",
-    "running",
-    "processing",
-    "in_progress",
-  ].includes(status.trim().toLowerCase())
+  return !isActiveSurfJobStatus(status)
+}
+
+function readSourceEndpointId(source: SourceRow): string | null {
+  return readTrimmedString(asRecord(source.pull_config).endpoint_id)
 }
 
 export class SignalSurfRepository {
@@ -2069,6 +2429,253 @@ export class SignalSurfRepository {
     })
   }
 
+  private async getSourceForUpdate(
+    context: SignalSurfContext,
+    sourceId: string
+  ): Promise<SourceRow> {
+    const { data, error } = await this.db
+      .from("sources")
+      .select(SOURCE_COLUMNS)
+      .eq("id", sourceId)
+      .maybeSingle()
+
+    requireNoDbError(error, "Failed to read surf point source")
+    if (!data) {
+      throw new UserFacingError("Source not found or access denied.", {
+        code: "NOT_FOUND",
+        status: 404,
+      })
+    }
+
+    const source = data as SourceRow
+    await this.assertSurfPointBelongsToProduct(context, source.playbook_id)
+    return source
+  }
+
+  private async listSourceRowsForSurfPoint(
+    context: SignalSurfContext,
+    surfPointId: string
+  ): Promise<SourceRow[]> {
+    await this.assertSurfPointBelongsToProduct(context, surfPointId)
+    const { data, error } = await this.db
+      .from("sources")
+      .select(SOURCE_COLUMNS)
+      .eq("playbook_id", surfPointId)
+
+    requireNoDbError(error, "Failed to list surf point sources")
+    return (data ?? []) as SourceRow[]
+  }
+
+  private async resolveSourceDatabaseName(
+    context: SignalSurfContext,
+    sourceType: SourceTypeInput,
+    config: JsonRecord
+  ): Promise<string | null> {
+    const databaseId = readTrimmedString(config.databaseId)
+    const requiresDatabase =
+      sourceType === "item-created" || sourceType === "item-updated"
+    if (!databaseId) {
+      if (requiresDatabase) {
+        throw new UserFacingError(
+          `Missing config.databaseId. ${sourceType} sources require a product table to watch.`,
+          { code: "BAD_REQUEST", status: 400 }
+        )
+      }
+      return null
+    }
+
+    const { data, error } = await this.db
+      .from("databases")
+      .select("id, name")
+      .eq("id", databaseId)
+      .eq("product_id", context.productId)
+      .maybeSingle()
+
+    requireNoDbError(error, "Failed to validate source database")
+    if (!data) {
+      throw new UserFacingError("Database not found or access denied.", {
+        code: "NOT_FOUND",
+        status: 404,
+      })
+    }
+    return readTrimmedString((data as { name?: string | null }).name) ?? ""
+  }
+
+  private async deleteSourceRows(
+    context: SignalSurfContext,
+    sources: SourceRow[]
+  ): Promise<number> {
+    const sourceIds = uniqueIds(sources.map((source) => source.id))
+    if (sourceIds.length === 0) return 0
+
+    const { error: jobError } = await this.db
+      .from("surf_jobs")
+      .delete({ count: "exact" })
+      .in("source_id", sourceIds)
+      .in("status", ACTIVE_SURF_JOB_STATUSES)
+    requireNoDbError(errorOrNull(jobError), "Failed to delete source jobs")
+
+    const { count, error } = await this.db
+      .from("sources")
+      .delete({ count: "exact" })
+      .in("id", sourceIds)
+    requireNoDbError(errorOrNull(error), "Failed to delete surf point sources")
+
+    const cleanupTargets = new Map<
+      string,
+      { surfPointId: string; endpointId: string }
+    >()
+    for (const source of sources) {
+      const endpointId = readSourceEndpointId(source)
+      if (!endpointId) continue
+      cleanupTargets.set(`${source.playbook_id}:${endpointId}`, {
+        surfPointId: source.playbook_id,
+        endpointId,
+      })
+    }
+    for (const target of cleanupTargets.values()) {
+      await this.disableOrphanedPlatformSourceConfig(
+        context,
+        target.surfPointId,
+        target.endpointId
+      )
+    }
+
+    return count ?? sourceIds.length
+  }
+
+  private async enforceSourceExclusivity(
+    context: SignalSurfContext,
+    surfPointId: string,
+    sourceType: SourceTypeInput,
+    replaceExisting: boolean,
+    keepSourceId?: string
+  ): Promise<number> {
+    const existingSources = (
+      await this.listSourceRowsForSurfPoint(context, surfPointId)
+    ).filter((source) => source.id !== keepSourceId)
+    if (existingSources.length === 0) return 0
+
+    const nextIsInternal = isInternalSourceType(sourceType)
+    const hasExistingInternal = existingSources.some(
+      (source) => source.type === "internal"
+    )
+    if (!nextIsInternal && !hasExistingInternal) return 0
+
+    if (!replaceExisting) {
+      throw new UserFacingError(
+        "Internal trigger sources are exclusive. Pass replaceExisting=true to replace existing sources, or delete the conflicting source first.",
+        { code: "CONFLICT", status: 409 }
+      )
+    }
+
+    return this.deleteSourceRows(context, existingSources)
+  }
+
+  private async disableOrphanedPlatformSourceConfig(
+    context: SignalSurfContext,
+    surfPointId: string,
+    endpointId: string | null
+  ): Promise<void> {
+    if (!endpointId) return
+
+    const remainingSources = await this.listSourceRowsForSurfPoint(
+      context,
+      surfPointId
+    )
+    if (
+      remainingSources.some(
+        (source) => readSourceEndpointId(source) === endpointId
+      )
+    ) {
+      return
+    }
+
+    const now = new Date().toISOString()
+    const { error: searchConfigError } = await this.db
+      .from("platform_search_config")
+      .update({ is_enabled: false, updated_at: now })
+      .eq("product_id", context.productId)
+      .eq("playbook_id", surfPointId)
+      .eq("platform", endpointId)
+    requireNoDbError(
+      errorOrNull(searchConfigError),
+      "Failed to disable orphaned platform source keywords"
+    )
+
+    const { error: trackedAccountsError } = await this.db
+      .from("tracked_accounts")
+      .update({ is_enabled: false, updated_at: now })
+      .eq("product_id", context.productId)
+      .eq("playbook_id", surfPointId)
+      .eq("platform", endpointId)
+    requireNoDbError(
+      errorOrNull(trackedAccountsError),
+      "Failed to disable orphaned platform tracked accounts"
+    )
+  }
+
+  private async syncPlatformSourceConfig(
+    context: SignalSurfContext,
+    surfPointId: string,
+    endpointId: string | null,
+    config: JsonRecord
+  ): Promise<void> {
+    if (!endpointId) return
+
+    if (Object.prototype.hasOwnProperty.call(config, "keywords")) {
+      const keywords = readStringArray(config.keywords)
+      const { error } = await this.db.from("platform_search_config").upsert(
+        {
+          product_id: context.productId,
+          playbook_id: surfPointId,
+          platform: endpointId,
+          is_enabled: true,
+          cooldown_minutes: 60,
+          keywords,
+        },
+        { onConflict: "playbook_id,platform" }
+      )
+      requireNoDbError(
+        errorOrNull(error),
+        "Failed to update platform source keywords"
+      )
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "trackedAccounts")) {
+      const { error: deleteError } = await this.db
+        .from("tracked_accounts")
+        .delete()
+        .eq("product_id", context.productId)
+        .eq("playbook_id", surfPointId)
+        .eq("platform", endpointId)
+      requireNoDbError(
+        errorOrNull(deleteError),
+        "Failed to clear platform tracked accounts"
+      )
+
+      const trackedAccounts = readStringArray(config.trackedAccounts).map(
+        (username) => username.replace(/^@/, "")
+      )
+      if (trackedAccounts.length === 0) return
+
+      const { error } = await this.db.from("tracked_accounts").upsert(
+        trackedAccounts.map((username) => ({
+          product_id: context.productId,
+          playbook_id: surfPointId,
+          platform: endpointId,
+          username,
+          is_enabled: true,
+        })),
+        { onConflict: "playbook_id,platform,username" }
+      )
+      requireNoDbError(
+        errorOrNull(error),
+        "Failed to update platform tracked accounts"
+      )
+    }
+  }
+
   async listSurfPointSources(context: SignalSurfContext, surfPointId: string) {
     await this.assertSurfPointBelongsToProduct(context, surfPointId)
 
@@ -2084,6 +2691,300 @@ export class SignalSurfRepository {
       surfPointId,
       sources: sources.map(formatSource),
       totalCount: sources.length,
+    }
+  }
+
+  async createSurfPointSource(
+    context: SignalSurfContext,
+    input: CreateSurfPointSourceInput
+  ) {
+    const config = asRecord(input.config)
+    const sourceDatabaseName = await this.resolveSourceDatabaseName(
+      context,
+      input.sourceType,
+      config
+    )
+    const fields = buildSourceFields(input, sourceDatabaseName)
+    const replacedCount = await this.enforceSourceExclusivity(
+      context,
+      input.surfPointId,
+      input.sourceType,
+      input.replaceExisting === true
+    )
+
+    if (input.sourceType === "platform") {
+      const endpointId = readTrimmedString(fields.pullConfig?.endpoint_id)
+      const existing = (
+        await this.listSourceRowsForSurfPoint(context, input.surfPointId)
+      ).find(
+        (source) =>
+          readTrimmedString(asRecord(source.pull_config).endpoint_id) ===
+          endpointId
+      )
+      if (existing) {
+        const updateData: Record<string, unknown> = {
+          pull_config: {
+            ...asRecord(existing.pull_config),
+            ...asRecord(fields.pullConfig),
+          },
+          updated_at: new Date().toISOString(),
+        }
+        if (input.name !== undefined) updateData.name = fields.name
+        if (input.isActive !== undefined) updateData.is_active = fields.isActive
+        if (input.dataSchema !== undefined)
+          updateData.data_schema = fields.dataSchema
+
+        const { data, error } = await this.db
+          .from("sources")
+          .update(updateData)
+          .eq("id", existing.id)
+          .select(SOURCE_COLUMNS)
+          .single()
+        requireNoDbError(error, "Failed to update existing platform source")
+
+        await this.syncPlatformSourceConfig(
+          context,
+          input.surfPointId,
+          endpointId,
+          config
+        )
+
+        return {
+          source: formatSource(data as SourceRow),
+          replacedCount,
+          updatedExisting: true,
+        }
+      }
+    }
+
+    const userId =
+      context.userId ?? (await this.resolveProductOwnerId(context)) ?? undefined
+    if (!userId) {
+      throw new UserFacingError(
+        "Cannot create source because no source owner could be resolved.",
+        { code: "CONFIG_ERROR", status: 500 }
+      )
+    }
+
+    const now = new Date().toISOString()
+    const { data, error } = await this.db
+      .from("sources")
+      .insert({
+        id: randomUUID(),
+        user_id: userId,
+        playbook_id: input.surfPointId,
+        name: fields.name,
+        type: fields.dbType,
+        pull_config: fields.pullConfig,
+        metadata: fields.metadata,
+        data_schema: fields.dataSchema,
+        is_active: fields.isActive,
+        created_at: now,
+        updated_at: now,
+      })
+      .select(SOURCE_COLUMNS)
+      .single()
+
+    requireNoDbError(error, "Failed to create surf point source")
+
+    if (input.sourceType === "platform") {
+      await this.syncPlatformSourceConfig(
+        context,
+        input.surfPointId,
+        readTrimmedString(fields.pullConfig?.endpoint_id),
+        config
+      )
+    }
+
+    return {
+      source: formatSource(data as SourceRow),
+      replacedCount,
+    }
+  }
+
+  async updateSurfPointSource(
+    context: SignalSurfContext,
+    input: UpdateSurfPointSourceInput
+  ) {
+    if (input.pullConfig !== undefined && input.pullConfigPatch !== undefined) {
+      throw new UserFacingError(
+        "Pass either pullConfig or pullConfigPatch, not both.",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+    if (input.metadata !== undefined && input.metadataPatch !== undefined) {
+      throw new UserFacingError(
+        "Pass either metadata or metadataPatch, not both.",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+
+    const source = await this.getSourceForUpdate(context, input.sourceId)
+    const previousEndpointId = readSourceEndpointId(source)
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    }
+    let replacedCount = 0
+    let configForPlatformSync: JsonRecord | null = null
+
+    const inferredSourceType = inferSourceType(source)
+    const rebuildSourceType =
+      input.sourceType ??
+      (input.config !== undefined && isSupportedSourceType(inferredSourceType)
+        ? inferredSourceType
+        : undefined)
+
+    if (input.config !== undefined && !rebuildSourceType) {
+      throw new UserFacingError(
+        "Cannot rebuild this source from config because its source type could not be inferred. Pass sourceType explicitly.",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+
+    if (rebuildSourceType) {
+      const config = asRecord(input.config)
+      const sourceDatabaseName = await this.resolveSourceDatabaseName(
+        context,
+        rebuildSourceType,
+        config
+      )
+      const fields = buildSourceFields(
+        {
+          sourceType: rebuildSourceType,
+          name: input.name === undefined ? source.name : input.name,
+          config,
+          dataSchema:
+            input.dataSchema !== undefined
+              ? input.dataSchema
+              : (source.data_schema ?? { fields: [] }),
+          isActive:
+            input.isActive !== undefined
+              ? input.isActive
+              : (source.is_active ?? true),
+        },
+        sourceDatabaseName
+      )
+      replacedCount = await this.enforceSourceExclusivity(
+        context,
+        source.playbook_id,
+        rebuildSourceType,
+        input.replaceExisting === true,
+        source.id
+      )
+      updateData.name = fields.name
+      updateData.type = fields.dbType
+      updateData.pull_config = fields.pullConfig
+      updateData.metadata = fields.metadata
+      updateData.data_schema = fields.dataSchema
+      updateData.is_active = fields.isActive
+      if (rebuildSourceType === "platform") configForPlatformSync = config
+    } else {
+      if (input.name !== undefined)
+        updateData.name = input.name?.trim() ? input.name.trim() : null
+      if (input.isActive !== undefined) updateData.is_active = input.isActive
+      if (input.dataSchema !== undefined) updateData.data_schema = input.dataSchema
+    }
+
+    if (input.pullConfig !== undefined) {
+      updateData.pull_config = input.pullConfig
+    }
+    if (input.pullConfigPatch !== undefined) {
+      updateData.pull_config = {
+        ...asRecord(updateData.pull_config ?? source.pull_config),
+        ...input.pullConfigPatch,
+      }
+    }
+    if (input.metadata !== undefined) {
+      updateData.metadata = input.metadata
+    }
+    if (input.metadataPatch !== undefined) {
+      updateData.metadata = {
+        ...asRecord(updateData.metadata ?? source.metadata),
+        ...input.metadataPatch,
+      }
+    }
+
+    const changedFields = Object.keys(updateData).filter(
+      (key) => key !== "updated_at"
+    )
+    if (changedFields.length === 0) {
+      throw new UserFacingError("No fields to update.", {
+        code: "BAD_REQUEST",
+        status: 400,
+      })
+    }
+
+    const { data, error } = await this.db
+      .from("sources")
+      .update(updateData)
+      .eq("id", input.sourceId)
+      .select(SOURCE_COLUMNS)
+      .single()
+
+    requireNoDbError(error, "Failed to update surf point source")
+    const updatedSource = data as SourceRow
+    const nextEndpointId = readSourceEndpointId(updatedSource)
+
+    if (previousEndpointId && previousEndpointId !== nextEndpointId) {
+      await this.disableOrphanedPlatformSourceConfig(
+        context,
+        source.playbook_id,
+        previousEndpointId
+      )
+    }
+
+    if (configForPlatformSync) {
+      await this.syncPlatformSourceConfig(
+        context,
+        updatedSource.playbook_id,
+        nextEndpointId,
+        configForPlatformSync
+      )
+    }
+
+    return {
+      source: formatSource(updatedSource),
+      changedFields,
+      replacedCount,
+    }
+  }
+
+  async deleteSurfPointSource(
+    context: SignalSurfContext,
+    input: DeleteSurfPointSourceInput
+  ) {
+    const sourceIds = uniqueIds([
+      ...(input.sourceIds ?? []),
+      ...(input.sourceId ? [input.sourceId] : []),
+    ])
+    if (sourceIds.length === 0) {
+      throw new UserFacingError("Pass sourceId or sourceIds.", {
+        code: "BAD_REQUEST",
+        status: 400,
+      })
+    }
+
+    const { data, error } = await this.db
+      .from("sources")
+      .select(SOURCE_COLUMNS)
+      .in("id", sourceIds)
+    requireNoDbError(error, "Failed to read surf point sources")
+
+    const sources = (data ?? []) as SourceRow[]
+    if (sources.length !== sourceIds.length) {
+      throw new UserFacingError("Source not found or access denied.", {
+        code: "NOT_FOUND",
+        status: 404,
+      })
+    }
+    for (const source of sources) {
+      await this.assertSurfPointBelongsToProduct(context, source.playbook_id)
+    }
+
+    const deletedCount = await this.deleteSourceRows(context, sources)
+    return {
+      sourceIds,
+      deletedCount,
     }
   }
 
@@ -3278,10 +4179,14 @@ function formatSource(row: SourceRow) {
     surfPointId: row.playbook_id,
     name: row.name ?? null,
     type: row.type ?? null,
+    sourceType: inferSourceType(row),
     endpointId: readTrimmedString(pullConfig.endpoint_id),
     schedule: readTrimmedString(pullConfig.schedule),
     url: readTrimmedString(pullConfig.url),
     provider: readTrimmedString(metadata.provider),
+    eventType: readTrimmedString(metadata.event_type),
+    databaseId: readTrimmedString(metadata.database_id),
+    webhookSecretConfigured: Boolean(row.webhook_secret),
     isActive: row.is_active ?? null,
     createdAt: row.created_at ?? null,
     updatedAt: row.updated_at ?? null,
