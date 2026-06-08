@@ -338,15 +338,16 @@ Sources and surf point tools:
 - `list_surf_point_sources`: returns safe source metadata only:
   `sourceId`, `surfPointId`, name, database type, public `sourceType`,
   endpoint, schedule, URL, provider, event type, database id,
-  `webhookSecretConfigured`, `isActive`, and timestamps. Source config,
-  credentials, headers, bodies, auth settings, and provider payloads are not
-  exposed through MCP.
+  `webhookUrl` for custom webhook sources, `webhookSecretConfigured`,
+  `isActive`, and timestamps. Source config, credentials, headers, bodies, auth
+  settings, and provider payloads are not exposed through MCP.
 - `create_surf_point_source`: creates a SignalSurf source/signal for a Surf
   Point. Supported `sourceType` values are `platform`, `custom-pull`, `rss`,
   `webhook`, `web-monitor`, `github`, `coingecko`, `hackernews`,
   `producthunt`, `item-created`, `item-updated`, `manual-trigger`, and
-  `on-schedule`. Platform sources also write `keywords` and `trackedAccounts`
-  into the product search-config tables.
+  `on-schedule`. Creating a `webhook` source also returns top-level
+  `webhookUrl`, matching the URL shown in SignalSurf Web. Platform sources also
+  write `keywords` and `trackedAccounts` into the product search-config tables.
 - `update_surf_point_source`: updates source name, active state, typed source
   config, `pull_config`, `metadata`, or `data_schema`. Secret-bearing config
   such as headers, bodies, and auth may be written but is not returned by list

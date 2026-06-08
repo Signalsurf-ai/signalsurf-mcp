@@ -623,6 +623,30 @@ function readTrimmedString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null
 }
 
+function buildWebhookSignalUrl(sourceId: string): string | null {
+  const explicitBase = readTrimmedString(
+    process.env.SIGNALSURF_WEBHOOK_SIGNAL_BASE_URL
+  )
+  const supabaseUrl =
+    explicitBase ??
+    readTrimmedString(process.env.SIGNALSURF_SUPABASE_URL) ??
+    readTrimmedString(process.env.SUPABASE_URL) ??
+    readTrimmedString(process.env.NEXT_PUBLIC_SUPABASE_URL)
+  if (!supabaseUrl) return null
+
+  const baseUrl = explicitBase
+    ? explicitBase
+    : `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/webhook-signal`
+
+  try {
+    const url = new URL(baseUrl)
+    url.searchParams.set("source_id", sourceId)
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
 function buildSourceSnapshot(source: SourceRow) {
   const pullConfig = asRecord(source.pull_config)
   const metadata = asRecord(source.metadata)
@@ -2796,8 +2820,12 @@ export class SignalSurfRepository {
       )
     }
 
+    const source = formatSource(data as SourceRow)
     return {
-      source: formatSource(data as SourceRow),
+      source,
+      ...(source.sourceType === "webhook"
+        ? { webhookUrl: source.webhookUrl ?? null }
+        : {}),
       replacedCount,
     }
   }
@@ -2942,8 +2970,12 @@ export class SignalSurfRepository {
       )
     }
 
+    const formattedSource = formatSource(updatedSource)
     return {
-      source: formatSource(updatedSource),
+      source: formattedSource,
+      ...(formattedSource.sourceType === "webhook"
+        ? { webhookUrl: formattedSource.webhookUrl ?? null }
+        : {}),
       changedFields,
       replacedCount,
     }
@@ -4173,13 +4205,14 @@ function formatSurfPoint(row: SurfPointRow) {
 function formatSource(row: SourceRow) {
   const pullConfig = asRecord(row.pull_config)
   const metadata = asRecord(row.metadata)
-  return {
+  const sourceType = inferSourceType(row)
+  const source: Record<string, unknown> = {
     id: row.id,
     sourceId: row.id,
     surfPointId: row.playbook_id,
     name: row.name ?? null,
     type: row.type ?? null,
-    sourceType: inferSourceType(row),
+    sourceType,
     endpointId: readTrimmedString(pullConfig.endpoint_id),
     schedule: readTrimmedString(pullConfig.schedule),
     url: readTrimmedString(pullConfig.url),
@@ -4191,6 +4224,10 @@ function formatSource(row: SourceRow) {
     createdAt: row.created_at ?? null,
     updatedAt: row.updated_at ?? null,
   }
+  if (sourceType === "webhook") {
+    source.webhookUrl = buildWebhookSignalUrl(row.id)
+  }
+  return source
 }
 
 function formatSurfJob(row: SurfJobRow) {
