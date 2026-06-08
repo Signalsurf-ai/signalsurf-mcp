@@ -784,6 +784,48 @@ describe("SignalSurfRepository", () => {
     })
   })
 
+  it("returns the callable SignalSurf URL for custom webhook sources", async () => {
+    const previousUrl = process.env.SIGNALSURF_SUPABASE_URL
+    process.env.SIGNALSURF_SUPABASE_URL = "https://example.supabase.co"
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    try {
+      const created = await repo.createSurfPointSource(context, {
+        surfPointId: surfPoint1,
+        sourceType: "webhook",
+        name: "BlockRun intake",
+      })
+      const sourceId = created.source.sourceId
+      const webhookUrl = `https://example.supabase.co/functions/v1/webhook-signal?source_id=${sourceId}`
+
+      expect(created).toMatchObject({
+        webhookUrl,
+        source: {
+          sourceId,
+          sourceType: "webhook",
+          type: "webhook",
+          name: "BlockRun intake",
+          webhookUrl,
+          webhookSecretConfigured: false,
+        },
+      })
+      expect(
+        db.tables.sources.find((source) => source.id === sourceId)
+      ).toMatchObject({
+        user_id: context.userId,
+        playbook_id: surfPoint1,
+        type: "webhook",
+      })
+    } finally {
+      if (previousUrl === undefined) {
+        delete process.env.SIGNALSURF_SUPABASE_URL
+      } else {
+        process.env.SIGNALSURF_SUPABASE_URL = previousUrl
+      }
+    }
+  })
+
   it("writes platform source search config", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)

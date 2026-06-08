@@ -407,7 +407,7 @@ export const PUBLIC_MCP_TOOLS = {
   create_surf_point_source: {
     title: "Create Surf Point Source",
     description:
-      "Create a SignalSurf source/signal for an authorized surf point. Supports platform, custom-pull, RSS, webhook, web-monitor, GitHub, CoinGecko, Hacker News, Product Hunt, and the four exclusive internal trigger types.",
+      "Create a SignalSurf source/signal for an authorized surf point. Supports platform, custom-pull, RSS, webhook, web-monitor, GitHub, CoinGecko, Hacker News, Product Hunt, and the four exclusive internal trigger types. Webhook sources return the callable SignalSurf webhookUrl.",
     requiredCapability: "sources.write",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
