@@ -116,6 +116,7 @@ type PublicMcpToolDefinition = {
   title: string
   description: string
   requiredCapability: McpCapability
+  requiredCapabilities?: readonly McpCapability[]
   surferSurface: string
   publicStatus: "supported"
   annotations: {
@@ -466,6 +467,7 @@ export const PUBLIC_MCP_TOOLS = {
     description:
       "Replay one captured webhook payload through a saved or provided import mapping and upsert mapped rows into tables attached to the source surf point.",
     requiredCapability: "tables.write",
+    requiredCapabilities: ["sources.read", "tables.write"],
     surferSurface: "manage_data",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
@@ -538,6 +540,13 @@ export const PUBLIC_MCP_TOOLS = {
 export const PUBLIC_MCP_TOOL_NAMES = Object.keys(
   PUBLIC_MCP_TOOLS
 ) as PublicMcpToolName[]
+
+export function requiredCapabilitiesForTool(
+  toolName: PublicMcpToolName
+): readonly McpCapability[] {
+  const definition: PublicMcpToolDefinition = PUBLIC_MCP_TOOLS[toolName]
+  return definition.requiredCapabilities ?? [definition.requiredCapability]
+}
 
 const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   [MCP_LEGACY_READ_SCOPE]: [

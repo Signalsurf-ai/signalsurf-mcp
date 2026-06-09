@@ -1054,6 +1054,80 @@ describe("SignalSurfRepository", () => {
     })
   })
 
+  it("rejects webhook import mappings with unsupported transform options", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+    const baseMapping = {
+      version: "signalsurf.import_mapping.v1" as const,
+      mappings: [
+        {
+          name: "GitHub stargazers",
+          targetDatabaseId: db1,
+          recordsPath: "$.contacts[*]",
+          operation: "upsert" as const,
+          uniqueKey: {
+            template: "github:{login}",
+            normalize: "lowercase" as const,
+          },
+          fields: [
+            {
+              targetField: "githubHandle",
+              sourcePath: "$.login",
+              transform: "lowercase" as const,
+            },
+          ],
+        },
+      ],
+    }
+
+    await expect(
+      repo.createSurfPointSource(context, {
+        surfPointId: surfPoint1,
+        sourceType: "webhook",
+        name: "Invalid transform webhook",
+        config: {
+          importMapping: {
+            ...baseMapping,
+            mappings: [
+              {
+                ...baseMapping.mappings[0],
+                fields: [
+                  {
+                    targetField: "githubHandle",
+                    sourcePath: "$.login",
+                    transform: "lowerCase",
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      })
+    ).rejects.toThrow("config.importMapping must match")
+
+    await expect(
+      repo.createSurfPointSource(context, {
+        surfPointId: surfPoint1,
+        sourceType: "webhook",
+        name: "Invalid normalize webhook",
+        config: {
+          importMapping: {
+            ...baseMapping,
+            mappings: [
+              {
+                ...baseMapping.mappings[0],
+                uniqueKey: {
+                  template: "github:{login}",
+                  normalize: "lowerCase",
+                },
+              },
+            ],
+          },
+        },
+      })
+    ).rejects.toThrow("config.importMapping must match")
+  })
+
   it("writes platform source search config", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)

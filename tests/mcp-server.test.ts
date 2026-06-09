@@ -331,6 +331,7 @@ describe("MCP server", () => {
       create_table_row: true,
       update_table_row: true,
       delete_table_rows: false,
+      replay_webhook_payload: false,
       get_surf_point: false,
       create_surf_point: false,
       run_surf_point: false,
@@ -389,6 +390,26 @@ describe("MCP server", () => {
       details: {
         oauthError: "insufficient_scope",
         requiredScopes: ["mcp:surf_points.execute"],
+      },
+    })
+
+    const deniedReplay = await client.callTool({
+      name: "replay_webhook_payload",
+      arguments: {
+        sourceId: "00000000-0000-4000-8000-000000000801",
+        payloadId: "00000000-0000-4000-8000-000000000b01",
+      },
+    })
+    expect(deniedReplay.isError).toBe(true)
+    const deniedReplayText =
+      deniedReplay.content?.[0]?.type === "text"
+        ? deniedReplay.content[0].text
+        : ""
+    expect(JSON.parse(deniedReplayText)).toMatchObject({
+      code: "INSUFFICIENT_SCOPE",
+      details: {
+        oauthError: "insufficient_scope",
+        requiredScopes: ["mcp:sources.read"],
       },
     })
     expect(db.tables.playbooks).toHaveLength(0)

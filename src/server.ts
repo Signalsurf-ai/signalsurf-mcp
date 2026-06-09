@@ -14,6 +14,7 @@ import {
 import {
   PUBLIC_MCP_TOOLS,
   PUBLIC_MCP_TOOL_NAMES,
+  requiredCapabilitiesForTool,
   type PublicMcpToolName,
 } from "./capabilities.js"
 import { jsonResource, runJsonTool } from "./mcp-results.js"
@@ -110,7 +111,9 @@ function registerTools(
   }
 
   function assertToolAllowed(name: PublicMcpToolName) {
-    assertCanUseCapability(context, PUBLIC_MCP_TOOLS[name].requiredCapability)
+    for (const capability of requiredCapabilitiesForTool(name)) {
+      assertCanUseCapability(context, capability)
+    }
   }
 
   function toolContext(args: any): SignalSurfContext {
@@ -146,9 +149,8 @@ function registerTools(
           tools: Object.fromEntries(
             PUBLIC_MCP_TOOL_NAMES.map((toolName) => [
               toolName,
-              canUseCapability(
-                context,
-                PUBLIC_MCP_TOOLS[toolName].requiredCapability
+              requiredCapabilitiesForTool(toolName).every((capability) =>
+                canUseCapability(context, capability)
               ),
             ])
           ),

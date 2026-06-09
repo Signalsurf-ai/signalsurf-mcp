@@ -39,6 +39,32 @@ function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null
 }
 
+function readTransform(
+  value: unknown
+): ImportMappingField["transform"] | null | undefined {
+  if (value === undefined) return undefined
+  if (
+    value === "trim" ||
+    value === "lowercase" ||
+    value === "number" ||
+    value === "date" ||
+    value === "url"
+  ) {
+    return value
+  }
+  return null
+}
+
+function readNormalize(
+  value: unknown
+): ImportMappingRule["uniqueKey"]["normalize"] | null | undefined {
+  if (value === undefined) return undefined
+  if (value === "lowercase" || value === "email" || value === "url") {
+    return value
+  }
+  return null
+}
+
 export function readImportMappingValue(value: unknown): ImportMappingV1 | null {
   if (!isRecord(value)) return null
   if (value.version !== "signalsurf.import_mapping.v1") return null
@@ -68,21 +94,19 @@ export function readImportMappingValue(value: unknown): ImportMappingV1 | null {
       if (!isRecord(rawField)) return null
       const targetField = readString(rawField.targetField)
       if (!targetField) return null
+      const transform = readTransform(rawField.transform)
+      if (transform === null) return null
       fields.push({
         targetField,
         sourcePath: readString(rawField.sourcePath) ?? undefined,
         template: readString(rawField.template) ?? undefined,
         defaultValue: rawField.defaultValue,
-        transform:
-          rawField.transform === "trim" ||
-          rawField.transform === "lowercase" ||
-          rawField.transform === "number" ||
-          rawField.transform === "date" ||
-          rawField.transform === "url"
-            ? rawField.transform
-            : undefined,
+        transform,
       })
     }
+
+    const normalize = readNormalize(uniqueKey.normalize)
+    if (normalize === null) return null
 
     mappings.push({
       name,
@@ -92,12 +116,7 @@ export function readImportMappingValue(value: unknown): ImportMappingV1 | null {
       uniqueKey: {
         sourcePath: readString(uniqueKey.sourcePath) ?? undefined,
         template: readString(uniqueKey.template) ?? undefined,
-        normalize:
-          uniqueKey.normalize === "lowercase" ||
-          uniqueKey.normalize === "email" ||
-          uniqueKey.normalize === "url"
-            ? uniqueKey.normalize
-            : undefined,
+        normalize,
       },
       fields,
     })
