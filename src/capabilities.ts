@@ -15,6 +15,16 @@ export const MCP_GRANULAR_SCOPES = [
   "mcp:schemas.write",
   "mcp:sources.read",
   "mcp:sources.write",
+] as const
+
+// account_lists scopes are understood and enforced by this MCP server, but the
+// authorization server (www.signalsurf.ai) does not yet register them, so it rejects
+// them at the /authorize step ("Unsupported scope") and breaks the whole OAuth flow.
+// Keep them in the supported set so existing grants and the mcp:write fallback still
+// work, but do NOT advertise or request them by default. Fold these back into
+// MCP_RESOURCE_SCOPES and MCP_DEFAULT_RESOURCE_SCOPES once the authorization server
+// registers them.
+export const MCP_ACCOUNT_LIST_SCOPES = [
   "mcp:account_lists.read",
   "mcp:account_lists.write",
 ] as const
@@ -23,6 +33,7 @@ export const MCP_SUPPORTED_SCOPES = [
   MCP_LEGACY_READ_SCOPE,
   MCP_LEGACY_WRITE_SCOPE,
   ...MCP_GRANULAR_SCOPES,
+  ...MCP_ACCOUNT_LIST_SCOPES,
   MCP_OFFLINE_ACCESS_SCOPE,
 ] as const
 
@@ -32,22 +43,7 @@ export const MCP_RESOURCE_SCOPES = [
   ...MCP_GRANULAR_SCOPES,
 ] as const
 
-export const MCP_DEFAULT_RESOURCE_SCOPES = [
-  "mcp:products.write",
-  "mcp:surf_points.read",
-  "mcp:surf_points.write",
-  "mcp:surf_points.execute",
-  "mcp:surf_points.delete",
-  "mcp:tables.read",
-  "mcp:tables.write",
-  "mcp:tables.delete",
-  "mcp:schemas.read",
-  "mcp:schemas.write",
-  "mcp:sources.read",
-  "mcp:sources.write",
-  "mcp:account_lists.read",
-  "mcp:account_lists.write",
-] as const
+export const MCP_DEFAULT_RESOURCE_SCOPES = [...MCP_GRANULAR_SCOPES] as const
 
 export type McpScope = (typeof MCP_SUPPORTED_SCOPES)[number]
 
