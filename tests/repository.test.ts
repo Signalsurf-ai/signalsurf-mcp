@@ -440,12 +440,14 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    await expect(repo.getSurfPoint(context, surfPoint1)).resolves.toMatchObject({
-      surfPoint: {
-        surfPointId: surfPoint1,
-        name: "Active",
-      },
-    })
+    await expect(repo.getSurfPoint(context, surfPoint1)).resolves.toMatchObject(
+      {
+        surfPoint: {
+          surfPointId: surfPoint1,
+          name: "Active",
+        },
+      }
+    )
 
     await expect(
       repo.getSurfPoint(context, otherProductSurfPoint)
@@ -826,6 +828,232 @@ describe("SignalSurfRepository", () => {
     }
   })
 
+  it("creates webhook import mappings and previews/replays captured payloads", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+    const importMapping = {
+      version: "signalsurf.import_mapping.v1" as const,
+      mappings: [
+        {
+          name: "GitHub stargazers",
+          targetDatabaseId: db1,
+          recordsPath: "$.contacts[*]",
+          operation: "upsert" as const,
+          uniqueKey: {
+            template: "github:{login}",
+            normalize: "lowercase" as const,
+          },
+          fields: [
+            {
+              targetField: "name",
+              sourcePath: "$.name",
+              transform: "trim" as const,
+            },
+            {
+              targetField: "githubHandle",
+              sourcePath: "$.login",
+              transform: "lowercase" as const,
+            },
+            {
+              targetField: "email",
+              sourcePath: "$.email",
+              transform: "lowercase" as const,
+            },
+          ],
+        },
+      ],
+    }
+
+    const created = await repo.createSurfPointSource(context, {
+      surfPointId: surfPoint1,
+      sourceType: "webhook",
+      name: "GitHub stars webhook",
+      config: {
+        importMapping,
+      },
+    })
+    const sourceId = created.source.sourceId as string
+
+    expect(created.source).toMatchObject({
+      sourceType: "webhook",
+      importMapping: {
+        version: "signalsurf.import_mapping.v1",
+        mappingNames: ["GitHub stargazers"],
+        targetDatabaseIds: [db1],
+        mappedFieldCount: 3,
+      },
+    })
+    expect(
+      db.tables.sources.find((source) => source.id === sourceId)?.data_schema
+    ).toMatchObject({
+      fields: [],
+      import_mapping: importMapping,
+    })
+
+    const updatedMapping = {
+      ...importMapping,
+      mappings: [
+        {
+          ...importMapping.mappings[0],
+          name: "Reach candidates",
+        },
+      ],
+    }
+    const updated = await repo.updateSurfPointSource(context, {
+      sourceId,
+      sourceType: "webhook",
+      config: {
+        importMapping: updatedMapping,
+      },
+    })
+    expect(updated.source).toMatchObject({
+      importMapping: {
+        mappingNames: ["Reach candidates"],
+        mappedFieldCount: 3,
+      },
+    })
+
+    const payloadId = "00000000-0000-4000-8000-000000000b01"
+    db.tables.raw_signals = [
+      {
+        id: payloadId,
+        source_id: sourceId,
+        status: "received",
+        received_at: "2026-06-08T00:00:00Z",
+        dedup_key: "stars-1",
+        data: {
+          contacts: [
+            {
+              login: "AgenticNick",
+              name: " Nick ",
+              email: "Nick@Example.COM",
+            },
+          ],
+        },
+      },
+    ]
+
+    await expect(
+      repo.listWebhookPayloadSamples(context, { sourceId })
+    ).resolves.toMatchObject({
+      sourceId,
+      totalCount: 1,
+      samples: [
+        {
+          payloadId,
+          dedupKey: "stars-1",
+          payload: {
+            contacts: [
+              {
+                login: "AgenticNick",
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    await expect(
+      repo.previewImportMapping(context, {
+        sourceId,
+        importMapping: updatedMapping,
+        payload: {
+          contacts: [
+            {
+              login: "AgenticNick",
+              name: "Nick",
+              email: "Nick@Example.COM",
+            },
+          ],
+        },
+      })
+    ).resolves.toMatchObject({
+      rowCount: 1,
+      rows: [
+        {
+          targetDatabaseId: db1,
+          entryKeyHash: "github:agenticnick",
+          data: {
+            name: "Nick",
+            githubHandle: "agenticnick",
+            email: "nick@example.com",
+          },
+        },
+      ],
+    })
+
+    const capturedPreview = await repo.previewImportMapping(context, {
+      sourceId,
+      payloadId,
+    })
+    expect(capturedPreview).toMatchObject({
+      rowCount: 1,
+      rows: [
+        {
+          entryKeyHash: "github:agenticnick",
+          data: {
+            name: "Nick",
+            githubHandle: "agenticnick",
+          },
+        },
+      ],
+    })
+
+    const replayed = await repo.replayWebhookPayload(context, {
+      sourceId,
+      payloadId,
+    })
+    expect(replayed).toMatchObject({
+      importedRows: 1,
+      rows: [
+        {
+          databaseId: db1,
+          playbookId: surfPoint1,
+          entryKeyHash: "github:agenticnick",
+          rawSignalId: payloadId,
+          data: {
+            name: "Nick",
+            githubHandle: "agenticnick",
+            email: "nick@example.com",
+          },
+        },
+      ],
+      warnings: [],
+    })
+
+    const inserted = db.tables.entries.find(
+      (entry) => entry.entry_key_hash === "github:agenticnick"
+    )
+    expect(inserted).toMatchObject({
+      database_id: db1,
+      playbook_id: surfPoint1,
+      origin: "pipeline",
+      origin_ref: `raw_signal:${payloadId}`,
+      data: {
+        name: "Nick",
+      },
+    })
+
+    db.tables.raw_signals[0].data.contacts[0].name = "Nick Updated"
+    await repo.replayWebhookPayload(context, {
+      sourceId,
+      payloadId,
+    })
+    expect(
+      db.tables.entries.filter(
+        (entry) => entry.entry_key_hash === "github:agenticnick"
+      )
+    ).toHaveLength(1)
+    expect(
+      db.tables.entries.find(
+        (entry) => entry.entry_key_hash === "github:agenticnick"
+      )?.data
+    ).toMatchObject({
+      name: "Nick Updated",
+      email: "nick@example.com",
+    })
+  })
+
   it("writes platform source search config", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
@@ -976,15 +1204,18 @@ describe("SignalSurfRepository", () => {
         databaseId: db1,
       },
     })
-    expect(db.tables.sources.find((source) => source.id === source1)).toBeFalsy()
+    expect(
+      db.tables.sources.find((source) => source.id === source1)
+    ).toBeFalsy()
     expect(db.tables.surf_jobs).toEqual([
       expect.objectContaining({
         id: completedJob,
         status: "completed",
       }),
     ])
-    expect(db.tables.sources.find((source) => source.id === otherProductSource))
-      .toBeTruthy()
+    expect(
+      db.tables.sources.find((source) => source.id === otherProductSource)
+    ).toBeTruthy()
     expect(
       db.tables.sources.find((source) => source.id === created.source.sourceId)
         ?.metadata
@@ -1046,7 +1277,9 @@ describe("SignalSurfRepository", () => {
       sourceIds: [source1],
       deletedCount: 1,
     })
-    expect(db.tables.sources.find((source) => source.id === source1)).toBeFalsy()
+    expect(
+      db.tables.sources.find((source) => source.id === source1)
+    ).toBeFalsy()
     expect(db.tables.surf_jobs).toEqual([
       expect.objectContaining({
         id: completedJob,
@@ -1095,11 +1328,13 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    await expect(repo.listSurfPointTools(context, surfPoint1)).resolves.toEqual({
-      surfPointId: surfPoint1,
-      toolIds: [],
-      totalCount: 0,
-    })
+    await expect(repo.listSurfPointTools(context, surfPoint1)).resolves.toEqual(
+      {
+        surfPointId: surfPoint1,
+        toolIds: [],
+        totalCount: 0,
+      }
+    )
 
     await expect(
       repo.attachSurfPointTool(context, {
@@ -1715,10 +1950,7 @@ describe("SignalSurfRepository", () => {
         patch: { label: "Deal Priority" },
       })
     ).resolves.toMatchObject({
-      fields: [
-        { key: "parent" },
-        { key: "priority", label: "Deal Priority" },
-      ],
+      fields: [{ key: "parent" }, { key: "priority", label: "Deal Priority" }],
     })
 
     await expect(

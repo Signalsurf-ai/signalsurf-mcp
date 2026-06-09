@@ -43,11 +43,14 @@ import {
   listProductToolsSchema,
   listSurfPointSourcesSchema,
   listSurfPointToolsSchema,
+  listWebhookPayloadSamplesSchema,
+  previewImportMappingSchema,
   removeDatabaseFieldSchema,
   listSurfJobsSchema,
   listSurfPointsSchema,
   readTableSchema,
   readTableViewSchema,
+  replayWebhookPayloadSchema,
   runSurfPointSchema,
   saveAccountListProfileSchema,
   setSurfPointSourceActiveSchema,
@@ -210,14 +213,11 @@ function registerTools(
       })
   )
 
-  registerPublicTool(
-    "run_surf_point",
-    runSurfPointSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("run_surf_point")
-        return repository.runSurfPoint(toolContext(args), args)
-      })
+  registerPublicTool("run_surf_point", runSurfPointSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("run_surf_point")
+      return repository.runSurfPoint(toolContext(args), args)
+    })
   )
 
   registerPublicTool("get_surf_job", getSurfJobSchema, async (args: any) =>
@@ -302,11 +302,14 @@ function registerTools(
     })
   )
 
-  registerPublicTool("read_table_view", readTableViewSchema, async (args: any) =>
-    runJsonTool(async () => {
-      assertToolAllowed("read_table_view")
-      return repository.readTableView(toolContext(args), args)
-    })
+  registerPublicTool(
+    "read_table_view",
+    readTableViewSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("read_table_view")
+        return repository.readTableView(toolContext(args), args)
+      })
   )
 
   registerPublicTool("get_table_row", getTableRowSchema, async (args: any) =>
@@ -450,6 +453,36 @@ function registerTools(
   )
 
   registerPublicTool(
+    "list_webhook_payload_samples",
+    listWebhookPayloadSamplesSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("list_webhook_payload_samples")
+        return repository.listWebhookPayloadSamples(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "preview_import_mapping",
+    previewImportMappingSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("preview_import_mapping")
+        return repository.previewImportMapping(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "replay_webhook_payload",
+    replayWebhookPayloadSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("replay_webhook_payload")
+        return repository.replayWebhookPayload(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
     "list_product_tools",
     listProductToolsSchema,
     async (args: any) =>
@@ -465,7 +498,10 @@ function registerTools(
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("list_surf_point_tools")
-        return repository.listSurfPointTools(toolContext(args), args.surfPointId)
+        return repository.listSurfPointTools(
+          toolContext(args),
+          args.surfPointId
+        )
       })
   )
 

@@ -12,6 +12,14 @@ import type {
   SurfPointRow,
 } from "./types.js"
 import {
+  buildImportMappingPreview,
+  importMappingSummary,
+  readImportMapping,
+  readImportMappingValue,
+  type ImportMappingPreviewRow,
+  type ImportMappingV1,
+} from "./import-mapping.js"
+import {
   grantedCapabilitiesForScopes,
   isSupportedMcpScope,
   parseStoredScopes,
@@ -243,6 +251,24 @@ type SetSurfPointSourceActiveInput = {
   isActive: boolean
 }
 
+type ListWebhookPayloadSamplesInput = {
+  sourceId: string
+  limit?: number
+}
+
+type PreviewImportMappingInput = {
+  sourceId: string
+  importMapping?: ImportMappingV1
+  payloadId?: string
+  payload?: unknown
+}
+
+type ReplayWebhookPayloadInput = {
+  sourceId: string
+  payloadId: string
+  importMapping?: ImportMappingV1
+}
+
 type SourceTypeInput =
   | "platform"
   | "custom-pull"
@@ -379,6 +405,15 @@ type SourceRow = {
   is_active?: boolean | null
   created_at?: string | null
   updated_at?: string | null
+}
+
+type RawSignalRow = {
+  id: string
+  source_id: string
+  data: unknown
+  status?: string | null
+  received_at?: string | null
+  dedup_key?: string | null
 }
 
 type ProductToolRow = {
@@ -575,7 +610,9 @@ function idempotentSurfJobId(
 ): string {
   const bytes = Buffer.from(
     createHash("sha256")
-      .update(`${context.productId}:${surfPointId}:${sourceId}:${idempotencyKey}`)
+      .update(
+        `${context.productId}:${surfPointId}:${sourceId}:${idempotencyKey}`
+      )
       .digest("hex")
       .slice(0, 32),
     "hex"
@@ -621,6 +658,44 @@ function withoutLegacyToolRouting(config: JsonRecord): JsonRecord {
 
 function readTrimmedString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function normalizeWebhookDataSchema(
+  dataSchema: JsonRecord | null | undefined,
+  config: JsonRecord = {}
+): JsonRecord {
+  const base = asRecord(dataSchema)
+  const fields = Array.isArray(base.fields) ? base.fields : []
+  const next: JsonRecord = {
+    ...base,
+    fields,
+  }
+  const rawImportMapping = config.importMapping ?? config.import_mapping
+
+  if (rawImportMapping !== undefined) {
+    if (rawImportMapping === null) {
+      delete next.import_mapping
+      return next
+    }
+    const importMapping = readImportMappingValue(rawImportMapping)
+    if (!importMapping) {
+      throw new UserFacingError(
+        "config.importMapping must match signalsurf.import_mapping.v1.",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+    next.import_mapping = importMapping
+    return next
+  }
+
+  if (next.import_mapping !== undefined && !readImportMapping(next)) {
+    throw new UserFacingError(
+      "dataSchema.import_mapping must match signalsurf.import_mapping.v1.",
+      { code: "BAD_REQUEST", status: 400 }
+    )
+  }
+
+  return next
 }
 
 function buildWebhookSignalUrl(sourceId: string): string | null {
@@ -742,7 +817,9 @@ function sourceName(
   const explicitName = readTrimmedString(name)
   if (explicitName) return explicitName
   if (sourceType === "platform") {
-    return readTrimmedString(config.endpointId) ?? SOURCE_TYPE_LABELS[sourceType]
+    return (
+      readTrimmedString(config.endpointId) ?? SOURCE_TYPE_LABELS[sourceType]
+    )
   }
   if (sourceType === "custom-pull" || sourceType === "rss") {
     return readTrimmedString(config.url) ?? SOURCE_TYPE_LABELS[sourceType]
@@ -795,6 +872,7 @@ function buildSourceFields(
   const config = asRecord(input.config)
   const pullConfig: JsonRecord = {}
   const metadata: JsonRecord = {}
+  let dataSchema = input.dataSchema ?? { fields: [] }
   let dbType = "pull"
 
   switch (input.sourceType) {
@@ -804,8 +882,7 @@ function buildSourceFields(
         "endpointId",
         input.sourceType
       )
-      pullConfig.schedule =
-        readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *"
       for (const key of [
         "marketplace_location",
         "marketplace_category",
@@ -827,8 +904,7 @@ function buildSourceFields(
         )
       }
       pullConfig.method = method
-      pullConfig.schedule =
-        readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *"
       if (config.headers) pullConfig.headers = config.headers
       if (config.body) pullConfig.body = config.body
       if (config.auth) pullConfig.auth = config.auth
@@ -839,17 +915,16 @@ function buildSourceFields(
     case "rss":
       pullConfig.url = requireHttpUrl(config, "url", input.sourceType)
       pullConfig.format = "rss"
-      pullConfig.schedule =
-        readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *"
       break
     case "webhook":
       dbType = "webhook"
       if (config.iconUrl) pullConfig.icon_url = config.iconUrl
       if (config.icon_url) pullConfig.icon_url = config.icon_url
+      dataSchema = normalizeWebhookDataSchema(input.dataSchema, config)
       break
     case "web-monitor":
-      pullConfig.schedule =
-        readTrimmedString(config.schedule) ?? "0 0 * * *"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 0 * * *"
       pullConfig.firecrawl_config = {
         url: requireHttpUrl(config, "url", input.sourceType),
         prompt: requireConfigString(config, "prompt", input.sourceType),
@@ -870,8 +945,7 @@ function buildSourceFields(
     case "coingecko":
       pullConfig.coin_id = readTrimmedString(config.coinId) ?? "bitcoin"
       pullConfig.currency = readTrimmedString(config.currency) ?? "usd"
-      pullConfig.schedule =
-        readTrimmedString(config.schedule) ?? "0 */1 * * *"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */1 * * *"
       if (typeof config.thresholdPct === "number") {
         pullConfig.threshold_pct = config.thresholdPct
       }
@@ -881,8 +955,7 @@ function buildSourceFields(
       pullConfig.endpoint_id = readTrimmedString(config.keyword)
         ? "hackernews-keyword-search"
         : "hackernews-stories"
-      pullConfig.schedule =
-        readTrimmedString(config.schedule) ?? "0 */2 * * *"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */2 * * *"
       if (config.keyword) pullConfig.keyword = config.keyword
       metadata.provider = "hackernews"
       break
@@ -890,8 +963,7 @@ function buildSourceFields(
       pullConfig.endpoint_id = readTrimmedString(config.topic)
         ? "producthunt-search"
         : "producthunt-leaderboard"
-      pullConfig.schedule =
-        readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *"
       if (config.topic) pullConfig.topic = config.topic
       metadata.provider = "producthunt"
       break
@@ -923,8 +995,7 @@ function buildSourceFields(
     case "on-schedule":
       dbType = "internal"
       metadata.event_type = "scheduled"
-      pullConfig.schedule =
-        readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *"
       break
   }
 
@@ -933,7 +1004,7 @@ function buildSourceFields(
     dbType,
     pullConfig: Object.keys(pullConfig).length > 0 ? pullConfig : null,
     metadata: Object.keys(metadata).length > 0 ? metadata : null,
-    dataSchema: input.dataSchema ?? { fields: [] },
+    dataSchema,
     isActive: input.isActive ?? true,
   }
 }
@@ -1126,9 +1197,8 @@ export class SignalSurfRepository {
         .map((product) => product.organization_id)
         .filter((id): id is string => Boolean(id))
     )
-    const organizationsById = await this.resolveOrganizationsById(
-      organizationIds
-    )
+    const organizationsById =
+      await this.resolveOrganizationsById(organizationIds)
 
     return uniqueProductIds.map((productId) => {
       const product = productsById.get(productId)
@@ -1789,10 +1859,7 @@ export class SignalSurfRepository {
     return { job: formatSurfJob(job) }
   }
 
-  async waitForSurfJob(
-    context: SignalSurfContext,
-    input: WaitForSurfJobInput
-  ) {
+  async waitForSurfJob(context: SignalSurfContext, input: WaitForSurfJobInput) {
     const timeoutMs = Math.min(Math.max(input.timeoutMs ?? 30000, 0), 120000)
     const pollIntervalMs = Math.min(
       Math.max(input.pollIntervalMs ?? 1000, 100),
@@ -2029,10 +2096,13 @@ export class SignalSurfRepository {
       input.databaseId
     )
     if (input.schema !== undefined && input.schemaPatch !== undefined) {
-      throw new UserFacingError("Pass either schema or schemaPatch, not both.", {
-        code: "BAD_REQUEST",
-        status: 400,
-      })
+      throw new UserFacingError(
+        "Pass either schema or schemaPatch, not both.",
+        {
+          code: "BAD_REQUEST",
+          status: 400,
+        }
+      )
     }
     if (input.folderId) {
       await this.assertDatabaseFolderBelongsToProduct(context, input.folderId)
@@ -2049,7 +2119,8 @@ export class SignalSurfRepository {
     if (input.color !== undefined) updateData.color = input.color
     if (input.itemType !== undefined)
       updateData.item_type = input.itemType?.trim() || null
-    if (input.viewConfigs !== undefined) updateData.view_configs = input.viewConfigs
+    if (input.viewConfigs !== undefined)
+      updateData.view_configs = input.viewConfigs
     if (input.folderId !== undefined) updateData.folder_id = input.folderId
     if (input.displayOrder !== undefined)
       updateData.display_order = input.displayOrder
@@ -2143,10 +2214,7 @@ export class SignalSurfRepository {
     }
   }
 
-  async readTableView(
-    context: SignalSurfContext,
-    input: ReadTableViewInput
-  ) {
+  async readTableView(context: SignalSurfContext, input: ReadTableViewInput) {
     const database = await this.getDatabaseAndValidateProduct(
       context,
       input.databaseId
@@ -2416,20 +2484,26 @@ export class SignalSurfRepository {
   ) {
     return {
       removesRowData: false,
-      ...(await this.updateDatabaseSchema(context, input.databaseId, (schema) => {
-        const fields = schemaFields(schema)
-        const nextFields = fields.filter((field) => field.key !== input.fieldKey)
-        if (nextFields.length === fields.length) {
-          throw new UserFacingError("Database field not found.", {
-            code: "NOT_FOUND",
-            status: 404,
-          })
+      ...(await this.updateDatabaseSchema(
+        context,
+        input.databaseId,
+        (schema) => {
+          const fields = schemaFields(schema)
+          const nextFields = fields.filter(
+            (field) => field.key !== input.fieldKey
+          )
+          if (nextFields.length === fields.length) {
+            throw new UserFacingError("Database field not found.", {
+              code: "NOT_FOUND",
+              status: 404,
+            })
+          }
+          return {
+            ...schema,
+            fields: nextFields,
+          }
         }
-        return {
-          ...schema,
-          fields: nextFields,
-        }
-      })),
+      )),
     }
   }
 
@@ -2474,6 +2548,154 @@ export class SignalSurfRepository {
     const source = data as SourceRow
     await this.assertSurfPointBelongsToProduct(context, source.playbook_id)
     return source
+  }
+
+  private async getWebhookSourceForImport(
+    context: SignalSurfContext,
+    sourceId: string
+  ): Promise<SourceRow> {
+    const source = await this.getSourceForUpdate(context, sourceId)
+    if (inferSourceType(source) !== "webhook") {
+      throw new UserFacingError("Source is not a webhook source.", {
+        code: "BAD_REQUEST",
+        status: 400,
+      })
+    }
+    return source
+  }
+
+  private resolveWebhookImportMapping(
+    source: SourceRow,
+    inputMapping?: ImportMappingV1
+  ): ImportMappingV1 {
+    const mapping = inputMapping
+      ? readImportMappingValue(inputMapping)
+      : readImportMapping(source.data_schema)
+    if (!mapping) {
+      throw new UserFacingError("No valid import mapping configured.", {
+        code: "BAD_REQUEST",
+        status: 400,
+      })
+    }
+    return mapping
+  }
+
+  private async getWebhookPayloadSample(
+    sourceId: string,
+    payloadId?: string
+  ): Promise<RawSignalRow> {
+    let query = this.db
+      .from("raw_signals")
+      .select("id, source_id, data, status, received_at, dedup_key")
+      .eq("source_id", sourceId)
+
+    if (payloadId) query = query.eq("id", payloadId)
+
+    const { data, error } = await query
+      .order("received_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    requireNoDbError(error, "Failed to read webhook payload sample")
+    if (!data) {
+      throw new UserFacingError("Webhook payload sample not found.", {
+        code: "NOT_FOUND",
+        status: 404,
+      })
+    }
+    return data as RawSignalRow
+  }
+
+  private async upsertImportMappingPreviewRows(
+    context: SignalSurfContext,
+    source: SourceRow,
+    rows: ImportMappingPreviewRow[],
+    rawSignalId: string,
+    receivedAt: string
+  ): Promise<{
+    importedRows: number
+    rows: Array<ReturnType<typeof formatEntry>>
+    warnings: string[]
+  }> {
+    const surfPoint = await this.getSurfPointForUpdate(
+      context,
+      source.playbook_id
+    )
+    const allowedDatabaseIds = new Set(surfPoint.database_ids ?? [])
+    const imported: Array<ReturnType<typeof formatEntry>> = []
+    const warnings: string[] = []
+
+    for (const row of rows) {
+      if (!allowedDatabaseIds.has(row.targetDatabaseId)) {
+        warnings.push(
+          `Mapping "${row.mappingName}" targets database ${row.targetDatabaseId}, which is not attached to this surf point.`
+        )
+        continue
+      }
+
+      await this.validateEntryDataReferences(
+        context,
+        row.targetDatabaseId,
+        row.data
+      )
+
+      const { data: existing, error: existingError } = await this.db
+        .from("entries")
+        .select(ENTRY_COLUMNS)
+        .eq("playbook_id", source.playbook_id)
+        .eq("database_id", row.targetDatabaseId)
+        .eq("entry_key_hash", row.entryKeyHash)
+        .maybeSingle()
+      requireNoDbError(existingError, "Failed to read mapped import row")
+
+      if (existing) {
+        const nextData = {
+          ...asRecord((existing as EntryRow).data),
+          ...row.data,
+        }
+        const { data: updated, error: updateError } = await this.db
+          .from("entries")
+          .update({
+            data: nextData,
+            raw_signal_id: rawSignalId,
+            origin: "pipeline",
+            origin_ref: `raw_signal:${rawSignalId}`,
+            updated_at: receivedAt,
+          })
+          .eq("id", (existing as EntryRow).id)
+          .select(ENTRY_COLUMNS)
+          .single()
+        requireNoDbError(updateError, "Failed to update mapped import row")
+        imported.push(formatEntry(updated as EntryRow))
+        continue
+      }
+
+      const { data: inserted, error: insertError } = await this.db
+        .from("entries")
+        .insert({
+          id: randomUUID(),
+          playbook_id: source.playbook_id,
+          database_id: row.targetDatabaseId,
+          data: row.data,
+          note: null,
+          origin: "pipeline",
+          origin_ref: `raw_signal:${rawSignalId}`,
+          entry_key_hash: row.entryKeyHash,
+          raw_signal_id: rawSignalId,
+          triggered: false,
+          created_at: receivedAt,
+          updated_at: receivedAt,
+        })
+        .select(ENTRY_COLUMNS)
+        .single()
+      requireNoDbError(insertError, "Failed to insert mapped import row")
+      imported.push(formatEntry(inserted as EntryRow))
+    }
+
+    return {
+      importedRows: imported.length,
+      rows: imported,
+      warnings,
+    }
   }
 
   private async listSourceRowsForSurfPoint(
@@ -2910,7 +3132,12 @@ export class SignalSurfRepository {
       if (input.name !== undefined)
         updateData.name = input.name?.trim() ? input.name.trim() : null
       if (input.isActive !== undefined) updateData.is_active = input.isActive
-      if (input.dataSchema !== undefined) updateData.data_schema = input.dataSchema
+      if (input.dataSchema !== undefined) {
+        updateData.data_schema =
+          inferSourceType(source) === "webhook"
+            ? normalizeWebhookDataSchema(input.dataSchema)
+            : input.dataSchema
+      }
     }
 
     if (input.pullConfig !== undefined) {
@@ -3055,6 +3282,88 @@ export class SignalSurfRepository {
     return { source: formatSource(data as SourceRow) }
   }
 
+  async listWebhookPayloadSamples(
+    context: SignalSurfContext,
+    input: ListWebhookPayloadSamplesInput
+  ) {
+    await this.getWebhookSourceForImport(context, input.sourceId)
+    const { data, error } = await this.db
+      .from("raw_signals")
+      .select("id, source_id, data, status, received_at, dedup_key")
+      .eq("source_id", input.sourceId)
+      .order("received_at", { ascending: false })
+      .limit(input.limit ?? 5)
+
+    requireNoDbError(error, "Failed to list webhook payload samples")
+    const samples = (data ?? []) as RawSignalRow[]
+    return {
+      sourceId: input.sourceId,
+      samples: samples.map((sample) => ({
+        id: sample.id,
+        payloadId: sample.id,
+        status: sample.status ?? null,
+        receivedAt: sample.received_at ?? null,
+        dedupKey: sample.dedup_key ?? null,
+        payload: sample.data,
+      })),
+      totalCount: samples.length,
+    }
+  }
+
+  async previewImportMapping(
+    context: SignalSurfContext,
+    input: PreviewImportMappingInput
+  ) {
+    const source = await this.getWebhookSourceForImport(context, input.sourceId)
+    const mapping = this.resolveWebhookImportMapping(
+      source,
+      input.importMapping
+    )
+    const payload =
+      input.payload !== undefined
+        ? input.payload
+        : (await this.getWebhookPayloadSample(input.sourceId, input.payloadId))
+            .data
+    const preview = buildImportMappingPreview(mapping, payload)
+    return {
+      sourceId: input.sourceId,
+      summary: importMappingSummary(mapping),
+      rows: preview.rows.slice(0, 25),
+      rowCount: preview.rows.length,
+      warnings: preview.warnings,
+    }
+  }
+
+  async replayWebhookPayload(
+    context: SignalSurfContext,
+    input: ReplayWebhookPayloadInput
+  ) {
+    const source = await this.getWebhookSourceForImport(context, input.sourceId)
+    const mapping = this.resolveWebhookImportMapping(
+      source,
+      input.importMapping
+    )
+    const payload = await this.getWebhookPayloadSample(
+      input.sourceId,
+      input.payloadId
+    )
+    const preview = buildImportMappingPreview(mapping, payload.data)
+    const upsert = await this.upsertImportMappingPreviewRows(
+      context,
+      source,
+      preview.rows,
+      payload.id,
+      payload.received_at ?? new Date().toISOString()
+    )
+    return {
+      sourceId: input.sourceId,
+      payloadId: input.payloadId,
+      importedRows: upsert.importedRows,
+      rows: upsert.rows,
+      warnings: [...preview.warnings, ...upsert.warnings],
+    }
+  }
+
   async listSurfPointTools(context: SignalSurfContext, surfPointId: string) {
     const surfPoint = await this.getSurfPointForUpdate(context, surfPointId)
     const toolIds = uniqueStrings(asRecord(surfPoint.tool_config).auto_tool_ids)
@@ -3070,11 +3379,8 @@ export class SignalSurfRepository {
     input: SurfPointToolInput
   ) {
     await this.assertProductToolBelongsToProduct(context, input.toolId)
-    return this.updateSurfPointToolIds(
-      context,
-      input.surfPointId,
-      (toolIds) =>
-        toolIds.includes(input.toolId) ? toolIds : [...toolIds, input.toolId]
+    return this.updateSurfPointToolIds(context, input.surfPointId, (toolIds) =>
+      toolIds.includes(input.toolId) ? toolIds : [...toolIds, input.toolId]
     )
   }
 
@@ -3869,8 +4175,10 @@ function normalizeSavedViewSorts(
     {
       field: sortKey,
       direction:
-        firstString(raw.sort_direction, configs.sort_direction)?.toLowerCase() ===
-        "asc"
+        firstString(
+          raw.sort_direction,
+          configs.sort_direction
+        )?.toLowerCase() === "asc"
           ? "asc"
           : "desc",
     },
@@ -4226,6 +4534,9 @@ function formatSource(row: SourceRow) {
   }
   if (sourceType === "webhook") {
     source.webhookUrl = buildWebhookSignalUrl(row.id)
+    source.importMapping = importMappingSummary(
+      readImportMapping(row.data_schema)
+    )
   }
   return source
 }
