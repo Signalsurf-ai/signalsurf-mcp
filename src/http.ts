@@ -13,6 +13,7 @@ import {
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_RESOURCE_SCOPES,
   PUBLIC_MCP_TOOLS,
+  requiredCapabilitiesForTool,
   requiredScopesForCapability,
   type PublicMcpToolName,
 } from "./capabilities.js"
@@ -136,12 +137,20 @@ function findInsufficientScopeRequest(
   for (const message of messages) {
     const toolName = getKnownToolName(message)
     if (!toolName) continue
-    const capability = PUBLIC_MCP_TOOLS[toolName].requiredCapability
-    if (canUseCapability(context, capability)) continue
+    const missingCapabilities = requiredCapabilitiesForTool(toolName).filter(
+      (capability) => !canUseCapability(context, capability)
+    )
+    if (missingCapabilities.length === 0) continue
     if (context.scopes === undefined) continue
     return {
       toolName,
-      requiredScopes: requiredScopesForCapability(capability),
+      requiredScopes: [
+        ...new Set(
+          missingCapabilities.flatMap((capability) =>
+            requiredScopesForCapability(capability)
+          )
+        ),
+      ],
     }
   }
   return null

@@ -101,6 +101,9 @@ export type PublicMcpToolName =
   | "update_surf_point_source"
   | "delete_surf_point_source"
   | "set_surf_point_source_active"
+  | "list_webhook_payload_samples"
+  | "preview_import_mapping"
+  | "replay_webhook_payload"
   | "list_product_tools"
   | "list_surf_point_tools"
   | "attach_surf_point_tool"
@@ -113,6 +116,7 @@ type PublicMcpToolDefinition = {
   title: string
   description: string
   requiredCapability: McpCapability
+  requiredCapabilities?: readonly McpCapability[]
   surferSurface: string
   publicStatus: "supported"
   annotations: {
@@ -440,6 +444,34 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
+  list_webhook_payload_samples: {
+    title: "List Webhook Payload Samples",
+    description:
+      "List recent captured raw webhook payload samples for a product-scoped webhook source. Payload samples may contain user-provided data, but source credentials and secrets are not exposed.",
+    requiredCapability: "sources.read",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  preview_import_mapping: {
+    title: "Preview Webhook Import Mapping",
+    description:
+      "Preview how an import mapping would transform a captured or inline webhook payload into table upserts without writing rows.",
+    requiredCapability: "sources.read",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  replay_webhook_payload: {
+    title: "Replay Webhook Payload",
+    description:
+      "Replay one captured webhook payload through a saved or provided import mapping and upsert mapped rows into tables attached to the source surf point.",
+    requiredCapability: "tables.write",
+    requiredCapabilities: ["sources.read", "tables.write"],
+    surferSurface: "manage_data",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
   list_product_tools: {
     title: "List Product Tools",
     description:
@@ -508,6 +540,13 @@ export const PUBLIC_MCP_TOOLS = {
 export const PUBLIC_MCP_TOOL_NAMES = Object.keys(
   PUBLIC_MCP_TOOLS
 ) as PublicMcpToolName[]
+
+export function requiredCapabilitiesForTool(
+  toolName: PublicMcpToolName
+): readonly McpCapability[] {
+  const definition: PublicMcpToolDefinition = PUBLIC_MCP_TOOLS[toolName]
+  return definition.requiredCapabilities ?? [definition.requiredCapability]
+}
 
 const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   [MCP_LEGACY_READ_SCOPE]: [
