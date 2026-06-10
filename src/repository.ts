@@ -1563,6 +1563,14 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     input: DeeplineEnrichInput
   ) {
+    // leadmagic needs a lookup target. Reject locally rather than spend a paid
+    // call on first/last name alone (which yields an ambiguous/empty result).
+    if (!readTrimmedString(input.domain) && !readTrimmedString(input.companyName)) {
+      throw new UserFacingError(
+        "Provide a domain or companyName to find an email.",
+        { code: "INVALID_INPUT", status: 400 }
+      )
+    }
     const apiKey = await this.resolveDeeplineApiKey(context)
     const payload = cleanDeeplinePayload({
       first_name: input.firstName,

@@ -111,4 +111,15 @@ describe("Deepline capabilities", () => {
     ).rejects.toThrow(/disabled/i)
     expect(noop).not.toHaveBeenCalled()
   })
+
+  it("enrich requires a domain or companyName (no wasted paid call)", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    const noop = vi.fn()
+    vi.stubGlobal("fetch", noop)
+    const repo = new SignalSurfRepository(dbWithKey() as never)
+    await expect(
+      repo.deeplineEnrichContact(context, { firstName: "A", lastName: "B" })
+    ).rejects.toThrow(/domain or companyName/i)
+    expect(noop).not.toHaveBeenCalled()
+  })
 })

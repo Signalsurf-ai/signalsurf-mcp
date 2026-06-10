@@ -75,7 +75,7 @@ export type McpCapability =
   | "sources.write"
   | "account_lists.read"
   | "account_lists.write"
-  | "deepline.search"
+  | "deepline.read"
   | "deepline.enrich"
 
 export type PublicMcpToolName =
@@ -552,7 +552,7 @@ export const PUBLIC_MCP_TOOLS = {
     title: "Search People via Deepline",
     description:
       "Search people through Deepline's Apollo people search for an authorized product. Pass `filters` using Apollo's accepted fields (person_titles, include_similar_titles, person_seniorities, person_locations, organization_locations, organization_num_employees_ranges as ['11,50'], q_keywords, contact_email_status) plus optional limit. Returns preview rows + match counts; emails require the separate enrich step. Requires a Deepline integration key on the product.",
-    requiredCapability: "deepline.search",
+    requiredCapability: "deepline.read",
     surferSurface: "account_list_icp_builder",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
@@ -561,7 +561,7 @@ export const PUBLIC_MCP_TOOLS = {
     title: "Search Companies via Deepline",
     description:
       "Search companies through Deepline's Apollo company search for an authorized product. Pass `filters` using Apollo's accepted fields (q_organization_keyword_tags, q_organization_name, q_organization_domains_list, organization_locations, organization_not_locations, organization_num_employees_ranges as ['11,50']) plus optional limit. Requires a Deepline integration key on the product.",
-    requiredCapability: "deepline.search",
+    requiredCapability: "deepline.read",
     surferSurface: "account_list_icp_builder",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
@@ -596,7 +596,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "schemas.read",
     "sources.read",
     "account_lists.read",
-    "deepline.search",
+    "deepline.read",
   ],
   [MCP_LEGACY_WRITE_SCOPE]: [
     "context.read",
@@ -614,7 +614,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "sources.write",
     "account_lists.read",
     "account_lists.write",
-    "deepline.search",
+    "deepline.read",
     "deepline.enrich",
   ],
   [MCP_OFFLINE_ACCESS_SCOPE]: [],
@@ -648,8 +648,8 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "account_lists.read",
     "account_lists.write",
   ],
-  "mcp:deepline.read": ["context.read", "deepline.search"],
-  "mcp:deepline.write": ["context.read", "deepline.search", "deepline.enrich"],
+  "mcp:deepline.read": ["context.read", "deepline.read"],
+  "mcp:deepline.write": ["context.read", "deepline.read", "deepline.enrich"],
 }
 
 const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
@@ -668,7 +668,7 @@ const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "sources.write": ["mcp:sources.write"],
   "account_lists.read": ["mcp:account_lists.read"],
   "account_lists.write": ["mcp:account_lists.write"],
-  "deepline.search": ["mcp:deepline.read"],
+  "deepline.read": ["mcp:deepline.read"],
   "deepline.enrich": ["mcp:deepline.write"],
 }
 
