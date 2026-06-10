@@ -54,6 +54,9 @@ import {
   replayWebhookPayloadSchema,
   runSurfPointSchema,
   saveAccountListProfileSchema,
+  deeplineSearchPeopleSchema,
+  deeplineSearchCompaniesSchema,
+  deeplineEnrichContactSchema,
   setSurfPointSourceActiveSchema,
   updateDatabaseFieldSchema,
   updateSurfPointSourceSchema,
@@ -557,6 +560,36 @@ function registerTools(
           toolContext(args),
           args.profileId
         )
+      })
+  )
+
+  registerPublicTool(
+    "deepline_search_people",
+    deeplineSearchPeopleSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("deepline_search_people")
+        return repository.deeplineSearchPeople(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "deepline_search_companies",
+    deeplineSearchCompaniesSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("deepline_search_companies")
+        return repository.deeplineSearchCompanies(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "deepline_enrich_contact",
+    deeplineEnrichContactSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("deepline_enrich_contact")
+        return repository.deeplineEnrichContact(toolContext(args), args)
       })
   )
 }
