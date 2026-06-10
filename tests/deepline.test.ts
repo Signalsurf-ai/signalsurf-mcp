@@ -1,0 +1,114 @@
+import { afterEach, describe, expect, it, vi } from "vitest"
+
+import { SignalSurfRepository } from "../src/repository.js"
+import type { SignalSurfContext } from "../src/types.js"
+import { FakeSupabase } from "./fake-supabase.js"
+
+const context: SignalSurfContext = {
+  productId: "00000000-0000-4000-8000-000000000001",
+  userId: "00000000-0000-4000-8000-000000000010",
+  role: "editor",
+  tokenName: "test-agent",
+}
+
+function dbWithKey(apiKey = "dl_test") {
+  return new FakeSupabase({
+    integration_accounts: [
+      {
+        product_id: context.productId,
+        integration_type: "deepline",
+        credentials: { api_key: apiKey },
+      },
+    ],
+  })
+}
+
+function stubFetch(body: unknown, init: { ok?: boolean; status?: number } = {}) {
+  const mock = vi.fn(async () => ({
+    ok: init.ok ?? true,
+    status: init.status ?? 200,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  }))
+  vi.stubGlobal("fetch", mock)
+  return mock
+}
+
+describe("Deepline capabilities", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  it("enrich_contact sends leadmagic's accepted fields and returns the email", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    const fetchMock = stubFetch({
+      status: "completed",
+      toolResponse: { raw: { email: "jane@acme.com", status: "valid" } },
+    })
+    const repo = new SignalSurfRepository(dbWithKey() as never)
+    const res = await repo.deeplineEnrichContact(context, {
+      firstName: "Jane",
+      lastName: "Doe",
+      domain: "acme.com",
+    })
+    expect(res.email).toBe("jane@acme.com")
+    const call = (fetchMock as unknown as { mock: { calls: unknown[][] } }).mock
+      .calls[0]
+    const [url, reqInit] = call as [string, { body: string; headers: Record<string, string> }]
+    expect(String(url)).toContain("/api/v2/integrations/")
+    expect(JSON.parse(reqInit.body).payload).toEqual({
+      first_name: "Jane",
+      last_name: "Doe",
+      domain: "acme.com",
+    })
+    expect(reqInit.headers.Authorization).toBe("Bearer dl_test")
+  })
+
+  it("search_people passes the filters + per_page through to Apollo", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    const fetchMock = stubFetch({
+      status: "completed",
+      toolResponse: { raw: { total_entries: 5, people: [] } },
+    })
+    const repo = new SignalSurfRepository(dbWithKey() as never)
+    const res = await repo.deeplineSearchPeople(context, {
+      filters: { person_titles: ["VP of Sales"] },
+      limit: 3,
+    })
+    expect((res.result as { total_entries: number }).total_entries).toBe(5)
+    const call = (fetchMock as unknown as { mock: { calls: unknown[][] } }).mock
+      .calls[0]
+    const reqInit = (call as [string, { body: string }])[1]
+    expect(JSON.parse(reqInit.body).payload).toEqual({
+      person_titles: ["VP of Sales"],
+      per_page: 3,
+    })
+  })
+
+  it("fails clearly when Deepline is not connected for the product", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    vi.stubEnv("DEEPLINE_API_KEY", "")
+    const repo = new SignalSurfRepository(
+      new FakeSupabase({ integration_accounts: [] }) as never
+    )
+    await expect(
+      repo.deeplineEnrichContact(context, {
+        firstName: "A",
+        lastName: "B",
+        domain: "b.com",
+      })
+    ).rejects.toThrow(/not connected/i)
+  })
+
+  it("is hard-disabled by the DEEPLINE_DISABLED kill-switch (no network)", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "1")
+    const noop = vi.fn()
+    vi.stubGlobal("fetch", noop)
+    const repo = new SignalSurfRepository(dbWithKey() as never)
+    await expect(
+      repo.deeplineSearchCompanies(context, { filters: {} })
+    ).rejects.toThrow(/disabled/i)
+    expect(noop).not.toHaveBeenCalled()
+  })
+})

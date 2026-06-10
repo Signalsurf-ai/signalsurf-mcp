@@ -26,7 +26,28 @@ import {
   scopesImplyWriteAccess,
 } from "./capabilities.js"
 import { sha256Hex } from "./auth.js"
+import {
+  DEEPLINE_TOOL_IDS,
+  cleanDeeplinePayload,
+  deeplineStatusOk,
+  executeDeeplineTool,
+  isDeeplineDisabled,
+  unwrapDeepline,
+} from "./deepline.js"
 import { UserFacingError } from "./errors.js"
+
+type DeeplineSearchInput = {
+  productId?: string
+  filters?: Record<string, unknown>
+  limit?: number
+}
+type DeeplineEnrichInput = {
+  productId?: string
+  firstName: string
+  lastName: string
+  domain?: string
+  companyName?: string
+}
 
 type ListSurfPointsInput = {
   includeInactive?: boolean
@@ -1461,6 +1482,112 @@ export class SignalSurfRepository {
       profileId: (data as AccountListProfileRow).id,
       created: true,
     }
+  }
+
+  // ── Deepline curated capabilities ──────────────────────────────────────────
+  // Resolve the product's Deepline key from integration_accounts (where
+  // SignalsurfWeb stores it), falling back to a server-wide DEEPLINE_API_KEY.
+  // Hard-disabled by the DEEPLINE_DISABLED kill-switch.
+  private async resolveDeeplineApiKey(
+    context: SignalSurfContext
+  ): Promise<string> {
+    if (isDeeplineDisabled()) {
+      throw new UserFacingError(
+        "Deepline is disabled (DEEPLINE_DISABLED is set)",
+        { code: "DEEPLINE_DISABLED", status: 503 }
+      )
+    }
+    const { data, error } = await this.db
+      .from("integration_accounts")
+      .select("credentials")
+      .eq("product_id", context.productId)
+      .eq("integration_type", "deepline")
+      .maybeSingle()
+    requireNoDbError(error, "Failed to read Deepline integration")
+    const fromRow = readTrimmedString(
+      (data?.credentials as { api_key?: unknown } | null)?.api_key
+    )
+    const apiKey = fromRow ?? readTrimmedString(process.env.DEEPLINE_API_KEY)
+    if (!apiKey) {
+      throw new UserFacingError(
+        "Deepline is not connected for this product. Connect it in SignalSurf Settings -> Integrations.",
+        { code: "NOT_FOUND", status: 404 }
+      )
+    }
+    return apiKey
+  }
+
+  private async runDeeplineSearch(
+    context: SignalSurfContext,
+    toolId: string,
+    input: DeeplineSearchInput
+  ) {
+    const apiKey = await this.resolveDeeplineApiKey(context)
+    const payload = cleanDeeplinePayload({
+      ...(input.filters ?? {}),
+      per_page: input.limit ?? 10,
+    })
+    const envelope = await executeDeeplineTool(toolId, payload, apiKey)
+    if (envelope.status !== undefined && !deeplineStatusOk(envelope.status)) {
+      throw new UserFacingError(`Deepline returned status ${envelope.status}`, {
+        code: "UPSTREAM_ERROR",
+        status: 502,
+      })
+    }
+    return { toolId, result: unwrapDeepline(envelope) }
+  }
+
+  async deeplineSearchPeople(
+    context: SignalSurfContext,
+    input: DeeplineSearchInput
+  ) {
+    return this.runDeeplineSearch(
+      context,
+      DEEPLINE_TOOL_IDS.searchPeople(),
+      input
+    )
+  }
+
+  async deeplineSearchCompanies(
+    context: SignalSurfContext,
+    input: DeeplineSearchInput
+  ) {
+    return this.runDeeplineSearch(
+      context,
+      DEEPLINE_TOOL_IDS.searchCompanies(),
+      input
+    )
+  }
+
+  async deeplineEnrichContact(
+    context: SignalSurfContext,
+    input: DeeplineEnrichInput
+  ) {
+    const apiKey = await this.resolveDeeplineApiKey(context)
+    const payload = cleanDeeplinePayload({
+      first_name: input.firstName,
+      last_name: input.lastName,
+      domain: input.domain,
+      company_name: input.companyName,
+    })
+    const toolId = DEEPLINE_TOOL_IDS.emailFinder()
+    const envelope = await executeDeeplineTool(toolId, payload, apiKey)
+    if (envelope.status !== undefined && !deeplineStatusOk(envelope.status)) {
+      throw new UserFacingError(`Deepline returned status ${envelope.status}`, {
+        code: "UPSTREAM_ERROR",
+        status: 502,
+      })
+    }
+    const raw = unwrapDeepline(envelope)
+    const record =
+      raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
+    const email =
+      typeof record.email === "string"
+        ? record.email
+        : typeof record.work_email === "string"
+          ? (record.work_email as string)
+          : null
+    return { toolId, email, status: record.status ?? null, result: raw }
   }
 
   async archiveAccountListProfile(

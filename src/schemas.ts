@@ -6,6 +6,31 @@ const productTargetSchema = {
   productId: uuidSchema.optional(),
 }
 
+// Deepline curated capabilities. Search tools take an Apollo-shaped `filters`
+// object passed through to Deepline (apollo_search_people / apollo_company_search
+// accepted fields, e.g. person_titles, person_seniorities, person_locations,
+// organization_num_employees_ranges, q_keywords / q_organization_keyword_tags,
+// organization_locations). Enrich takes name + domain/company (leadmagic).
+export const deeplineSearchPeopleSchema = {
+  ...productTargetSchema,
+  filters: jsonObjectSchema.optional(),
+  limit: z.number().int().min(1).max(25).default(10).optional(),
+}
+
+export const deeplineSearchCompaniesSchema = {
+  ...productTargetSchema,
+  filters: jsonObjectSchema.optional(),
+  limit: z.number().int().min(1).max(25).default(10).optional(),
+}
+
+export const deeplineEnrichContactSchema = {
+  ...productTargetSchema,
+  firstName: z.string().trim().min(1).max(120),
+  lastName: z.string().trim().min(1).max(120),
+  domain: z.string().trim().max(255).optional(),
+  companyName: z.string().trim().max(255).optional(),
+}
+
 export const sourceTypeSchema = z.enum([
   "platform",
   "custom-pull",
