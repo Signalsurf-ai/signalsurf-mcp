@@ -98,11 +98,43 @@ describe("auth", () => {
     expect(() =>
       assertCanUseCapability(context, "account_lists.write")
     ).toThrow("Token scope does not allow")
+    expect(() =>
+      assertCanUseCapability(context, "deepline.execute")
+    ).toThrow("Token scope does not allow")
     expect(listContextCapabilities(context)).toEqual([
       "context.read",
       "tables.read",
       "tables.write",
     ])
+  })
+
+  it("grants Deepline read and execute through Deepline scopes", () => {
+    const readContext = {
+      productId: "00000000-0000-4000-8000-000000000001",
+      role: "editor" as const,
+      scopes: ["mcp:deepline.read"],
+    }
+    expect(listContextCapabilities(readContext)).toEqual([
+      "context.read",
+      "deepline.read",
+    ])
+    expect(() =>
+      assertCanUseCapability(readContext, "deepline.execute")
+    ).toThrow("Token scope does not allow")
+
+    const writeContext = {
+      ...readContext,
+      scopes: ["mcp:deepline.write"],
+    }
+    expect(listContextCapabilities(writeContext)).toEqual([
+      "context.read",
+      "deepline.read",
+      "deepline.enrich",
+      "deepline.execute",
+    ])
+    expect(() =>
+      assertCanUseCapability(writeContext, "deepline.execute")
+    ).not.toThrow()
   })
 
   it("treats explicit empty scopes as no capability grant", () => {
@@ -140,6 +172,9 @@ describe("auth", () => {
       "sources.write",
       "account_lists.read",
       "account_lists.write",
+      "deepline.read",
+      "deepline.enrich",
+      "deepline.execute",
     ])
   })
 

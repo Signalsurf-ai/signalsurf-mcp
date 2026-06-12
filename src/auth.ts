@@ -223,6 +223,7 @@ export function listContextCapabilities(
         "schemas.read",
         "sources.read",
         "account_lists.read",
+        "deepline.read",
       ]
     : [
         "context.read",
@@ -240,6 +241,9 @@ export function listContextCapabilities(
         "sources.write",
         "account_lists.read",
         "account_lists.write",
+        "deepline.read",
+        "deepline.enrich",
+        "deepline.execute",
       ]
 }
 

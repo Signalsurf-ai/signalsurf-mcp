@@ -1,7 +1,8 @@
 # SignalSurf MCP Capabilities
 
 This package exposes the public MCP contract for external agents. It is not a
-mirror of every internal Surfer tool in SignalSurf Web.
+raw mirror of every internal SignalSurf Web UI helper, but portable
+agent-facing capabilities should have a public MCP equivalent.
 
 `src/capabilities.ts` is the code source of truth for:
 
@@ -17,7 +18,7 @@ mirror of every internal Surfer tool in SignalSurf Web.
 
 | Scope                     | Capability grant                                                                  |
 | ------------------------- | --------------------------------------------------------------------------------- |
-| `mcp:read`                | `context.read`, `surf_points.read`, `tables.read`, `schemas.read`, `sources.read`, `account_lists.read` |
+| `mcp:read`                | `context.read`, `surf_points.read`, `tables.read`, `schemas.read`, `sources.read`, `account_lists.read`, `deepline.read` |
 | `mcp:write`               | All current read, write, execute, and delete capabilities                         |
 | `mcp:products.write`      | `context.read`, `products.write`                                                  |
 | `mcp:surf_points.read`    | `context.read`, `surf_points.read`                                                |
@@ -33,10 +34,15 @@ mirror of every internal Surfer tool in SignalSurf Web.
 | `mcp:sources.write`       | `context.read`, `sources.read`, `sources.write`                                   |
 | `mcp:account_lists.read`  | `context.read`, `account_lists.read`                                              |
 | `mcp:account_lists.write` | `context.read`, `account_lists.read`, `account_lists.write`                       |
+| `mcp:deepline.read`       | `context.read`, `deepline.read`                                                   |
+| `mcp:deepline.write`      | `context.read`, `deepline.read`, `deepline.enrich`, `deepline.execute`            |
 | `offline_access`          | No tool capability; allows OAuth refresh in SignalSurf Web                        |
 
 The protected resource metadata and `WWW-Authenticate` scope hints include only
-SignalSurf resource scopes, not `offline_access`.
+SignalSurf resource scopes registered by the hosted authorization server, not
+`offline_access`. `account_lists` and `deepline` scopes are accepted and
+enforced by this MCP server, but are not advertised by default until the hosted
+authorization server registers them.
 
 Manual fallback tokens are still role-based for compatibility. If a static env
 token includes a `scopes` array, both role and scopes are enforced. If it omits
@@ -85,6 +91,11 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `list_account_list_profiles`   | `account_lists.read`  | No          | Lists reusable Account List / ICP Builder profiles                                                      |
 | `save_account_list_profile`    | `account_lists.write` | No          | Creates or updates a structured Account List / ICP Builder profile                                      |
 | `archive_account_list_profile` | `account_lists.write` | No          | Soft-archives a reusable Account List / ICP Builder profile                                             |
+| `deepline_search_people`       | `deepline.read`       | No          | Runs the curated Apollo-backed people search through Deepline                                           |
+| `deepline_search_companies`    | `deepline.read`       | No          | Runs the curated Apollo-backed company search through Deepline                                          |
+| `deepline_enrich_contact`      | `deepline.enrich`     | No          | Finds a work email through Deepline's configured email finder                                           |
+| `deepline_search_catalog`      | `deepline.read`       | No          | Searches Deepline's live v2 tool catalog for provider tool ids                                          |
+| `deepline_execute_tool`        | `deepline.execute`    | No          | Executes a selected Deepline v2 tool id with a JSON payload                                             |
 
 OAuth tokens can authorize multiple products. Agents should call `get_context`
 first; when multiple `productIds` are returned, choose from `products[]` using

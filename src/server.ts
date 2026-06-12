@@ -57,6 +57,8 @@ import {
   deeplineSearchPeopleSchema,
   deeplineSearchCompaniesSchema,
   deeplineEnrichContactSchema,
+  deeplineSearchCatalogSchema,
+  deeplineExecuteToolSchema,
   setSurfPointSourceActiveSchema,
   updateDatabaseFieldSchema,
   updateSurfPointSourceSchema,
@@ -158,7 +160,9 @@ function registerTools(
             ])
           ),
           read: canUseCapability(context, "context.read"),
-          execute: canUseCapability(context, "surf_points.execute"),
+          execute:
+            canUseCapability(context, "surf_points.execute") ||
+            canUseCapability(context, "deepline.execute"),
           write:
             canUseCapability(context, "products.write") ||
             canUseCapability(context, "surf_points.execute") ||
@@ -168,7 +172,9 @@ function registerTools(
             canUseCapability(context, "tables.delete") ||
             canUseCapability(context, "schemas.write") ||
             canUseCapability(context, "sources.write") ||
-            canUseCapability(context, "account_lists.write"),
+            canUseCapability(context, "account_lists.write") ||
+            canUseCapability(context, "deepline.enrich") ||
+            canUseCapability(context, "deepline.execute"),
         },
       }
     })
@@ -590,6 +596,26 @@ function registerTools(
       runJsonTool(async () => {
         assertToolAllowed("deepline_enrich_contact")
         return repository.deeplineEnrichContact(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "deepline_search_catalog",
+    deeplineSearchCatalogSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("deepline_search_catalog")
+        return repository.deeplineSearchCatalog(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "deepline_execute_tool",
+    deeplineExecuteToolSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("deepline_execute_tool")
+        return repository.deeplineExecuteTool(toolContext(args), args)
       })
   )
 }

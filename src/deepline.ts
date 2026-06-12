@@ -2,9 +2,11 @@
 //
 // Mirrors the contract used in SignalsurfWeb, verified against the live catalog
 // (scripts/deepline-run.sh --tools): one key routes across Deepline's provider
-// tools. We drive a small curated set (people/company search + email finder).
+// tools. We drive a small curated set and expose the catalog-search + execute
+// bridge used by SignalsurfWeb's agent.
 //
 //   POST {base}/api/v2/integrations/{toolId}/execute  body {"payload": {...}}
+//   GET  {base}/api/v2/tools
 //   Authorization: Bearer <key>
 //   x-deepline-execute-response-contract: v2-tool-response
 //   -> { status: "completed"|"success"|"ok", toolResponse: { raw } }
@@ -76,6 +78,31 @@ export function cleanDeeplinePayload(
 }
 
 export type FetchLike = typeof fetch
+
+/** List Deepline's live v2 tool catalog. Throws on a non-2xx response. */
+export async function listDeeplineTools(
+  apiKey: string,
+  fetchImpl: FetchLike = fetch
+): Promise<Array<Record<string, unknown>>> {
+  const res = await fetchImpl(`${baseUrl()}/api/v2/tools`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => "")
+    throw new Error(
+      `Deepline tool catalog -> HTTP ${res.status}${
+        text ? `: ${text.slice(0, 300)}` : ""
+      }`
+    )
+  }
+  const data = (await res.json()) as { tools?: unknown } | unknown[]
+  const tools = Array.isArray(data) ? data : data.tools
+  return Array.isArray(tools) ? (tools as Array<Record<string, unknown>>) : []
+}
 
 /** Execute one Deepline tool. Throws on a non-2xx (message carries the status). */
 export async function executeDeeplineTool(

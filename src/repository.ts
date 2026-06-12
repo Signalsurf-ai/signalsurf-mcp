@@ -32,6 +32,7 @@ import {
   deeplineStatusOk,
   executeDeeplineTool,
   isDeeplineDisabled,
+  listDeeplineTools,
   unwrapDeepline,
 } from "./deepline.js"
 import { UserFacingError } from "./errors.js"
@@ -47,6 +48,16 @@ type DeeplineEnrichInput = {
   lastName: string
   domain?: string
   companyName?: string
+}
+type DeeplineCatalogSearchInput = {
+  productId?: string
+  query?: string
+  limit?: number
+}
+type DeeplineExecuteToolInput = {
+  productId?: string
+  toolId: string
+  payload?: JsonRecord
 }
 
 type ListSurfPointsInput = {
@@ -679,6 +690,45 @@ function withoutLegacyToolRouting(config: JsonRecord): JsonRecord {
 
 function readTrimmedString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+type DeeplineToolSummary = {
+  toolId: string
+  provider?: string
+  displayName?: string
+  bestFor?: string
+}
+
+function formatDeeplineToolSummary(
+  tool: Record<string, unknown>
+): DeeplineToolSummary | null {
+  const toolId = readTrimmedString(tool.toolId) ?? readTrimmedString(tool.id)
+  if (!toolId) return null
+  const provider = readTrimmedString(tool.provider)
+  const displayName =
+    readTrimmedString(tool.displayName) ??
+    readTrimmedString(tool.display_name) ??
+    readTrimmedString(tool.name)
+  const bestFor =
+    readTrimmedString(tool.bestFor) ??
+    readTrimmedString(tool.best_for) ??
+    readTrimmedString(tool.description)
+  return {
+    toolId,
+    ...(provider ? { provider } : {}),
+    ...(displayName ? { displayName } : {}),
+    ...(bestFor ? { bestFor } : {}),
+  }
+}
+
+function deeplineToolMatchesQuery(
+  tool: DeeplineToolSummary,
+  query: string
+): boolean {
+  if (!query) return true
+  return [tool.toolId, tool.provider, tool.displayName, tool.bestFor].some(
+    (value) => typeof value === "string" && value.toLowerCase().includes(query)
+  )
 }
 
 function normalizeWebhookDataSchema(
@@ -1596,6 +1646,45 @@ export class SignalSurfRepository {
           ? (record.work_email as string)
           : null
     return { toolId, email, status: record.status ?? null, result: raw }
+  }
+
+  async deeplineSearchCatalog(
+    context: SignalSurfContext,
+    input: DeeplineCatalogSearchInput
+  ) {
+    const apiKey = await this.resolveDeeplineApiKey(context)
+    const query = (input.query ?? "").trim().toLowerCase()
+    const limit = Math.max(1, Math.min(input.limit ?? 25, 50))
+    const tools = (await listDeeplineTools(apiKey))
+      .map(formatDeeplineToolSummary)
+      .filter((tool): tool is DeeplineToolSummary => Boolean(tool))
+      .filter((tool) => deeplineToolMatchesQuery(tool, query))
+      .slice(0, limit)
+    return { tools, count: tools.length }
+  }
+
+  async deeplineExecuteTool(
+    context: SignalSurfContext,
+    input: DeeplineExecuteToolInput
+  ) {
+    const apiKey = await this.resolveDeeplineApiKey(context)
+    const payload = input.payload ?? {}
+    const envelope = await executeDeeplineTool(input.toolId, payload, apiKey)
+    const ok = envelope.status === undefined || deeplineStatusOk(envelope.status)
+    const result = unwrapDeepline(envelope)
+    const resultRecord =
+      result && typeof result === "object"
+        ? (result as Record<string, unknown>)
+        : {}
+    const creditsConsumed = resultRecord.credits_consumed
+    return {
+      toolId: input.toolId,
+      ok,
+      status: envelope.status ?? "ok",
+      result,
+      credits_consumed:
+        typeof creditsConsumed === "number" ? creditsConsumed : null,
+    }
   }
 
   async archiveAccountListProfile(

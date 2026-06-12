@@ -86,6 +86,109 @@ describe("Deepline capabilities", () => {
     })
   })
 
+  it("search_catalog filters Deepline's live tool catalog", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    const fetchMock = stubFetch({
+      tools: [
+        {
+          toolId: "hubspot_create_contact",
+          provider: "hubspot",
+          displayName: "HubSpot Create Contact",
+          bestFor: "Create a CRM contact",
+        },
+        {
+          toolId: "apollo_search_people",
+          provider: "apollo",
+          displayName: "Apollo People Search",
+          bestFor: "Find prospects",
+        },
+      ],
+    })
+    const repo = new SignalSurfRepository(dbWithKey() as never)
+    const res = await repo.deeplineSearchCatalog(context, {
+      query: "hubspot",
+      limit: 5,
+    })
+    expect(res).toEqual({
+      tools: [
+        {
+          toolId: "hubspot_create_contact",
+          provider: "hubspot",
+          displayName: "HubSpot Create Contact",
+          bestFor: "Create a CRM contact",
+        },
+      ],
+      count: 1,
+    })
+    const [url, reqInit] = (
+      fetchMock as unknown as { mock: { calls: unknown[][] } }
+    ).mock.calls[0] as [string, { method: string; headers: Record<string, string> }]
+    expect(String(url)).toContain("/api/v2/tools")
+    expect(reqInit.method).toBe("GET")
+    expect(reqInit.headers.Authorization).toBe("Bearer dl_test")
+  })
+
+  it("execute_tool preserves arbitrary payloads and reports credits", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    const fetchMock = stubFetch({
+      status: "completed",
+      toolResponse: {
+        raw: {
+          id: "contact_123",
+          ok: true,
+          credits_consumed: 2,
+        },
+      },
+    })
+    const repo = new SignalSurfRepository(dbWithKey() as never)
+    const res = await repo.deeplineExecuteTool(context, {
+      toolId: "hubspot_create_contact",
+      payload: {
+        email: "jane@acme.com",
+        note: "",
+        metadata: { nullable: null },
+      },
+    })
+    expect(res).toMatchObject({
+      toolId: "hubspot_create_contact",
+      ok: true,
+      status: "completed",
+      credits_consumed: 2,
+      result: { id: "contact_123", ok: true },
+    })
+    const call = (fetchMock as unknown as { mock: { calls: unknown[][] } }).mock
+      .calls[0]
+    const [url, reqInit] = call as [string, { body: string }]
+    expect(String(url)).toContain(
+      "/api/v2/integrations/hubspot_create_contact/execute"
+    )
+    expect(JSON.parse(reqInit.body).payload).toEqual({
+      email: "jane@acme.com",
+      note: "",
+      metadata: { nullable: null },
+    })
+  })
+
+  it("execute_tool returns non-OK Deepline envelopes with the provider result", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    stubFetch({
+      status: "failed",
+      toolResponse: { raw: { error: "provider rejected payload" } },
+    })
+    const repo = new SignalSurfRepository(dbWithKey() as never)
+    await expect(
+      repo.deeplineExecuteTool(context, {
+        toolId: "hubspot_create_contact",
+        payload: { email: "bad" },
+      })
+    ).resolves.toMatchObject({
+      toolId: "hubspot_create_contact",
+      ok: false,
+      status: "failed",
+      result: { error: "provider rejected payload" },
+    })
+  })
+
   it("fails clearly when Deepline is not connected for the product", async () => {
     vi.stubEnv("DEEPLINE_DISABLED", "")
     vi.stubEnv("DEEPLINE_API_KEY", "")
