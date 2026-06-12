@@ -120,7 +120,10 @@ scope needed for step-up authorization.
    capability when the operation is destructive.
 6. Add tests that prove `tools/list` includes the registry entry and scoped
    tokens cannot call tools outside their scopes.
-7. Update this document and the Web-side Surfer capability matrix.
+7. Update this document, the Web-side Surfer capability matrix, and
+   `docs/surfer-mcp-parity.json` when the tool maps to or changes a Surfer
+   capability.
+8. Run `pnpm check:surfer-parity`.
 
 Do not add raw SQL, arbitrary table-name access, service-role-like operations,
 or tools that bypass SignalSurf's existing provenance, changelog, job, or
