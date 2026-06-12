@@ -184,7 +184,7 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 
 - `create_product`
 - `list_surf_points`, `get_surf_point`, `create_surf_point`, `update_surf_point`, `run_surf_point`, `get_surf_job`, `wait_for_surf_job`, `list_surf_jobs`, `cancel_surf_job`, `delete_surf_point`
-- `list_databases`, `create_table`, `update_table`, `list_database_views`, `read_table`, `read_table_view`, `get_table_row`
+- `list_databases`, `create_table`, `update_table`, `delete_table`, `list_database_views`, `read_table`, `read_table_view`, `get_table_row`
 - `create_table_row`, `update_table_row`, `delete_table_rows`
 - `list_database_fields`, `add_database_field`, `update_database_field`, `remove_database_field`, `create_relation_field`
 - `list_surf_point_sources`, `create_surf_point_source`, `update_surf_point_source`, `delete_surf_point_source`, `set_surf_point_source_active`
@@ -303,6 +303,9 @@ Tables:
   view config, item type, display order, and existing table folder placement.
 - `update_table`: updates table metadata, custom schema, saved view config,
   item type, display order, or folder placement.
+- `delete_table`: hard-deletes one or more user-facing tables after product
+  scope validation, then removes those table ids from active Surf Points'
+  `databaseIds`. System tables cannot be deleted through MCP.
 - `read_table`: reads rows with pagination and optional JSON containment filter.
   It also supports UI-style `filters`, `filterLogic`, and data-field `sorts`.
   Advanced filters are evaluated over a bounded scan (`scanLimit`, default

@@ -32,6 +32,7 @@ import {
   createRelationFieldSchema,
   deleteSurfPointSourceSchema,
   deleteSurfPointSchema,
+  deleteTableSchema,
   deleteTableRowsSchema,
   detachSurfPointToolSchema,
   getSurfPointSchema,
@@ -293,6 +294,13 @@ function registerTools(
     runJsonTool(async () => {
       assertToolAllowed("update_table")
       return repository.updateTable(toolContext(args), args)
+    })
+  )
+
+  registerPublicTool("delete_table", deleteTableSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("delete_table")
+      return repository.deleteTables(toolContext(args), args.databaseIds)
     })
   )
 

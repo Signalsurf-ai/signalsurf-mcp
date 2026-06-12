@@ -67,6 +67,7 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `list_databases`               | `tables.read`         | No          | Lists product tables/databases                                                                          |
 | `create_table`                 | `schemas.write`       | No          | Creates a product table with custom schema and saved-view config                                        |
 | `update_table`                 | `schemas.write`       | No          | Updates table metadata, custom schema, and saved-view config                                            |
+| `delete_table`                 | `tables.delete`       | Yes         | Deletes user-facing tables and unlinks them from active Surf Points after product-scope verification    |
 | `list_database_views`          | `tables.read`         | No          | Lists saved database views from view configuration                                                      |
 | `read_table`                   | `tables.read`         | No          | Reads rows with pagination, containment filters, and UI-style filters/sorts                             |
 | `read_table_view`              | `tables.read`         | No          | Reads rows using compatible saved-view filters/sorts                                                    |

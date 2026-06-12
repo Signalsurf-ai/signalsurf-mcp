@@ -96,6 +96,7 @@ export type PublicMcpToolName =
   | "list_databases"
   | "create_table"
   | "update_table"
+  | "delete_table"
   | "list_database_views"
   | "read_table"
   | "read_table_view"
@@ -317,6 +318,15 @@ export const PUBLIC_MCP_TOOLS = {
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
+  },
+  delete_table: {
+    title: "Delete Table",
+    description:
+      "Delete one or more user-facing SignalSurf databases/tables after product-scope verification, then unlink the deleted table ids from active Surf Points. Pass productId when this connection can access multiple products.",
+    requiredCapability: "tables.delete",
+    surferSurface: "manage_projects/manage_databases",
+    publicStatus: "supported",
+    annotations: DELETE_ANNOTATIONS,
   },
   list_database_views: {
     title: "List Database Views",
