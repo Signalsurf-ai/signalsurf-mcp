@@ -33,8 +33,9 @@ export const MCP_ACCOUNT_LIST_SCOPES = [
 // account_lists above: the authorization server does not register them yet, so
 // requesting them at /authorize would break OAuth. Keep them supported (so the
 // mcp:write fallback grants them) but exclude from the advertised resource
-// scopes until the auth server registers them. deepline.search = people/company
-// search; deepline.enrich = email finder (spends Deepline credits on a hit).
+// scopes until the auth server registers them. deepline.read = catalog and
+// curated people/company search; deepline.enrich = contact enrichment;
+// deepline.execute = arbitrary selected catalog tool execution.
 export const MCP_DEEPLINE_SCOPES = [
   "mcp:deepline.read",
   "mcp:deepline.write",
@@ -77,6 +78,7 @@ export type McpCapability =
   | "account_lists.write"
   | "deepline.read"
   | "deepline.enrich"
+  | "deepline.execute"
 
 export type PublicMcpToolName =
   | "get_context"
@@ -124,6 +126,8 @@ export type PublicMcpToolName =
   | "deepline_search_people"
   | "deepline_search_companies"
   | "deepline_enrich_contact"
+  | "deepline_search_catalog"
+  | "deepline_execute_tool"
 
 type PublicMcpToolDefinition = {
   title: string
@@ -152,6 +156,16 @@ const CREATE_ANNOTATIONS = {
   destructiveHint: false,
   idempotentHint: false,
   openWorldHint: false,
+} as const
+
+const EXTERNAL_READ_ANNOTATIONS = {
+  ...READ_ANNOTATIONS,
+  openWorldHint: true,
+} as const
+
+const EXTERNAL_CREATE_ANNOTATIONS = {
+  ...CREATE_ANNOTATIONS,
+  openWorldHint: true,
 } as const
 
 const MUTATE_ANNOTATIONS = {
@@ -555,7 +569,7 @@ export const PUBLIC_MCP_TOOLS = {
     requiredCapability: "deepline.read",
     surferSurface: "account_list_icp_builder",
     publicStatus: "supported",
-    annotations: READ_ANNOTATIONS,
+    annotations: EXTERNAL_READ_ANNOTATIONS,
   },
   deepline_search_companies: {
     title: "Search Companies via Deepline",
@@ -564,7 +578,7 @@ export const PUBLIC_MCP_TOOLS = {
     requiredCapability: "deepline.read",
     surferSurface: "account_list_icp_builder",
     publicStatus: "supported",
-    annotations: READ_ANNOTATIONS,
+    annotations: EXTERNAL_READ_ANNOTATIONS,
   },
   deepline_enrich_contact: {
     title: "Find a Contact Email via Deepline",
@@ -573,7 +587,25 @@ export const PUBLIC_MCP_TOOLS = {
     requiredCapability: "deepline.enrich",
     surferSurface: "account_list_icp_builder",
     publicStatus: "supported",
-    annotations: CREATE_ANNOTATIONS,
+    annotations: EXTERNAL_CREATE_ANNOTATIONS,
+  },
+  deepline_search_catalog: {
+    title: "Search Deepline Tool Catalog",
+    description:
+      "Search Deepline's live v2 tool catalog for an authorized product to discover provider tool ids before execution. An empty query returns the first tools in the catalog. Requires a Deepline integration key on the product.",
+    requiredCapability: "deepline.read",
+    surferSurface: "deepline",
+    publicStatus: "supported",
+    annotations: EXTERNAL_READ_ANNOTATIONS,
+  },
+  deepline_execute_tool: {
+    title: "Execute Deepline Tool",
+    description:
+      "Execute a selected Deepline v2 tool id with a JSON payload for an authorized product. Use deepline_search_catalog first unless the tool id is already known. May spend Deepline credits depending on the provider and result. Requires a Deepline integration key on the product.",
+    requiredCapability: "deepline.execute",
+    surferSurface: "deepline",
+    publicStatus: "supported",
+    annotations: EXTERNAL_CREATE_ANNOTATIONS,
   },
 } as const satisfies Record<PublicMcpToolName, PublicMcpToolDefinition>
 
@@ -616,6 +648,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "account_lists.write",
     "deepline.read",
     "deepline.enrich",
+    "deepline.execute",
   ],
   [MCP_OFFLINE_ACCESS_SCOPE]: [],
   "mcp:products.write": ["context.read", "products.write"],
@@ -649,7 +682,12 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "account_lists.write",
   ],
   "mcp:deepline.read": ["context.read", "deepline.read"],
-  "mcp:deepline.write": ["context.read", "deepline.read", "deepline.enrich"],
+  "mcp:deepline.write": [
+    "context.read",
+    "deepline.read",
+    "deepline.enrich",
+    "deepline.execute",
+  ],
 }
 
 const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
@@ -670,6 +708,7 @@ const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "account_lists.write": ["mcp:account_lists.write"],
   "deepline.read": ["mcp:deepline.read"],
   "deepline.enrich": ["mcp:deepline.write"],
+  "deepline.execute": ["mcp:deepline.write"],
 }
 
 export function parseStoredScopes(scope: string | undefined | null): string[] {

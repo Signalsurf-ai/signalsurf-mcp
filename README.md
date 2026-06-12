@@ -190,6 +190,7 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - `list_surf_point_sources`, `create_surf_point_source`, `update_surf_point_source`, `delete_surf_point_source`, `set_surf_point_source_active`
 - `list_product_tools`, `list_surf_point_tools`, `attach_surf_point_tool`, `detach_surf_point_tool`
 - `list_account_list_profiles`, `save_account_list_profile`, `archive_account_list_profile`
+- `deepline_search_people`, `deepline_search_companies`, `deepline_enrich_contact`, `deepline_search_catalog`, `deepline_execute_tool`
 - Resources for context; single-product tokens also expose surf point, database,
   surf job, database-row, and account-list-profile resources
 
@@ -201,9 +202,9 @@ touching rows. Surf point deletion is a soft delete (`deleted_at`), matching the
 web app behavior.
 
 OAuth clients can request broad compatibility scopes (`mcp:read`, `mcp:write`)
-or granular scopes. The protected resource metadata advertises the granular
-SignalSurf resource scopes so the consent screen can name each capability
-instead of hiding them behind broad write access:
+or granular scopes. The protected resource metadata advertises the registered
+granular SignalSurf resource scopes so the consent screen can name each
+capability instead of hiding them behind broad write access:
 
 - `mcp:products.write`
 - `mcp:surf_points.read`
@@ -217,12 +218,13 @@ instead of hiding them behind broad write access:
 - `mcp:schemas.write`
 - `mcp:sources.read`
 - `mcp:sources.write`
-- `mcp:account_lists.read`
-- `mcp:account_lists.write`
 
-OAuth tokens may also carry `offline_access` for refresh-token support. The MCP
-resource server accepts that scope but does not advertise it as a resource
-requirement, and it grants no tool capability by itself.
+The MCP server also accepts and enforces `mcp:account_lists.read`,
+`mcp:account_lists.write`, `mcp:deepline.read`, and `mcp:deepline.write`, but it
+does not advertise those scopes by default until the hosted authorization server
+registers them. OAuth tokens may also carry `offline_access` for refresh-token
+support. The MCP resource server accepts that scope but does not advertise it as
+a resource requirement, and it grants no tool capability by itself.
 
 ## Architecture
 

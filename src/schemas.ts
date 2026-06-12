@@ -31,6 +31,18 @@ export const deeplineEnrichContactSchema = {
   companyName: z.string().trim().max(255).optional(),
 }
 
+export const deeplineSearchCatalogSchema = {
+  ...productTargetSchema,
+  query: z.string().trim().max(200).default("").optional(),
+  limit: z.number().int().min(1).max(50).default(25).optional(),
+}
+
+export const deeplineExecuteToolSchema = {
+  ...productTargetSchema,
+  toolId: z.string().trim().min(1).max(200),
+  payload: jsonObjectSchema.default({}).optional(),
+}
+
 export const sourceTypeSchema = z.enum([
   "platform",
   "custom-pull",
