@@ -1,0 +1,275 @@
+{
+  "version": 1,
+  "description": "Machine-readable parity contract for durable Surfer capabilities. Every fixed Surfer operation must be mapped to public SignalSurf MCP tools or explicitly listed as an exception.",
+  "sources": {
+    "surferProxyOperations": "src/lib/ai/chat-tool-proxies.ts",
+    "surferStandaloneTools": "src/app/api/ai/chat/route.ts",
+    "mcpPublicTools": "signalsurf-mcp/src/capabilities.ts"
+  },
+  "knownPublicMcpTools": [
+    "add_database_field",
+    "archive_account_list_profile",
+    "attach_surf_point_tool",
+    "cancel_surf_job",
+    "create_product",
+    "create_relation_field",
+    "create_surf_point",
+    "create_surf_point_source",
+    "create_table",
+    "create_table_row",
+    "deepline_enrich_contact",
+    "deepline_execute_tool",
+    "deepline_search_catalog",
+    "deepline_search_companies",
+    "deepline_search_people",
+    "delete_surf_point",
+    "delete_surf_point_source",
+    "delete_table",
+    "delete_table_rows",
+    "detach_surf_point_tool",
+    "get_context",
+    "get_surf_job",
+    "get_surf_point",
+    "get_table_row",
+    "list_account_list_profiles",
+    "list_database_fields",
+    "list_database_views",
+    "list_databases",
+    "list_product_tools",
+    "list_surf_jobs",
+    "list_surf_point_sources",
+    "list_surf_point_tools",
+    "list_surf_points",
+    "list_webhook_payload_samples",
+    "preview_import_mapping",
+    "read_table",
+    "read_table_view",
+    "remove_database_field",
+    "replay_webhook_payload",
+    "run_surf_point",
+    "save_account_list_profile",
+    "set_surf_point_source_active",
+    "update_database_field",
+    "update_surf_point",
+    "update_surf_point_source",
+    "update_table",
+    "update_table_row",
+    "wait_for_surf_job"
+  ],
+  "operationMappings": {
+    "list_projects": ["list_databases"],
+    "create_project": ["create_table"],
+    "update_project_metadata": ["update_table"],
+    "update_project_schema": ["update_table"],
+    "update_project_relation_defs": ["create_relation_field"],
+    "list_databases": ["list_databases"],
+    "create_database": ["create_table"],
+    "update_database_metadata": ["update_table"],
+    "update_database_schema": ["update_table"],
+    "update_database_relation_defs": ["create_relation_field"],
+    "create_view": ["update_table"],
+    "update_view": ["update_table"],
+    "delete_view": ["update_table"],
+    "update_chart_config": ["update_table"],
+    "list_tools": ["list_product_tools"],
+    "attach_tool_to_surf_point": ["attach_surf_point_tool"],
+    "create_item": ["create_table_row"],
+    "list_items": ["read_table"],
+    "update_item": ["update_table_row"],
+    "delete_item": ["delete_table_rows"],
+    "search_items": ["read_table"],
+    "query_project": ["read_table"],
+    "query_database": ["read_table"],
+    "list_surf_points": ["list_surf_points"],
+    "create_surf_point": ["create_surf_point"],
+    "update_surf_point": ["update_surf_point"],
+    "delete_surf_point": ["delete_surf_point"],
+    "update_scoring_rubric": ["update_surf_point"],
+    "update_surf_prompt": ["update_surf_point"],
+    "list_signals": ["list_surf_point_sources"],
+    "create_signal": ["create_surf_point_source"],
+    "update_signal": [
+      "update_surf_point_source",
+      "set_surf_point_source_active"
+    ],
+    "delete_signal": ["delete_surf_point_source"],
+    "get_pipeline_status": ["list_surf_jobs"],
+    "list_action_history": ["list_surf_jobs"],
+    "trigger_discovery": ["run_surf_point"],
+    "lead_gen_find_people": [
+      "deepline_search_people",
+      "deepline_search_companies",
+      "create_table_row",
+      "update_table_row"
+    ],
+    "lead_gen_enrich_run": ["deepline_enrich_contact", "update_table_row"]
+  },
+  "standaloneMappings": {},
+  "operationExceptionGroups": [
+    {
+      "name": "database_folders",
+      "reason": "Folder creation, rename, and delete are sidebar layout state rather than core table capability. MCP can place tables in existing folders but does not manage folder lifecycle yet.",
+      "requiredBeforePublic": "Stable public folder vocabulary, product-scope guards, cache/realtime behavior, and tests.",
+      "operations": [
+        "list_project_folders",
+        "create_project_folder",
+        "update_project_folder",
+        "delete_project_folder",
+        "list_database_folders",
+        "create_database_folder",
+        "update_database_folder",
+        "delete_database_folder"
+      ]
+    },
+    {
+      "name": "surf_point_folders",
+      "reason": "Surf Point folder operations are sidebar layout state and not core Surf Point CRUD.",
+      "requiredBeforePublic": "Stable public folder vocabulary, product-scope guards, cache/realtime behavior, and tests.",
+      "operations": [
+        "list_surf_point_folders",
+        "create_surf_point_folder",
+        "update_surf_point_folder",
+        "delete_surf_point_folder"
+      ]
+    },
+    {
+      "name": "template_and_capability_descriptions",
+      "reason": "These are prompt/setup helpers, not durable product mutations or reads.",
+      "requiredBeforePublic": "A public template/catalog resource if external agents need guided setup.",
+      "operations": [
+        "describe_project_templates",
+        "describe_database_templates",
+        "describe_view_types",
+        "describe_playbook_templates",
+        "describe_source_capabilities"
+      ]
+    },
+    {
+      "name": "item_relations",
+      "reason": "Surfer uses the internal item_relations table and relation backfill behavior. Public MCP currently exposes schema-level relation fields and row CRUD, not item_relations CRUD/backfill.",
+      "requiredBeforePublic": "Relation-specific scopes, product-scope guards for both endpoints, dry-run/backfill limits, audit logs, and tests.",
+      "operations": [
+        "create_relation",
+        "delete_relation",
+        "list_relations",
+        "backfill_relations"
+      ]
+    },
+    {
+      "name": "provider_tool_setup",
+      "reason": "Provider tool setup depends on web-session OAuth, destination pickers, provider secrets, and confirmation/audit UX.",
+      "requiredBeforePublic": "Provider-specific scopes, OAuth destination protocol, secret redaction, confirmation model, and product-scope tests.",
+      "operations": [
+        "add_tool",
+        "remove_tool",
+        "run_tool",
+        "update_tool_settings",
+        "list_notion_targets",
+        "list_google_docs",
+        "list_google_presentations",
+        "list_google_spreadsheets",
+        "list_asana_workspaces",
+        "list_asana_projects",
+        "clear_google_sheet",
+        "list_instantly_campaigns",
+        "get_instantly_campaign",
+        "create_instantly_campaign",
+        "update_instantly_campaign",
+        "activate_instantly_campaign",
+        "pause_instantly_campaign",
+        "delete_instantly_campaign",
+        "get_instantly_campaign_analytics",
+        "list_instantly_email_accounts"
+      ]
+    },
+    {
+      "name": "outbound_social_and_email",
+      "reason": "Outbound messages and social publishing are high-risk external account actions that require provider-specific consent, previews, rate limits, and account verification.",
+      "requiredBeforePublic": "Provider OAuth scopes, send/draft separation, preview/confirmation flow, rate limits, audit export, and sender identity checks.",
+      "operations": [
+        "list_zernio_accounts",
+        "send_inbox_reply",
+        "send_email",
+        "publish_zernio_post",
+        "list_zernio_conversations",
+        "list_zernio_messages",
+        "list_zernio_comments",
+        "reply_to_zernio_comment",
+        "private_reply_to_zernio_comment",
+        "get_zernio_connect_url"
+      ]
+    },
+    {
+      "name": "bulk_and_notes",
+      "reason": "Bulk mutations and note editing need stronger dry-run, preview, and audit guarantees than single-row public MCP CRUD.",
+      "requiredBeforePublic": "Dry-run mode, max limits, explicit destructive scopes, confirmation semantics, and audit export.",
+      "operations": [
+        "bulk_update_items",
+        "bulk_delete_items",
+        "get_item_note",
+        "set_item_note",
+        "append_item_note"
+      ]
+    },
+    {
+      "name": "monitoring_internals",
+      "reason": "These operations inspect internal source quality, feed fetches, or long-running schedule state rather than stable public product records.",
+      "requiredBeforePublic": "Stable job/source resources, schedule scopes, owner/editor policy, pause/delete semantics, and tests.",
+      "operations": [
+        "fetch_posts",
+        "get_item_field_history",
+        "review_source_quality",
+        "manage_agent_schedule"
+      ]
+    },
+    {
+      "name": "memory",
+      "reason": "Memory may contain sensitive user and product strategy context.",
+      "requiredBeforePublic": "Memory-specific scopes, redaction policy, deletion/export behavior, and audit logs.",
+      "operations": [
+        "save_memory",
+        "search_memory",
+        "update_brand_voice",
+        "update_language_filter"
+      ]
+    },
+    {
+      "name": "inbox",
+      "reason": "Inbox history and draft writing depend on connected accounts, contact records, and web inbox composer state.",
+      "requiredBeforePublic": "Inbox-specific scopes, sender/account controls, draft/send separation, and audit behavior.",
+      "operations": ["query_inbox_history", "write_draft_for_contact"]
+    },
+    {
+      "name": "web_and_external_research",
+      "reason": "General web search/fetch and social research are separate internal integrations, not SignalSurf product CRUD.",
+      "requiredBeforePublic": "Product decision on whether SignalSurf MCP should proxy external research tools or require users to connect those MCPs separately.",
+      "operations": ["web_search", "fetch_url"]
+    },
+    {
+      "name": "surf_point_skills",
+      "reason": "Skill attachment depends on the internal skill runtime and app-managed skill catalog.",
+      "requiredBeforePublic": "Public skill resources, install/authorization model, and execution/audit semantics.",
+      "operations": ["attach_skills_to_surf_point"]
+    }
+  ],
+  "standaloneExceptionGroups": [
+    {
+      "name": "web_session_helpers",
+      "reason": "These tools drive the in-app chat confirmation and OAuth destination picker UX.",
+      "requiredBeforePublic": "A public setup/confirmation protocol rather than direct MCP tool parity.",
+      "tools": ["ask_structured_question", "resolve_oauth_destination"]
+    },
+    {
+      "name": "user_skills",
+      "reason": "User skill CRUD is tied to the app-managed skill runtime and product UI.",
+      "requiredBeforePublic": "Public skill resources, scopes, install policy, and audit logs.",
+      "tools": ["list_user_skills", "create_user_skill", "update_user_skill"]
+    },
+    {
+      "name": "deck_jobs",
+      "reason": "Deck generation depends on Hermes job state, product UI state, and billing details.",
+      "requiredBeforePublic": "Public job resources, polling/cancel model, billing accounting, and file delivery protocol.",
+      "tools": ["request_powerpoint_deck"]
+    }
+  ]
+}

@@ -225,6 +225,11 @@ export const updateTableSchema = {
   displayOrder: z.number().int().min(0).max(100000).optional(),
 }
 
+export const deleteTableSchema = {
+  ...productTargetSchema,
+  databaseIds: z.array(uuidSchema).min(1).max(50),
+}
+
 const tableFilterSchema = z.object({
   field: z.string().trim().min(1).max(100),
   op: z.enum([

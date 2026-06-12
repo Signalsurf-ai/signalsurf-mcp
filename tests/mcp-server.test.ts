@@ -328,6 +328,7 @@ describe("MCP server", () => {
       create_product: false,
       create_table: false,
       update_table: false,
+      delete_table: false,
       create_table_row: true,
       update_table_row: true,
       delete_table_rows: false,

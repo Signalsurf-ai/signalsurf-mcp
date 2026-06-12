@@ -2120,6 +2120,89 @@ describe("SignalSurfRepository", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
+  it("deletes product tables and unlinks them from active surf points", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+    const secondSurfPoint = db.tables.playbooks.find(
+      (row) => row.id === surfPoint2
+    )!
+    secondSurfPoint.database_ids = [db1, db2]
+
+    const result = await repo.deleteTables(context, [db1, db1])
+
+    expect(result).toMatchObject({
+      deletedDatabaseIds: [db1],
+      count: 1,
+      deletedTables: [{ databaseId: db1, name: "Companies" }],
+    })
+    expect(result.unlinkedSurfPoints).toEqual(
+      expect.arrayContaining([
+        { id: surfPoint1, databaseIds: [] },
+        { id: surfPoint2, databaseIds: [db2] },
+      ])
+    )
+    expect(db.tables.databases.some((database) => database.id === db1)).toBe(
+      false
+    )
+    expect(db.tables.databases.some((database) => database.id === db2)).toBe(
+      true
+    )
+    expect(
+      db.tables.databases.some((database) => database.id === otherProductDb)
+    ).toBe(true)
+    expect(
+      db.tables.playbooks.find((row) => row.id === surfPoint1)?.database_ids
+    ).toEqual([])
+    expect(
+      db.tables.playbooks.find((row) => row.id === surfPoint2)?.database_ids
+    ).toEqual([db2])
+  })
+
+  it("rejects partial table deletes without deleting the valid subset", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.deleteTables(context, [db1, otherProductDb])
+    ).rejects.toThrow("Database not found or access denied")
+
+    expect(db.tables.databases.some((database) => database.id === db1)).toBe(
+      true
+    )
+    expect(
+      db.tables.databases.some((database) => database.id === otherProductDb)
+    ).toBe(true)
+  })
+
+  it("refuses to delete system tables through MCP", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+    const systemDb = "00000000-0000-4000-8000-000000000298"
+    db.tables.databases.push({
+      id: systemDb,
+      product_id: context.productId,
+      name: "System Table",
+      description: null,
+      icon: null,
+      color: null,
+      schema: null,
+      item_type: "system",
+      system_type: "account_list_profiles",
+      view_configs: {},
+      display_order: 10,
+      created_at: "2026-06-01T00:00:00Z",
+      updated_at: "2026-06-01T00:00:00Z",
+    })
+
+    await expect(repo.deleteTables(context, [systemDb])).rejects.toThrow(
+      "System tables cannot be deleted through MCP"
+    )
+
+    expect(
+      db.tables.databases.some((database) => database.id === systemDb)
+    ).toBe(true)
+  })
+
   it("creates relation fields only to product-owned databases", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)

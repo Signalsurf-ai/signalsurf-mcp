@@ -2391,6 +2391,103 @@ export class SignalSurfRepository {
     }
   }
 
+  async deleteTables(context: SignalSurfContext, databaseIds: string[]) {
+    const ids = uniqueIds(databaseIds)
+    if (ids.length === 0) {
+      throw new UserFacingError("At least one database id is required.", {
+        code: "BAD_REQUEST",
+        status: 400,
+      })
+    }
+
+    const { data: databases, error: readError } = await this.db
+      .from("databases")
+      .select(DATABASE_COLUMNS)
+      .eq("product_id", context.productId)
+      .in("id", ids)
+
+    requireNoDbError(readError, "Failed to validate database access")
+    const found = (databases ?? []) as DatabaseRow[]
+    const foundIds = new Set(found.map((database) => database.id))
+    const missing = ids.filter((id) => !foundIds.has(id))
+    if (missing.length > 0) {
+      throw new UserFacingError(
+        `Database not found or access denied: ${missing.join(", ")}`,
+        { code: "NOT_FOUND", status: 404 }
+      )
+    }
+
+    const systemTables = found.filter((database) => database.system_type)
+    if (systemTables.length > 0) {
+      throw new UserFacingError(
+        `System tables cannot be deleted through MCP: ${systemTables
+          .map((database) => database.name)
+          .join(", ")}`,
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+
+    const { error, count } = await this.db
+      .from("databases")
+      .delete({ count: "exact" })
+      .eq("product_id", context.productId)
+      .in("id", ids)
+
+    requireNoDbError(error, "Failed to delete tables")
+
+    const { data: linkedSurfPoints, error: linkedError } = await this.db
+      .from("playbooks")
+      .select("id, database_ids")
+      .eq("product_id", context.productId)
+      .is("deleted_at", null)
+
+    requireNoDbError(linkedError, "Failed to list surf points linked to tables")
+    const deletedIdSet = new Set(ids)
+    const now = new Date().toISOString()
+    const unlinkedSurfPoints: Array<{ id: string; databaseIds: string[] }> = []
+    for (const surfPoint of (linkedSurfPoints ?? []) as Array<{
+      id: string
+      database_ids: string[] | null
+    }>) {
+      const currentIds = Array.isArray(surfPoint.database_ids)
+        ? surfPoint.database_ids
+        : []
+      const nextIds = currentIds.filter(
+        (databaseId) => !deletedIdSet.has(databaseId)
+      )
+      if (nextIds.length === currentIds.length) continue
+
+      const { error: updateError } = await this.db
+        .from("playbooks")
+        .update({
+          database_ids: nextIds,
+          updated_at: now,
+        })
+        .eq("id", surfPoint.id)
+        .eq("product_id", context.productId)
+        .is("deleted_at", null)
+      requireNoDbError(
+        updateError,
+        "Failed to unlink deleted table from surf point"
+      )
+      unlinkedSurfPoints.push({
+        id: surfPoint.id,
+        databaseIds: nextIds,
+      })
+    }
+
+    return {
+      deletedTables: found.map((database) => ({
+        id: database.id,
+        databaseId: database.id,
+        name: database.name,
+      })),
+      deletedDatabaseIds: ids,
+      count: count ?? ids.length,
+      unlinkedSurfPoints,
+    }
+  }
+
   async readTable(context: SignalSurfContext, input: ReadTableInput) {
     await this.assertDatabaseBelongsToProduct(context, input.databaseId)
 

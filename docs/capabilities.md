@@ -67,6 +67,7 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `list_databases`               | `tables.read`         | No          | Lists product tables/databases                                                                          |
 | `create_table`                 | `schemas.write`       | No          | Creates a product table with custom schema and saved-view config                                        |
 | `update_table`                 | `schemas.write`       | No          | Updates table metadata, custom schema, and saved-view config                                            |
+| `delete_table`                 | `tables.delete`       | Yes         | Deletes user-facing tables and unlinks them from active Surf Points after product-scope verification    |
 | `list_database_views`          | `tables.read`         | No          | Lists saved database views from view configuration                                                      |
 | `read_table`                   | `tables.read`         | No          | Reads rows with pagination, containment filters, and UI-style filters/sorts                             |
 | `read_table_view`              | `tables.read`         | No          | Reads rows using compatible saved-view filters/sorts                                                    |
@@ -119,7 +120,10 @@ scope needed for step-up authorization.
    capability when the operation is destructive.
 6. Add tests that prove `tools/list` includes the registry entry and scoped
    tokens cannot call tools outside their scopes.
-7. Update this document and the Web-side Surfer capability matrix.
+7. Update this document, the Web-side Surfer capability matrix, and
+   `docs/surfer-mcp-parity.json` when the tool maps to or changes a Surfer
+   capability.
+8. Run `pnpm check:surfer-parity`.
 
 Do not add raw SQL, arbitrary table-name access, service-role-like operations,
 or tools that bypass SignalSurf's existing provenance, changelog, job, or
