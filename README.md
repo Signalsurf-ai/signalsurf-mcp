@@ -188,6 +188,7 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - `create_table_row`, `update_table_row`, `delete_table_rows`
 - `list_database_fields`, `add_database_field`, `update_database_field`, `remove_database_field`, `create_relation_field`
 - `list_surf_point_sources`, `create_surf_point_source`, `update_surf_point_source`, `delete_surf_point_source`, `set_surf_point_source_active`
+- `enable_quick_surf`, `disable_quick_surf`, `list_quick_surf`, `run_quick_surf`
 - `list_product_tools`, `list_surf_point_tools`, `attach_surf_point_tool`, `detach_surf_point_tool`
 - `list_account_list_profiles`, `save_account_list_profile`, `archive_account_list_profile`
 - `deepline_search_people`, `deepline_search_companies`, `deepline_enrich_contact`, `deepline_search_catalog`, `deepline_execute_tool`
@@ -365,6 +366,16 @@ Sources and surf point tools:
   `replaceExisting=true` only when intentionally replacing existing sources.
 - `set_surf_point_source_active`: enables or pauses one source after verifying
   its surf point belongs to the authorized product.
+- `enable_quick_surf` / `disable_quick_surf` / `list_quick_surf` / `run_quick_surf`:
+  per-column enrichment. Enable binds a hidden surf point plus an internal
+  `manual_trigger` source to one `(databaseId, fieldKey)` with a "what to do"
+  instruction; the brain fills that single column from each row's context.
+  Disable keeps the instruction (off-but-remembered). Run queues one `analyze`
+  surf job per row (`scope` = `first10` | `first100` | `all`, capped at 1000) or
+  for a single `entryId`; poll the returned jobs with `list_surf_jobs` /
+  `wait_for_surf_job`. Credits are charged by the brain as each job runs. Enable
+  needs `mcp:sources.write`, list needs `mcp:sources.read`, and run needs
+  `mcp:surf_points.execute`.
 - `list_product_tools`: returns safe product tool metadata from
   `product_tools`; config secrets are not exposed.
 - `list_surf_point_tools`, `attach_surf_point_tool`, and
