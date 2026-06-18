@@ -124,6 +124,22 @@ describe("MCP server", () => {
           updated_at: "2026-06-01T00:00:00Z",
         },
       ],
+      product_goals: [
+        {
+          product_id: context.productId,
+          user_id: "00000000-0000-4000-8000-000000000010",
+          brand_name: "Acme",
+          brand_description: "Acme makes widgets.",
+          product_description: "A widget platform.",
+          product_categories: ["SaaS", "Widgets", "SaaS"],
+          selling_points: ["Fast", "Reliable"],
+          target_audience: "SMB operators",
+          competitors: ["Globex", "Initech"],
+          official_website: "https://acme.example",
+          brand_voice: { secret: "should-not-leak" },
+          updated_at: "2026-06-02T00:00:00Z",
+        },
+      ],
     })
     const server = createSignalSurfMcpServer({
       context,
@@ -154,6 +170,31 @@ describe("MCP server", () => {
     const text =
       result.content?.[0]?.type === "text" ? result.content[0].text : ""
     expect(JSON.parse(text).data.surfPoints[0].name).toBe("Active")
+
+    const brandResult = await client.callTool({
+      name: "get_brand_context",
+      arguments: {},
+    })
+    expect(brandResult.isError).toBeFalsy()
+    const brandText =
+      brandResult.content?.[0]?.type === "text"
+        ? brandResult.content[0].text
+        : ""
+    const brandContext = JSON.parse(brandText).data.brandContext
+    expect(brandContext).toMatchObject({
+      productId: context.productId,
+      brandName: "Acme",
+      brandDescription: "Acme makes widgets.",
+      productDescription: "A widget platform.",
+      productCategories: ["SaaS", "Widgets"],
+      sellingPoints: ["Fast", "Reliable"],
+      targetAudience: "SMB operators",
+      competitors: ["Globex", "Initech"],
+      officialWebsite: "https://acme.example",
+    })
+    expect(brandContext).not.toHaveProperty("brandVoice")
+    expect(brandContext).not.toHaveProperty("brand_voice")
+
     expect(result.structuredContent).toMatchObject({
       ok: true,
       data: {
@@ -325,6 +366,7 @@ describe("MCP server", () => {
         : ""
     const contextBody = JSON.parse(contextText).data
     expect(contextBody.capabilities.tools).toMatchObject({
+      get_brand_context: true,
       create_product: false,
       create_table: false,
       update_table: false,

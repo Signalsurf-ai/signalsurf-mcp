@@ -27,6 +27,7 @@
     "delete_table",
     "delete_table_rows",
     "detach_surf_point_tool",
+    "get_brand_context",
     "get_context",
     "get_surf_job",
     "get_surf_point",

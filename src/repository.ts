@@ -396,6 +396,19 @@ type ProductOwnerRow = {
   owner_id?: string | null
 }
 
+type ProductGoalsRow = {
+  product_id: string
+  brand_name?: string | null
+  brand_description?: string | null
+  product_description?: string | null
+  product_categories?: unknown
+  selling_points?: unknown
+  target_audience?: string | null
+  competitors?: unknown
+  official_website?: string | null
+  updated_at?: string | null
+}
+
 type OrganizationContextRow = {
   id: string
   name: string | null
@@ -574,6 +587,19 @@ const PRODUCT_TOOL_COLUMNS = [
   "config",
   "is_enabled",
   "created_at",
+  "updated_at",
+].join(", ")
+
+const PRODUCT_GOALS_BRAND_COLUMNS = [
+  "product_id",
+  "brand_name",
+  "brand_description",
+  "product_description",
+  "product_categories",
+  "selling_points",
+  "target_audience",
+  "competitors",
+  "official_website",
   "updated_at",
 ].join(", ")
 
@@ -1392,6 +1418,21 @@ export class SignalSurfRepository {
       .eq("id", context.oauthTokenId)
     requireNoDbError(error, "Failed to expand OAuth product grant")
     return productIds
+  }
+
+  async getBrandContext(context: SignalSurfContext) {
+    const { data, error } = await this.db
+      .from("product_goals")
+      .select(PRODUCT_GOALS_BRAND_COLUMNS)
+      .eq("product_id", context.productId)
+      .maybeSingle()
+
+    requireNoDbError(error, "Failed to read brand context")
+    return {
+      brandContext: data
+        ? formatBrandContext(data as ProductGoalsRow)
+        : formatBrandContext({ product_id: context.productId }),
+    }
   }
 
   async listSurfPoints(
@@ -4904,6 +4945,21 @@ function formatProductTool(row: ProductToolRow) {
     name: displayName,
     isEnabled: row.is_enabled ?? null,
     createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
+  }
+}
+
+function formatBrandContext(row: ProductGoalsRow) {
+  return {
+    productId: row.product_id,
+    brandName: readTrimmedString(row.brand_name),
+    brandDescription: readTrimmedString(row.brand_description),
+    productDescription: readTrimmedString(row.product_description),
+    productCategories: uniqueStrings(row.product_categories),
+    sellingPoints: uniqueStrings(row.selling_points),
+    targetAudience: readTrimmedString(row.target_audience),
+    competitors: uniqueStrings(row.competitors),
+    officialWebsite: readTrimmedString(row.official_website),
     updatedAt: row.updated_at ?? null,
   }
 }

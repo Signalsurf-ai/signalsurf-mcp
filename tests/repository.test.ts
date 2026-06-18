@@ -266,6 +266,16 @@ function makeDb() {
       {
         product_id: context.productId,
         user_id: context.userId,
+        brand_name: "Acme",
+        brand_description: "Acme makes widgets.",
+        product_description: "A widget platform.",
+        product_categories: ["SaaS", "Widgets", "SaaS"],
+        selling_points: ["Fast", "Reliable"],
+        target_audience: "SMB operators",
+        competitors: ["Globex", "Initech"],
+        official_website: "https://acme.example",
+        brand_voice: { secret: "should-not-leak" },
+        updated_at: "2026-06-02T00:00:00Z",
       },
     ],
     surf_jobs: [
@@ -452,6 +462,49 @@ describe("SignalSurfRepository", () => {
     await expect(
       repo.getSurfPoint(context, otherProductSurfPoint)
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
+  })
+
+  it("reads product-scoped brand context without leaking other goal fields", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    const { brandContext } = await repo.getBrandContext(context)
+
+    expect(brandContext).toEqual({
+      productId: context.productId,
+      brandName: "Acme",
+      brandDescription: "Acme makes widgets.",
+      productDescription: "A widget platform.",
+      productCategories: ["SaaS", "Widgets"],
+      sellingPoints: ["Fast", "Reliable"],
+      targetAudience: "SMB operators",
+      competitors: ["Globex", "Initech"],
+      officialWebsite: "https://acme.example",
+      updatedAt: "2026-06-02T00:00:00Z",
+    })
+  })
+
+  it("returns empty brand context when the product has no goals row", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    const { brandContext } = await repo.getBrandContext({
+      ...context,
+      productId: secondProductId,
+    })
+
+    expect(brandContext).toEqual({
+      productId: secondProductId,
+      brandName: null,
+      brandDescription: null,
+      productDescription: null,
+      productCategories: [],
+      sellingPoints: [],
+      targetAudience: null,
+      competitors: [],
+      officialWebsite: null,
+      updatedAt: null,
+    })
   })
 
   it("soft-deletes surf points and cancels pending jobs", async () => {

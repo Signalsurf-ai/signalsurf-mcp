@@ -82,6 +82,7 @@ export type McpCapability =
 
 export type PublicMcpToolName =
   | "get_context"
+  | "get_brand_context"
   | "create_product"
   | "list_surf_points"
   | "get_surf_point"
@@ -188,6 +189,15 @@ export const PUBLIC_MCP_TOOLS = {
     title: "Get SignalSurf MCP Context",
     description:
       "Return authorized product ids and names, user, role, scopes, and capability context bound to this MCP connection.",
+    requiredCapability: "context.read",
+    surferSurface: "connection context",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  get_brand_context: {
+    title: "Get Brand Context",
+    description:
+      "Read the active product's brand and positioning context: brand name, brand description, product description, product categories, selling points, target audience, competitors, and official website. Pass productId when this connection can access multiple products. Returns empty fields when the product has not completed brand setup.",
     requiredCapability: "context.read",
     surferSurface: "connection context",
     publicStatus: "supported",
