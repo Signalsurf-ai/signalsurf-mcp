@@ -35,6 +35,7 @@ import {
   deleteTableSchema,
   deleteTableRowsSchema,
   detachSurfPointToolSchema,
+  getBrandContextSchema,
   getSurfPointSchema,
   getSurfJobSchema,
   getTableRowSchema,
@@ -183,6 +184,16 @@ function registerTools(
         },
       }
     })
+  )
+
+  registerPublicTool(
+    "get_brand_context",
+    getBrandContextSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("get_brand_context")
+        return repository.getBrandContext(toolContext(args))
+      })
   )
 
   registerPublicTool("create_product", createProductSchema, async (args: any) =>

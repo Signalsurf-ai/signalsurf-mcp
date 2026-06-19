@@ -182,7 +182,7 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 
 ## What It Exposes
 
-- `create_product`
+- `get_brand_context`, `create_product`
 - `list_surf_points`, `get_surf_point`, `create_surf_point`, `update_surf_point`, `run_surf_point`, `get_surf_job`, `wait_for_surf_job`, `list_surf_jobs`, `cancel_surf_job`, `delete_surf_point`
 - `list_databases`, `create_table`, `update_table`, `delete_table`, `list_database_views`, `read_table`, `read_table_view`, `get_table_row`
 - `create_table_row`, `update_table_row`, `delete_table_rows`
@@ -263,6 +263,11 @@ Context:
   before writes. If `productIds` contains more than one id, choose the intended
   product from `products[]` and pass its `productId` to every product-scoped
   tool call.
+- `get_brand_context`: returns the active product's brand and positioning
+  context from product goals (brand name, brand description, product
+  description, product categories, selling points, target audience, competitors,
+  and official website). Fields are empty until the product completes brand
+  setup. Pass `productId` when this connection can access multiple products.
 
 Products:
 

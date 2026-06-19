@@ -29,6 +29,7 @@
     "detach_surf_point_tool",
     "disable_quick_surf",
     "enable_quick_surf",
+    "get_brand_context",
     "get_context",
     "get_surf_job",
     "get_surf_point",

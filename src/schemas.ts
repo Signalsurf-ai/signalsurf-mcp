@@ -98,6 +98,10 @@ export const createProductSchema = {
   displayOrder: z.number().int().min(0).max(100000).default(0).optional(),
 }
 
+export const getBrandContextSchema = {
+  ...productTargetSchema,
+}
+
 export const listSurfPointsSchema = {
   ...productTargetSchema,
   includeInactive: z.boolean().default(true).optional(),

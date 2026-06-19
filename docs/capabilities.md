@@ -53,6 +53,7 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | Tool                           | Required capability   | Destructive | Notes                                                                                                   |
 | ------------------------------ | --------------------- | ----------- | ------------------------------------------------------------------------------------------------------- |
 | `get_context`                  | `context.read`        | No          | Returns authorized product ids/names, workspace names, user, role, scopes, and per-tool access booleans |
+| `get_brand_context`            | `context.read`        | No          | Reads the active product's brand/positioning context from product goals (empty fields before brand setup) |
 | `create_product`               | `products.write`      | No          | Creates a product through hosted OAuth and expands the active grant                                     |
 | `list_surf_points`             | `surf_points.read`    | No          | Lists non-deleted Surf Points for one authorized product                                                |
 | `get_surf_point`               | `surf_points.read`    | No          | Reads one product-scoped Surf Point                                                                     |
