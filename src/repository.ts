@@ -36,6 +36,11 @@ import {
   unwrapDeepline,
 } from "./deepline.js"
 import { UserFacingError } from "./errors.js"
+import {
+  evaluateRunCondition,
+  parseRunCondition,
+  type RunCondition,
+} from "./run-condition.js"
 
 type DeeplineSearchInput = {
   productId?: string
@@ -124,6 +129,8 @@ type EnableQuickSurfInput = {
   databaseId: string
   fieldKey: string
   whatToDo: string
+  auto?: "off" | "on_created"
+  runCondition?: RunCondition
 }
 
 type DisableQuickSurfInput = {
@@ -140,12 +147,45 @@ type RunQuickSurfInput = {
   fieldKey: string
   scope?: "first10" | "first100" | "all"
   entryId?: string
+  entryIds?: string[]
 }
 
 const QUICK_SURF_SCOPE_LIMITS: Record<string, number> = {
   first10: 10,
   first100: 100,
   all: 1000,
+}
+
+function buildQuickSurfMetadata(
+  input: {
+    databaseId: string
+    fieldKey: string
+    auto?: "off" | "on_created"
+    runCondition?: RunCondition
+  },
+  existing?: JsonRecord
+): JsonRecord {
+  const metadata: JsonRecord = {
+    ...(existing ?? {}),
+    event_type: "manual_trigger",
+    database_id: input.databaseId,
+    target_field: input.fieldKey,
+    disabled: false,
+  }
+  if (input.auto === "on_created") {
+    metadata.auto = "on_created"
+  } else if (input.auto === "off") {
+    delete metadata.auto
+  }
+  if (input.runCondition !== undefined) {
+    const runCondition = parseRunCondition(input.runCondition)
+    if (runCondition) {
+      metadata.run_condition = runCondition
+    } else {
+      delete metadata.run_condition
+    }
+  }
+  return metadata
 }
 
 type ListProductToolsInput = {
@@ -2238,13 +2278,7 @@ export class SignalSurfRepository {
       const { error: srcError } = await this.db
         .from("sources")
         .update({
-          metadata: {
-            ...existing.metadata,
-            event_type: "manual_trigger",
-            database_id: input.databaseId,
-            target_field: input.fieldKey,
-            disabled: false,
-          },
+          metadata: buildQuickSurfMetadata(input, existing.metadata),
         })
         .eq("id", existing.id)
       requireNoDbError(srcError, "Failed to re-enable Quick Surf")
@@ -2304,9 +2338,7 @@ export class SignalSurfRepository {
       name: "Quick Surf",
       type: "internal",
       metadata: {
-        event_type: "manual_trigger",
-        database_id: input.databaseId,
-        target_field: input.fieldKey,
+        ...buildQuickSurfMetadata(input),
       },
       data_schema: { fields: [] },
       is_active: true,
@@ -2419,15 +2451,18 @@ export class SignalSurfRepository {
   }
 
   async runQuickSurf(context: SignalSurfContext, input: RunQuickSurfInput) {
-    if (!input.scope && !input.entryId) {
+    const entryIds = uniqueIds(input.entryIds ?? [])
+    const modeCount =
+      (input.scope ? 1 : 0) + (input.entryId ? 1 : 0) + (entryIds.length ? 1 : 0)
+    if (modeCount === 0) {
       throw new UserFacingError(
-        'Provide either scope ("first10" | "first100" | "all") for a column run, or entryId for a single cell.',
+        'Provide scope ("first10" | "first100" | "all"), entryId for a single cell, or entryIds for a specific row subset.',
         { code: "BAD_REQUEST", status: 400 }
       )
     }
-    if (input.scope && input.entryId) {
+    if (modeCount > 1) {
       throw new UserFacingError(
-        "Provide scope or entryId, not both.",
+        "Provide exactly one of scope, entryId, or entryIds.",
         { code: "BAD_REQUEST", status: 400 }
       )
     }
@@ -2567,19 +2602,31 @@ export class SignalSurfRepository {
       }
     }
 
-    const limit = QUICK_SURF_SCOPE_LIMITS[input.scope as string]
-    const { data: rows, error: rowsError } = await this.db
+    const limit = input.scope ? QUICK_SURF_SCOPE_LIMITS[input.scope] : 1000
+    const rowsQuery = this.db
       .from("entries")
       .select("id, data, database_id")
       .eq("database_id", input.databaseId)
-      .order("updated_at", { ascending: false })
-      .limit(limit)
+    const { data: rows, error: rowsError } =
+      entryIds.length > 0
+        ? await rowsQuery.in("id", entryIds)
+        : await rowsQuery.order("updated_at", { ascending: false }).limit(limit)
     requireNoDbError(rowsError, "Failed to list rows for Quick Surf")
-    const entries = (rows ?? []) as Array<{
+    const allEntries = (rows ?? []) as Array<{
       id: string
       data: unknown
       database_id?: string | null
     }>
+    const runCondition = parseRunCondition(source.metadata.run_condition)
+    const entries = runCondition
+      ? allEntries.filter((entry) =>
+          evaluateRunCondition(
+            runCondition,
+            asRecord((entry.data ?? {}) as JsonRecord)
+          )
+        )
+      : allEntries
+    const skipped = allEntries.length - entries.length
     const rawSignalIds: string[] = []
     const jobs: ReturnType<typeof formatSurfJob>[] = []
     for (const entry of entries) {
@@ -2593,10 +2640,13 @@ export class SignalSurfRepository {
       mode: "column" as const,
       databaseId: input.databaseId,
       fieldKey: input.fieldKey,
-      scope: input.scope,
+      scope: input.scope ?? null,
+      selected: entryIds.length > 0 ? entryIds.length : undefined,
       surfPointId: playbook.id,
       queued: rawSignalIds.length,
+      skipped,
       rawSignalIds,
+      entryIds: entries.map((entry) => entry.id),
       jobs,
       ...(truncated
         ? {

@@ -374,13 +374,17 @@ Sources and surf point tools:
 - `enable_quick_surf` / `disable_quick_surf` / `list_quick_surf` / `run_quick_surf`:
   per-column enrichment. Enable binds a hidden surf point plus an internal
   `manual_trigger` source to one `(databaseId, fieldKey)` with a "what to do"
-  instruction; the brain fills that single column from each row's context.
-  Disable keeps the instruction (off-but-remembered). Run queues one `analyze`
-  surf job per row (`scope` = `first10` | `first100` | `all`, capped at 1000) or
-  for a single `entryId`; poll the returned jobs with `list_surf_jobs` /
-  `wait_for_surf_job`. Credits are charged by the brain as each job runs. Enable
-  needs `mcp:sources.write`, list needs `mcp:sources.read`, and run needs
-  `mcp:surf_points.execute`.
+  instruction; the brain fills that single column from each row's context. Enable
+  can also persist `auto: "on_created"` and an "only run if" `runCondition`
+  gate (`has_value`, `is_empty`, comparisons, numeric comparisons, or `in`).
+  Disable keeps the instruction and gate (off-but-remembered). Run queues one
+  `analyze` surf job per matching row: pass `scope` (`first10` | `first100` |
+  `all`, capped at 1000), a specific `entryIds` subset, or a single `entryId`.
+  Column/subset runs apply the persisted `runCondition` before queueing and
+  return `queued`, `skipped`, `rawSignalIds`, jobs, and the touched `entryIds`;
+  poll the returned jobs with `list_surf_jobs` / `wait_for_surf_job`. Credits
+  are charged by the brain as each job runs. Enable needs `mcp:sources.write`,
+  list needs `mcp:sources.read`, and run needs `mcp:surf_points.execute`.
 - `list_product_tools`: returns safe product tool metadata from
   `product_tools`; config secrets are not exposed.
 - `list_surf_point_tools`, `attach_surf_point_tool`, and

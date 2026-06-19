@@ -199,9 +199,34 @@ const quickSurfColumnTarget = {
   fieldKey: z.string().trim().min(1).max(100),
 }
 
+const runConditionSchema = z.object({
+  column: z.string().trim().min(1).max(100),
+  predicate: z.enum([
+    "has_value",
+    "is_empty",
+    "equals",
+    "not_equals",
+    "contains",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "in",
+  ]),
+  value: z
+    .union([
+      z.string(),
+      z.number(),
+      z.array(z.union([z.string(), z.number()])),
+    ])
+    .nullish(),
+})
+
 export const enableQuickSurfSchema = {
   ...quickSurfColumnTarget,
   whatToDo: z.string().trim().min(1).max(10000),
+  auto: z.enum(["off", "on_created"]).optional(),
+  runCondition: runConditionSchema.optional(),
 }
 
 export const disableQuickSurfSchema = {
@@ -217,6 +242,7 @@ export const runQuickSurfSchema = {
   ...quickSurfColumnTarget,
   scope: z.enum(["first10", "first100", "all"]).optional(),
   entryId: uuidSchema.optional(),
+  entryIds: z.array(uuidSchema).min(1).max(1000).optional(),
 }
 
 export const deleteSurfPointSchema = {
