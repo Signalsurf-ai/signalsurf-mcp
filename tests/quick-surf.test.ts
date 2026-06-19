@@ -45,13 +45,13 @@ function makeDb() {
       {
         id: entry1,
         database_id: db1,
-        data: { name: "Ada" },
+        data: { name: "Ada", company: "SignalSurf", score: 80 },
         updated_at: "2026-06-02T00:00:00Z",
       },
       {
         id: entry2,
         database_id: db1,
-        data: { name: "Linus" },
+        data: { name: "Linus", company: "Linux", score: 20 },
         updated_at: "2026-06-01T00:00:00Z",
       },
     ],
@@ -91,6 +91,24 @@ describe("Quick Surf column enrichment", () => {
       event_type: "manual_trigger",
       database_id: db1,
       target_field: "work_email",
+    })
+  })
+
+  it("persists auto mode and run-condition metadata when enabling Quick Surf", async () => {
+    const db = makeDb()
+    const repo = makeRepo(db)
+
+    await repo.enableQuickSurf(context, {
+      databaseId: db1,
+      fieldKey: "work_email",
+      whatToDo: "Find work email for qualified companies.",
+      auto: "on_created",
+      runCondition: { column: "score", predicate: "gt", value: 50 },
+    })
+
+    expect(db.tables.sources[0].metadata).toMatchObject({
+      auto: "on_created",
+      run_condition: { column: "score", predicate: "gt", value: 50 },
     })
   })
 
@@ -222,11 +240,36 @@ describe("Quick Surf column enrichment", () => {
     expect(db.tables.raw_signals[0].data.entry_id).toBe(entry1)
   })
 
-  it("requires scope or entryId, and refuses to run a column with no Quick Surf", async () => {
+  it("runs an explicit row subset and applies the persisted run condition", async () => {
+    const db = makeDb()
+    const repo = makeRepo(db)
+    await repo.enableQuickSurf(context, {
+      databaseId: db1,
+      fieldKey: "work_email",
+      whatToDo: "Find the work email.",
+      runCondition: { column: "score", predicate: "gt", value: 50 },
+    })
+
+    const run = await repo.runQuickSurf(context, {
+      databaseId: db1,
+      fieldKey: "work_email",
+      entryIds: [entry1, entry2],
+    })
+
+    expect(run.mode).toBe("column")
+    expect(run.selected).toBe(2)
+    expect(run.queued).toBe(1)
+    expect(run.skipped).toBe(1)
+    expect(run.entryIds).toEqual([entry1])
+    expect(db.tables.raw_signals).toHaveLength(1)
+    expect(db.tables.raw_signals[0].data.entry_id).toBe(entry1)
+  })
+
+  it("requires one run mode, and refuses to run a column with no Quick Surf", async () => {
     const repo = makeRepo(makeDb())
     await expect(
       repo.runQuickSurf(context, { databaseId: db1, fieldKey: "work_email" })
-    ).rejects.toThrow(/scope.*entryId|entryId.*scope/i)
+    ).rejects.toThrow(/scope.*entryId.*entryIds/i)
     await expect(
       repo.runQuickSurf(context, {
         databaseId: db1,

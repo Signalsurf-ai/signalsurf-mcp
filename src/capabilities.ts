@@ -634,7 +634,7 @@ export const PUBLIC_MCP_TOOLS = {
   enable_quick_surf: {
     title: "Enable Quick Surf",
     description:
-      "Enable Quick Surf on one table column: bind a hidden surf point + manual-trigger source to (databaseId, fieldKey) with a 'what to do' instruction the brain uses to fill that single column from each row's context. Re-enabling an off column restores it and updates the instruction. Pass productId when this connection can access multiple products.",
+      "Enable Quick Surf on one table column: bind a hidden surf point + manual-trigger source to (databaseId, fieldKey) with a 'what to do' instruction the brain uses to fill that single column from each row's context. Optionally pass auto ('on_created' to auto-fill new rows, 'off' to clear auto-fill) and runCondition for the column's 'only run if' gate. Re-enabling an off column restores it and updates the instruction. Pass productId when this connection can access multiple products.",
     requiredCapability: "sources.write",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
@@ -661,7 +661,7 @@ export const PUBLIC_MCP_TOOLS = {
   run_quick_surf: {
     title: "Run Quick Surf",
     description:
-      "Queue Quick Surf enrichment for a column. Pass scope ('first10' | 'first100' | 'all', capped at 1000 rows) to backfill across rows, or entryId for a single cell. Returns the queued raw signal + surf job ids; poll with list_surf_jobs / wait_for_surf_job. Credits are charged by the brain as each job runs.",
+      "Queue Quick Surf enrichment for a column. Pass exactly one mode: scope ('first10' | 'first100' | 'all', capped at 1000 rows) to backfill across rows, entryIds for a specific row subset, or entryId for a single cell. Column/subset runs apply the persisted runCondition gate before queueing and return queued, skipped, rawSignalIds, jobs, and touched entryIds. Poll with list_surf_jobs / wait_for_surf_job. Credits are charged by the brain as each job runs.",
     requiredCapability: "surf_points.execute",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
