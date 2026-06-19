@@ -62,6 +62,10 @@ import {
   deeplineSearchCatalogSchema,
   deeplineExecuteToolSchema,
   setSurfPointSourceActiveSchema,
+  enableQuickSurfSchema,
+  disableQuickSurfSchema,
+  listQuickSurfSchema,
+  runQuickSurfSchema,
   updateDatabaseFieldSchema,
   updateSurfPointSourceSchema,
   toolOutputSchema,
@@ -510,6 +514,40 @@ function registerTools(
         assertToolAllowed("replay_webhook_payload")
         return repository.replayWebhookPayload(toolContext(args), args)
       })
+  )
+
+  registerPublicTool(
+    "enable_quick_surf",
+    enableQuickSurfSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("enable_quick_surf")
+        return repository.enableQuickSurf(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "disable_quick_surf",
+    disableQuickSurfSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("disable_quick_surf")
+        return repository.disableQuickSurf(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool("list_quick_surf", listQuickSurfSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("list_quick_surf")
+      return repository.listQuickSurf(toolContext(args), args)
+    })
+  )
+
+  registerPublicTool("run_quick_surf", runQuickSurfSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("run_quick_surf")
+      return repository.runQuickSurf(toolContext(args), args)
+    })
   )
 
   registerPublicTool(

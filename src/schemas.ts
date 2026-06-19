@@ -190,6 +190,35 @@ export const cancelSurfJobSchema = {
   jobId: uuidSchema,
 }
 
+// ─── Quick Surf (per-column enrichment) ──────────────────────────────────────
+// A hidden surf point bound to one database column (target_field). enable/disable
+// manage the binding; run queues per-row brain enrichment jobs.
+const quickSurfColumnTarget = {
+  ...productTargetSchema,
+  databaseId: uuidSchema,
+  fieldKey: z.string().trim().min(1).max(100),
+}
+
+export const enableQuickSurfSchema = {
+  ...quickSurfColumnTarget,
+  whatToDo: z.string().trim().min(1).max(10000),
+}
+
+export const disableQuickSurfSchema = {
+  ...quickSurfColumnTarget,
+}
+
+export const listQuickSurfSchema = {
+  ...productTargetSchema,
+  databaseId: uuidSchema,
+}
+
+export const runQuickSurfSchema = {
+  ...quickSurfColumnTarget,
+  scope: z.enum(["first10", "first100", "all"]).optional(),
+  entryId: uuidSchema.optional(),
+}
+
 export const deleteSurfPointSchema = {
   ...productTargetSchema,
   surfPointIds: z.array(uuidSchema).min(1).max(50),

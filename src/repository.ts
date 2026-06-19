@@ -120,6 +120,34 @@ type RunSurfPointInput = {
   dedupePending?: boolean
 }
 
+type EnableQuickSurfInput = {
+  databaseId: string
+  fieldKey: string
+  whatToDo: string
+}
+
+type DisableQuickSurfInput = {
+  databaseId: string
+  fieldKey: string
+}
+
+type ListQuickSurfInput = {
+  databaseId: string
+}
+
+type RunQuickSurfInput = {
+  databaseId: string
+  fieldKey: string
+  scope?: "first10" | "first100" | "all"
+  entryId?: string
+}
+
+const QUICK_SURF_SCOPE_LIMITS: Record<string, number> = {
+  first10: 10,
+  first100: 100,
+  all: 1000,
+}
+
 type ListProductToolsInput = {
   includeDisabled?: boolean
   limit?: number
@@ -2116,6 +2144,465 @@ export class SignalSurfRepository {
       runId,
       traceId,
       sourceIdsQueued: sourcesToQueue.map((source) => source.id),
+    }
+  }
+
+  // ─── Quick Surf (per-column enrichment) ────────────────────────────────────
+  //
+  // Mirrors the dashboard column "Quick Surf" toggle: a hidden surf point
+  // (playbooks row) bound to one column via an internal `manual_trigger` source
+  // whose metadata carries { event_type, database_id, target_field, disabled? }.
+  // Running enqueues one `analyze` surf job per row through the normal brain
+  // pipeline (so credits are charged by the brain as each job runs); poll with
+  // list_surf_jobs / wait_for_surf_job. Sources are product-scoped through their
+  // owning playbook, so every lookup re-verifies the playbook's product_id rather
+  // than relying on an embedded-resource filter the test double cannot model.
+  private async findQuickSurfSource(
+    context: SignalSurfContext,
+    databaseId: string,
+    fieldKey: string
+  ): Promise<{
+    id: string
+    playbook_id: string | null
+    metadata: JsonRecord
+  } | null> {
+    const { data, error } = await this.db
+      .from("sources")
+      .select("id, playbook_id, metadata")
+      .contains("metadata", {
+        event_type: "manual_trigger",
+        database_id: databaseId,
+        target_field: fieldKey,
+      })
+    requireNoDbError(error, "Failed to look up Quick Surf source")
+    const candidates = (data ?? []) as Array<{
+      id: string
+      playbook_id: string | null
+      metadata: unknown
+    }>
+    for (const candidate of candidates) {
+      if (!candidate.playbook_id) continue
+      const { data: playbook } = await this.db
+        .from("playbooks")
+        .select("id")
+        .eq("id", candidate.playbook_id)
+        .eq("product_id", context.productId)
+        .is("deleted_at", null)
+        .maybeSingle()
+      if (playbook) {
+        return {
+          id: candidate.id,
+          playbook_id: candidate.playbook_id,
+          metadata: asRecord(candidate.metadata),
+        }
+      }
+    }
+    return null
+  }
+
+  async enableQuickSurf(
+    context: SignalSurfContext,
+    input: EnableQuickSurfInput
+  ) {
+    const database = await this.getDatabaseAndValidateProduct(
+      context,
+      input.databaseId
+    )
+    const fields = schemaFields(asRecord(database.schema))
+    const field = fields.find((entry) => entry.key === input.fieldKey)
+    if (!field) {
+      throw new UserFacingError(
+        `Column "${input.fieldKey}" not found in this database. Add it with add_database_field first.`,
+        { code: "NOT_FOUND", status: 404 }
+      )
+    }
+    if (field.is_primary === true) {
+      throw new UserFacingError(
+        "The primary column cannot be enriched with Quick Surf.",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+    const whatToDo = input.whatToDo.trim()
+    const fieldLabel =
+      typeof field.label === "string" && field.label
+        ? field.label
+        : input.fieldKey
+
+    const existing = await this.findQuickSurfSource(
+      context,
+      input.databaseId,
+      input.fieldKey
+    )
+    if (existing) {
+      const wasDisabled = existing.metadata.disabled === true
+      const { error: srcError } = await this.db
+        .from("sources")
+        .update({
+          metadata: {
+            ...existing.metadata,
+            event_type: "manual_trigger",
+            database_id: input.databaseId,
+            target_field: input.fieldKey,
+            disabled: false,
+          },
+        })
+        .eq("id", existing.id)
+      requireNoDbError(srcError, "Failed to re-enable Quick Surf")
+      if (existing.playbook_id) {
+        const { error: pbError } = await this.db
+          .from("playbooks")
+          .update({
+            surf_prompt: whatToDo,
+            prompt_template: whatToDo,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing.playbook_id)
+          .eq("product_id", context.productId)
+        requireNoDbError(pbError, "Failed to update Quick Surf instruction")
+      }
+      return {
+        success: true,
+        reused: true,
+        restored: wasDisabled,
+        databaseId: input.databaseId,
+        fieldKey: input.fieldKey,
+        surfPointId: existing.playbook_id,
+        sourceId: existing.id,
+      }
+    }
+
+    const ownerId =
+      context.userId ?? (await this.resolveProductOwnerId(context))
+    if (!ownerId) {
+      throw new UserFacingError(
+        "Cannot enable Quick Surf because no owning user could be resolved.",
+        { code: "CONFIG_ERROR", status: 500 }
+      )
+    }
+
+    const surfPointId = randomUUID()
+    const playbookName = `${database.name || "Database"} · ${fieldLabel}`
+    const { error: pbError } = await this.db.from("playbooks").insert({
+      id: surfPointId,
+      product_id: context.productId,
+      name: playbookName,
+      description: null,
+      is_default: false,
+      database_ids: [input.databaseId],
+      surf_prompt: whatToDo,
+      prompt_template: whatToDo,
+      relevance_threshold: 0,
+      tool_config: {},
+      deleted_at: null,
+    })
+    requireNoDbError(pbError, "Failed to create the Quick Surf surf point")
+
+    const sourceId = randomUUID()
+    const { error: srcError } = await this.db.from("sources").insert({
+      id: sourceId,
+      user_id: ownerId,
+      name: "Quick Surf",
+      type: "internal",
+      metadata: {
+        event_type: "manual_trigger",
+        database_id: input.databaseId,
+        target_field: input.fieldKey,
+      },
+      data_schema: { fields: [] },
+      is_active: true,
+      playbook_id: surfPointId,
+    })
+    if (srcError) {
+      // Roll back the playbook so we never leave an orphaned hidden surf point.
+      await this.db
+        .from("playbooks")
+        .delete()
+        .eq("id", surfPointId)
+        .eq("product_id", context.productId)
+      requireNoDbError(srcError, "Failed to bind Quick Surf to the column")
+    }
+    return {
+      success: true,
+      reused: false,
+      restored: false,
+      databaseId: input.databaseId,
+      fieldKey: input.fieldKey,
+      surfPointId,
+      sourceId,
+    }
+  }
+
+  async disableQuickSurf(
+    context: SignalSurfContext,
+    input: DisableQuickSurfInput
+  ) {
+    const existing = await this.findQuickSurfSource(
+      context,
+      input.databaseId,
+      input.fieldKey
+    )
+    if (!existing) {
+      return {
+        success: true,
+        alreadyOff: true,
+        databaseId: input.databaseId,
+        fieldKey: input.fieldKey,
+      }
+    }
+    // Turn off WITHOUT deleting: keep the surf point + its "what to do" so
+    // re-enabling restores the instruction.
+    const { error } = await this.db
+      .from("sources")
+      .update({
+        metadata: {
+          ...existing.metadata,
+          event_type: "manual_trigger",
+          database_id: input.databaseId,
+          target_field: input.fieldKey,
+          disabled: true,
+        },
+      })
+      .eq("id", existing.id)
+    requireNoDbError(error, "Failed to disable Quick Surf")
+    return {
+      success: true,
+      databaseId: input.databaseId,
+      fieldKey: input.fieldKey,
+    }
+  }
+
+  async listQuickSurf(context: SignalSurfContext, input: ListQuickSurfInput) {
+    await this.assertDatabaseBelongsToProduct(context, input.databaseId)
+    const { data, error } = await this.db
+      .from("sources")
+      .select("id, metadata, playbook_id")
+      .contains("metadata", {
+        event_type: "manual_trigger",
+        database_id: input.databaseId,
+      })
+    requireNoDbError(error, "Failed to list Quick Surf columns")
+    const sources = (data ?? []) as Array<{
+      id: string
+      metadata: unknown
+      playbook_id: string | null
+    }>
+    const columns: Array<{
+      fieldKey: string
+      surfPointId: string
+      sourceId: string
+      whatToDo: string | null
+    }> = []
+    for (const source of sources) {
+      const meta = asRecord(source.metadata)
+      const targetField = meta.target_field
+      if (typeof targetField !== "string" || !targetField) continue
+      // Off-but-remembered columns are not "enabled" — skip them.
+      if (meta.disabled === true) continue
+      if (!source.playbook_id) continue
+      const { data: playbook } = await this.db
+        .from("playbooks")
+        .select("id, surf_prompt")
+        .eq("id", source.playbook_id)
+        .eq("product_id", context.productId)
+        .is("deleted_at", null)
+        .maybeSingle()
+      if (!playbook) continue
+      const surfPrompt = asRecord(playbook).surf_prompt
+      columns.push({
+        fieldKey: targetField,
+        surfPointId: source.playbook_id,
+        sourceId: source.id,
+        whatToDo: typeof surfPrompt === "string" ? surfPrompt : null,
+      })
+    }
+    return { success: true, databaseId: input.databaseId, columns }
+  }
+
+  async runQuickSurf(context: SignalSurfContext, input: RunQuickSurfInput) {
+    if (!input.scope && !input.entryId) {
+      throw new UserFacingError(
+        'Provide either scope ("first10" | "first100" | "all") for a column run, or entryId for a single cell.',
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+    if (input.scope && input.entryId) {
+      throw new UserFacingError(
+        "Provide scope or entryId, not both.",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+    await this.assertDatabaseBelongsToProduct(context, input.databaseId)
+
+    const source = await this.findQuickSurfSource(
+      context,
+      input.databaseId,
+      input.fieldKey
+    )
+    if (!source || !source.playbook_id) {
+      throw new UserFacingError(
+        `Quick Surf is not set up on column "${input.fieldKey}". Call enable_quick_surf first.`,
+        { code: "NOT_FOUND", status: 404 }
+      )
+    }
+    if (source.metadata.disabled === true) {
+      throw new UserFacingError(
+        `Quick Surf is turned off on column "${input.fieldKey}". Call enable_quick_surf to turn it back on, then run.`,
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+
+    const { data: playbookData, error: pbError } = await this.db
+      .from("playbooks")
+      .select(
+        "id, prompt_template, surf_prompt, scoring_rubric, is_active, product_id"
+      )
+      .eq("id", source.playbook_id)
+      .eq("product_id", context.productId)
+      .maybeSingle()
+    requireNoDbError(pbError, "Failed to load the Quick Surf surf point")
+    const playbook = playbookData as {
+      id: string
+      prompt_template?: string | null
+      surf_prompt?: string | null
+      scoring_rubric?: string | null
+      is_active?: boolean | null
+      product_id: string
+    } | null
+    const playbookValid =
+      !!playbook &&
+      (playbook.is_active ?? true) &&
+      (!!playbook.prompt_template ||
+        !!playbook.surf_prompt ||
+        !!playbook.scoring_rubric)
+    if (!playbook || !playbookValid) {
+      throw new UserFacingError(
+        "The Quick Surf surf point has no instruction or is inactive — re-run enable_quick_surf with a whatToDo.",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+
+    const userId =
+      context.userId ?? (await this.resolveProductOwnerId(context))
+    if (!userId) {
+      throw new UserFacingError(
+        "Cannot queue Quick Surf because no job user could be resolved.",
+        { code: "CONFIG_ERROR", status: 500 }
+      )
+    }
+
+    const enqueue = async (entry: {
+      id: string
+      data: unknown
+      database_id?: string | null
+    }): Promise<{ rawSignalId: string; job: ReturnType<typeof formatSurfJob> }> => {
+      const rawSignalId = randomUUID()
+      const { error: rawError } = await this.db.from("raw_signals").insert({
+        id: rawSignalId,
+        source_id: source.id,
+        status: "pending",
+        data: {
+          event_type: "manual_trigger",
+          triggered_at: new Date().toISOString(),
+          triggered_by: "mcp",
+          source_id: source.id,
+          target_field: input.fieldKey,
+          entry_id: entry.id,
+          entry_data: entry.data ?? null,
+          database_id: entry.database_id ?? input.databaseId,
+        },
+      })
+      requireNoDbError(rawError, "Failed to enqueue Quick Surf signal")
+      const { data: jobRow, error: jobError } = await this.db
+        .from("surf_jobs")
+        .insert({
+          id: randomUUID(),
+          job_type: "analyze",
+          status: "pending",
+          priority: 50,
+          product_id: playbook.product_id,
+          user_id: userId,
+          source_id: source.id,
+          playbook_id: playbook.id,
+          payload: {
+            raw_signal_id: rawSignalId,
+            playbook_id: playbook.id,
+            target_field: input.fieldKey,
+            triggered_by: "mcp",
+          },
+          max_attempts: 3,
+        })
+        .select("*")
+        .single()
+      requireNoDbError(jobError, "Failed to enqueue Quick Surf job")
+      return { rawSignalId, job: formatSurfJob(jobRow as SurfJobRow) }
+    }
+
+    if (input.entryId) {
+      const { data: entry, error: entryError } = await this.db
+        .from("entries")
+        .select("id, data, database_id")
+        .eq("id", input.entryId)
+        .eq("database_id", input.databaseId)
+        .maybeSingle()
+      requireNoDbError(entryError, "Failed to load the target entry")
+      if (!entry) {
+        throw new UserFacingError(
+          "Entry not found in this column's database.",
+          { code: "NOT_FOUND", status: 404 }
+        )
+      }
+      const queued = await enqueue(
+        entry as { id: string; data: unknown; database_id?: string | null }
+      )
+      return {
+        success: true,
+        mode: "cell" as const,
+        databaseId: input.databaseId,
+        fieldKey: input.fieldKey,
+        entryId: input.entryId,
+        surfPointId: playbook.id,
+        queued: 1,
+        rawSignalIds: [queued.rawSignalId],
+        jobs: [queued.job],
+      }
+    }
+
+    const limit = QUICK_SURF_SCOPE_LIMITS[input.scope as string]
+    const { data: rows, error: rowsError } = await this.db
+      .from("entries")
+      .select("id, data, database_id")
+      .eq("database_id", input.databaseId)
+      .order("updated_at", { ascending: false })
+      .limit(limit)
+    requireNoDbError(rowsError, "Failed to list rows for Quick Surf")
+    const entries = (rows ?? []) as Array<{
+      id: string
+      data: unknown
+      database_id?: string | null
+    }>
+    const rawSignalIds: string[] = []
+    const jobs: ReturnType<typeof formatSurfJob>[] = []
+    for (const entry of entries) {
+      const queued = await enqueue(entry)
+      rawSignalIds.push(queued.rawSignalId)
+      jobs.push(queued.job)
+    }
+    const truncated = input.scope === "all" && entries.length === limit
+    return {
+      success: true,
+      mode: "column" as const,
+      databaseId: input.databaseId,
+      fieldKey: input.fieldKey,
+      scope: input.scope,
+      surfPointId: playbook.id,
+      queued: rawSignalIds.length,
+      rawSignalIds,
+      jobs,
+      ...(truncated
+        ? {
+            note: `Capped at ${limit} rows. There may be more — re-run to continue.`,
+          }
+        : {}),
     }
   }
 
