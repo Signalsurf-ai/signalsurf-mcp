@@ -188,7 +188,7 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - `list_table_fields`, `add_table_field`, `update_table_field`, `remove_table_field`, `create_relation_field`
 - `list_signals`, `create_signal`, `update_signal`, `delete_signal`
 - `enable_quick_surf`, `disable_quick_surf`, `list_quick_surf`, `run_quick_surf`
-- `list_product_tools`, `list_surf_point_tools`, `attach_surf_point_tool`, `detach_surf_point_tool`
+- `list_product_tools`, `list_surf_point_tools` (attach/detach tools via `update_surf_point` `toolConfigPatch.auto_tool_ids`)
 - `deepline_search_people`, `deepline_search_companies`, `deepline_enrich_contact`, `deepline_search_catalog`, `deepline_execute_tool`
 - Resources for context; single-product tokens also expose surf point, database,
   surf job, and database-row resources
@@ -383,10 +383,9 @@ Sources and surf point tools:
   list needs `mcp:sources.read`, and run needs `mcp:surf_points.execute`.
 - `list_product_tools`: returns safe product tool metadata from
   `product_tools`; config secrets are not exposed.
-- `list_surf_point_tools`, `attach_surf_point_tool`, and
-  `detach_surf_point_tool`: manage `tool_config.auto_tool_ids` on a surf point
-  idempotently. Attach/detach validates that the tool exists in the authorized
-  product.
+- `list_surf_point_tools`: lists the tool ids in `tool_config.auto_tool_ids`
+  for a surf point. To attach or detach a tool, set
+  `toolConfigPatch.auto_tool_ids` via `update_surf_point` (shallow-merged).
 
 Roles:
 

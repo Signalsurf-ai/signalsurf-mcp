@@ -88,9 +88,7 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `list_quick_surf`              | `sources.read`        | No          | Lists Quick Surf-enabled columns for a table with their instructions                                    |
 | `run_quick_surf`               | `surf_points.execute` | No          | Queues column, row-subset, or single-cell enrichment; column/subset runs apply the persisted run gate   |
 | `list_product_tools`           | `surf_points.read`    | No          | Lists safe product tool metadata; config secrets are not exposed                                        |
-| `list_surf_point_tools`        | `surf_points.read`    | No          | Lists tool ids from `tool_config.auto_tool_ids`                                                         |
-| `attach_surf_point_tool`       | `surf_points.write`   | No          | Adds one tool id to `tool_config.auto_tool_ids` idempotently                                            |
-| `detach_surf_point_tool`       | `surf_points.write`   | No          | Removes one tool id from `tool_config.auto_tool_ids` idempotently                                       |
+| `list_surf_point_tools`        | `surf_points.read`    | No          | Lists tool ids from `tool_config.auto_tool_ids` (attach/detach via `update_surf_point` toolConfigPatch) |
 | `deepline_search_people`       | `deepline.read`       | No          | Runs the curated Apollo-backed people search through Deepline                                           |
 | `deepline_search_companies`    | `deepline.read`       | No          | Runs the curated Apollo-backed company search through Deepline                                          |
 | `deepline_enrich_contact`      | `deepline.enrich`     | No          | Finds a work email through Deepline's configured email finder                                           |

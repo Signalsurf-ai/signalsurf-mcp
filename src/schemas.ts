@@ -453,18 +453,6 @@ export const listSurfPointToolsSchema = {
   surfPointId: uuidSchema,
 }
 
-export const attachSurfPointToolSchema = {
-  ...productTargetSchema,
-  surfPointId: uuidSchema,
-  toolId: uuidSchema,
-}
-
-export const detachSurfPointToolSchema = {
-  ...productTargetSchema,
-  surfPointId: uuidSchema,
-  toolId: uuidSchema,
-}
-
 const numericRangeSchema = z
   .object({
     min: z.number().optional(),

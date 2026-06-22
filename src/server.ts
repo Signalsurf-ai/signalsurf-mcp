@@ -20,7 +20,6 @@ import {
 import { jsonResource, runJsonTool } from "./mcp-results.js"
 import { SignalSurfRepository } from "./repository.js"
 import {
-  attachSurfPointToolSchema,
   createSurfPointSourceSchema,
   createProductSchema,
   createSurfPointSchema,
@@ -33,7 +32,6 @@ import {
   deleteSurfPointSchema,
   deleteTableSchema,
   deleteTableRowsSchema,
-  detachSurfPointToolSchema,
   getBrandContextSchema,
   getSurfPointSchema,
   getSurfJobSchema,
@@ -536,26 +534,6 @@ function registerTools(
           toolContext(args),
           args.surfPointId
         )
-      })
-  )
-
-  registerPublicTool(
-    "attach_surf_point_tool",
-    attachSurfPointToolSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("attach_surf_point_tool")
-        return repository.attachSurfPointTool(toolContext(args), args)
-      })
-  )
-
-  registerPublicTool(
-    "detach_surf_point_tool",
-    detachSurfPointToolSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("detach_surf_point_tool")
-        return repository.detachSurfPointTool(toolContext(args), args)
       })
   )
 

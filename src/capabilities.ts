@@ -120,8 +120,6 @@ export type PublicMcpToolName =
   | "run_quick_surf"
   | "list_product_tools"
   | "list_surf_point_tools"
-  | "attach_surf_point_tool"
-  | "detach_surf_point_tool"
   | "deepline_search_people"
   | "deepline_search_companies"
   | "deepline_enrich_contact"
@@ -239,7 +237,7 @@ export const PUBLIC_MCP_TOOLS = {
   update_surf_point: {
     title: "Update Surf Point",
     description:
-      "Modify surf point metadata, prompt fields, target databases, and JSON config for an authorized product. Pass productId when this connection can access multiple products.",
+      "Modify surf point metadata, prompt fields, target tables, and JSON config for an authorized product. To attach or detach product integration tools, set toolConfigPatch.auto_tool_ids using tool ids from list_product_tools/list_surf_point_tools (shallow-merged). Pass productId when this connection can access multiple products.",
     requiredCapability: "surf_points.write",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
@@ -496,24 +494,6 @@ export const PUBLIC_MCP_TOOLS = {
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
-  },
-  attach_surf_point_tool: {
-    title: "Attach Surf Point Tool",
-    description:
-      "Auto-attach one product integration tool (from list_product_tools) to a surf point so it runs automatically during execution, by adding its tool id to toolConfig.auto_tool_ids. This manages tool wiring, not signals or surf-point CRUD.",
-    requiredCapability: "surf_points.write",
-    surferSurface: "manage_surf_points",
-    publicStatus: "supported",
-    annotations: MUTATE_ANNOTATIONS,
-  },
-  detach_surf_point_tool: {
-    title: "Detach Surf Point Tool",
-    description:
-      "Stop auto-attaching one product integration tool to a surf point by removing its tool id from toolConfig.auto_tool_ids. This manages tool wiring, not signals or surf-point CRUD.",
-    requiredCapability: "surf_points.write",
-    surferSurface: "manage_surf_points",
-    publicStatus: "supported",
-    annotations: MUTATE_ANNOTATIONS,
   },
   deepline_search_people: {
     title: "Search People via Deepline",

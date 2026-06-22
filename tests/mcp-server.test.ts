@@ -347,8 +347,6 @@ describe("MCP server", () => {
       delete_signal: false,
       list_product_tools: false,
       list_surf_point_tools: false,
-      attach_surf_point_tool: false,
-      detach_surf_point_tool: false,
     })
 
     const tools = await client.listTools()
