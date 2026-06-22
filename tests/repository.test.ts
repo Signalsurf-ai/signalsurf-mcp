@@ -1526,6 +1526,27 @@ describe("SignalSurfRepository", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
+  it("validates auto_tool_ids ownership when update_surf_point writes tool config", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.updateSurfPoint(context, {
+        surfPointId: surfPoint1,
+        toolConfigPatch: { auto_tool_ids: [tool1] },
+      })
+    ).resolves.toBeDefined()
+
+    await expect(
+      repo.updateSurfPoint(context, {
+        surfPointId: surfPoint1,
+        toolConfigPatch: {
+          auto_tool_ids: ["00000000-0000-4000-8000-000000000903"],
+        },
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" })
+  })
+
   it("lists product-scoped account list profiles", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
