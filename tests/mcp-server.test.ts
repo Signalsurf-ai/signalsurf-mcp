@@ -141,7 +141,7 @@ describe("MCP server", () => {
         },
       ],
     })
-    const server = createSignalSurfMcpServer({
+    const server = await createSignalSurfMcpServer({
       context,
       repository: new SignalSurfRepository(db as any),
     })
@@ -294,7 +294,7 @@ describe("MCP server", () => {
       user_preferences: [],
       sources: [],
     })
-    const server = createSignalSurfMcpServer({
+    const server = await createSignalSurfMcpServer({
       context,
       repository: new SignalSurfRepository(db as any),
     })
@@ -341,7 +341,7 @@ describe("MCP server", () => {
       role: "editor",
       scopes: ["mcp:tables.read", "mcp:tables.write"],
     }
-    const server = createSignalSurfMcpServer({
+    const server = await createSignalSurfMcpServer({
       context: scopedContext,
       repository: new SignalSurfRepository(db as any),
     })
@@ -474,7 +474,7 @@ describe("MCP server", () => {
       role: "editor",
       scopes: ["mcp:account_lists.read", "mcp:account_lists.write"],
     }
-    const server = createSignalSurfMcpServer({
+    const server = await createSignalSurfMcpServer({
       context: scopedContext,
       repository: new SignalSurfRepository(db as any),
     })
@@ -666,7 +666,7 @@ describe("MCP server", () => {
         },
       ],
     }
-    const server = createSignalSurfMcpServer({
+    const server = await createSignalSurfMcpServer({
       context: multiProductContext,
       repository: new SignalSurfRepository(db as any),
     })

@@ -43,13 +43,17 @@ function matchesToken(entry: TokenEntry, token: string): boolean {
 }
 
 function contextFromTokenEntry(entry: TokenEntry): SignalSurfContext {
-  return {
-    productId: entry.productId,
+  const context: SignalSurfContext = {
+    productId: entry.productId ?? entry.productIds![0]!,
     userId: entry.userId,
     role: entry.role,
     tokenName: entry.name,
     scopes: entry.scopes,
   }
+  if (entry.productIds?.length) {
+    context.productIds = entry.productIds
+  }
+  return context
 }
 
 export type DatabaseTokenResolver = {

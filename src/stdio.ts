@@ -9,6 +9,6 @@ import { createSupabaseClient } from "./supabase.js"
 export async function startStdioServer(config: AppConfig): Promise<void> {
   const context = resolveStdioContext(config)
   const repository = new SignalSurfRepository(createSupabaseClient(config))
-  const server = createSignalSurfMcpServer({ context, repository })
+  const server = await createSignalSurfMcpServer({ context, repository })
   await server.connect(new StdioServerTransport())
 }

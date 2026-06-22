@@ -81,10 +81,23 @@ export type CreateServerOptions = {
   repository: SignalSurfRepository
 }
 
-export function createSignalSurfMcpServer(
+export async function createSignalSurfMcpServer(
   options: CreateServerOptions
-): McpServer {
+): Promise<McpServer> {
   const { context, repository } = options
+  // OAuth/database tokens resolve product names during token resolution; static
+  // env tokens do not. Resolve them once here so every response (get_context and
+  // the signalsurf://context resource) reports real names instead of raw UUIDs.
+  if (!context.products?.length) {
+    try {
+      const resolved = await repository.resolveProductContexts(
+        authorizedProductIds(context)
+      )
+      if (resolved.length) context.products = resolved
+    } catch {
+      // Name resolution is best-effort; fall back to UUID display on failure.
+    }
+  }
   const server = new McpServer(
     {
       name: "signalsurf-mcp",

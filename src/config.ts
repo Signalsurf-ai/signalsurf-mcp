@@ -15,13 +15,17 @@ const tokenEntrySchema = z
       .string()
       .regex(/^[a-f0-9]{64}$/i)
       .optional(),
-    productId: z.string().uuid(),
+    productId: z.string().uuid().optional(),
+    productIds: z.array(z.string().uuid()).min(1).optional(),
     userId: z.string().uuid().optional(),
     role: roleSchema,
     scopes: z.array(mcpScopeSchema).min(1).optional(),
   })
   .refine((entry) => !!entry.token || !!entry.tokenSha256, {
     message: "Each token entry needs token or tokenSha256",
+  })
+  .refine((entry) => !!entry.productId || (entry.productIds?.length ?? 0) > 0, {
+    message: "Each token entry needs productId or productIds",
   })
 
 export type TokenEntry = z.infer<typeof tokenEntrySchema>

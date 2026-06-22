@@ -1340,7 +1340,7 @@ export class SignalSurfRepository {
     }
   }
 
-  private async resolveProductContexts(
+  async resolveProductContexts(
     productIds: string[]
   ): Promise<SignalSurfProductContext[]> {
     const uniqueProductIds = uniqueIds(productIds.filter(Boolean))

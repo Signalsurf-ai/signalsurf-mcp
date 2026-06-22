@@ -41,6 +41,39 @@ describe("auth", () => {
     })
   })
 
+  it("resolves a multi-product token, using the first id as the primary product", () => {
+    const context = resolveTokenContext(
+      {
+        authDisabled: false,
+        directContext: undefined,
+        tokenEntries: [
+          {
+            name: "multi-agent",
+            tokenSha256: sha256Hex("secret-token"),
+            productIds: [
+              "00000000-0000-4000-8000-000000000001",
+              "00000000-0000-4000-8000-000000000003",
+            ],
+            userId: "00000000-0000-4000-8000-000000000002",
+            role: "editor",
+          },
+        ],
+      },
+      "secret-token"
+    )
+
+    expect(context).toEqual({
+      productId: "00000000-0000-4000-8000-000000000001",
+      productIds: [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000003",
+      ],
+      userId: "00000000-0000-4000-8000-000000000002",
+      role: "editor",
+      tokenName: "multi-agent",
+    })
+  })
+
   it("rejects invalid tokens", () => {
     expect(() =>
       resolveTokenContext(
