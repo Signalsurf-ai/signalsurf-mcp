@@ -64,34 +64,6 @@ export const toolOutputSchema = {
   data: z.unknown().optional(),
 }
 
-export const importMappingSchema = z.object({
-  version: z.literal("signalsurf.import_mapping.v1"),
-  mappings: z.array(
-    z.object({
-      name: z.string().trim().min(1).max(200),
-      targetDatabaseId: uuidSchema,
-      recordsPath: z.string().trim().min(1).max(500),
-      operation: z.literal("upsert"),
-      uniqueKey: z.object({
-        sourcePath: z.string().trim().min(1).max(500).optional(),
-        template: z.string().trim().min(1).max(500).optional(),
-        normalize: z.enum(["lowercase", "email", "url"]).optional(),
-      }),
-      fields: z.array(
-        z.object({
-          targetField: z.string().trim().min(1).max(100),
-          sourcePath: z.string().trim().min(1).max(500).optional(),
-          template: z.string().trim().min(1).max(1000).optional(),
-          defaultValue: z.unknown().optional(),
-          transform: z
-            .enum(["trim", "lowercase", "number", "date", "url"])
-            .optional(),
-        })
-      ),
-    })
-  ),
-})
-
 export const createProductSchema = {
   name: z.string().trim().min(1).max(100),
   organizationId: uuidSchema.optional(),
@@ -470,33 +442,6 @@ export const deleteSurfPointSourceSchema = {
   sourceIds: z.array(uuidSchema).min(1).max(50).optional(),
 }
 
-export const setSurfPointSourceActiveSchema = {
-  ...productTargetSchema,
-  sourceId: uuidSchema,
-  isActive: z.boolean(),
-}
-
-export const listWebhookPayloadSamplesSchema = {
-  ...productTargetSchema,
-  sourceId: uuidSchema,
-  limit: z.number().int().min(1).max(20).default(5).optional(),
-}
-
-export const previewImportMappingSchema = {
-  ...productTargetSchema,
-  sourceId: uuidSchema,
-  importMapping: importMappingSchema.optional(),
-  payloadId: uuidSchema.optional(),
-  payload: z.unknown().optional(),
-}
-
-export const replayWebhookPayloadSchema = {
-  ...productTargetSchema,
-  sourceId: uuidSchema,
-  payloadId: uuidSchema,
-  importMapping: importMappingSchema.optional(),
-}
-
 export const listProductToolsSchema = {
   ...productTargetSchema,
   includeDisabled: z.boolean().default(false).optional(),
@@ -506,18 +451,6 @@ export const listProductToolsSchema = {
 export const listSurfPointToolsSchema = {
   ...productTargetSchema,
   surfPointId: uuidSchema,
-}
-
-export const attachSurfPointToolSchema = {
-  ...productTargetSchema,
-  surfPointId: uuidSchema,
-  toolId: uuidSchema,
-}
-
-export const detachSurfPointToolSchema = {
-  ...productTargetSchema,
-  surfPointId: uuidSchema,
-  toolId: uuidSchema,
 }
 
 const numericRangeSchema = z

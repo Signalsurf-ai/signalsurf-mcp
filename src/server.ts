@@ -20,8 +20,6 @@ import {
 import { jsonResource, runJsonTool } from "./mcp-results.js"
 import { SignalSurfRepository } from "./repository.js"
 import {
-  archiveAccountListProfileSchema,
-  attachSurfPointToolSchema,
   createSurfPointSourceSchema,
   createProductSchema,
   createSurfPointSchema,
@@ -34,34 +32,27 @@ import {
   deleteSurfPointSchema,
   deleteTableSchema,
   deleteTableRowsSchema,
-  detachSurfPointToolSchema,
   getBrandContextSchema,
   getSurfPointSchema,
   getSurfJobSchema,
   getTableRowSchema,
-  listAccountListProfilesSchema,
   listDatabasesSchema,
   listDatabaseViewsSchema,
   listDatabaseFieldsSchema,
   listProductToolsSchema,
   listSurfPointSourcesSchema,
   listSurfPointToolsSchema,
-  listWebhookPayloadSamplesSchema,
-  previewImportMappingSchema,
   removeDatabaseFieldSchema,
   listSurfJobsSchema,
   listSurfPointsSchema,
   readTableSchema,
   readTableViewSchema,
-  replayWebhookPayloadSchema,
   runSurfPointSchema,
-  saveAccountListProfileSchema,
   deeplineSearchPeopleSchema,
   deeplineSearchCompaniesSchema,
   deeplineEnrichContactSchema,
   deeplineSearchCatalogSchema,
   deeplineExecuteToolSchema,
-  setSurfPointSourceActiveSchema,
   enableQuickSurfSchema,
   disableQuickSurfSchema,
   listQuickSurfSchema,
@@ -81,10 +72,23 @@ export type CreateServerOptions = {
   repository: SignalSurfRepository
 }
 
-export function createSignalSurfMcpServer(
+export async function createSignalSurfMcpServer(
   options: CreateServerOptions
-): McpServer {
+): Promise<McpServer> {
   const { context, repository } = options
+  // OAuth/database tokens resolve product names during token resolution; static
+  // env tokens do not. Resolve them once here so every response (get_context and
+  // the signalsurf://context resource) reports real names instead of raw UUIDs.
+  if (!context.products?.length) {
+    try {
+      const resolved = await repository.resolveProductContexts(
+        authorizedProductIds(context)
+      )
+      if (resolved.length) context.products = resolved
+    } catch {
+      // Name resolution is best-effort; fall back to UUID display on failure.
+    }
+  }
   const server = new McpServer(
     {
       name: "signalsurf-mcp",
@@ -291,9 +295,9 @@ function registerTools(
       })
   )
 
-  registerPublicTool("list_databases", listDatabasesSchema, async (args: any) =>
+  registerPublicTool("list_tables", listDatabasesSchema, async (args: any) =>
     runJsonTool(async () => {
-      assertToolAllowed("list_databases")
+      assertToolAllowed("list_tables")
       return repository.listDatabases(toolContext(args), args)
     })
   )
@@ -320,11 +324,11 @@ function registerTools(
   )
 
   registerPublicTool(
-    "list_database_views",
+    "list_table_views",
     listDatabaseViewsSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("list_database_views")
+        assertToolAllowed("list_table_views")
         return repository.listDatabaseViews(toolContext(args), args.databaseId)
       })
   )
@@ -384,41 +388,41 @@ function registerTools(
   )
 
   registerPublicTool(
-    "list_database_fields",
+    "list_table_fields",
     listDatabaseFieldsSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("list_database_fields")
+        assertToolAllowed("list_table_fields")
         return repository.listDatabaseFields(toolContext(args), args.databaseId)
       })
   )
 
   registerPublicTool(
-    "add_database_field",
+    "add_table_field",
     addDatabaseFieldSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("add_database_field")
+        assertToolAllowed("add_table_field")
         return repository.addDatabaseField(toolContext(args), args)
       })
   )
 
   registerPublicTool(
-    "update_database_field",
+    "update_table_field",
     updateDatabaseFieldSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("update_database_field")
+        assertToolAllowed("update_table_field")
         return repository.updateDatabaseField(toolContext(args), args)
       })
   )
 
   registerPublicTool(
-    "remove_database_field",
+    "remove_table_field",
     removeDatabaseFieldSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("remove_database_field")
+        assertToolAllowed("remove_table_field")
         return repository.removeDatabaseField(toolContext(args), args)
       })
   )
@@ -434,11 +438,11 @@ function registerTools(
   )
 
   registerPublicTool(
-    "list_surf_point_sources",
+    "list_signals",
     listSurfPointSourcesSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("list_surf_point_sources")
+        assertToolAllowed("list_signals")
         return repository.listSurfPointSources(
           toolContext(args),
           args.surfPointId
@@ -447,72 +451,32 @@ function registerTools(
   )
 
   registerPublicTool(
-    "create_surf_point_source",
+    "create_signal",
     createSurfPointSourceSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("create_surf_point_source")
+        assertToolAllowed("create_signal")
         return repository.createSurfPointSource(toolContext(args), args)
       })
   )
 
   registerPublicTool(
-    "update_surf_point_source",
+    "update_signal",
     updateSurfPointSourceSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("update_surf_point_source")
+        assertToolAllowed("update_signal")
         return repository.updateSurfPointSource(toolContext(args), args)
       })
   )
 
   registerPublicTool(
-    "delete_surf_point_source",
+    "delete_signal",
     deleteSurfPointSourceSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("delete_surf_point_source")
+        assertToolAllowed("delete_signal")
         return repository.deleteSurfPointSource(toolContext(args), args)
-      })
-  )
-
-  registerPublicTool(
-    "set_surf_point_source_active",
-    setSurfPointSourceActiveSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("set_surf_point_source_active")
-        return repository.setSurfPointSourceActive(toolContext(args), args)
-      })
-  )
-
-  registerPublicTool(
-    "list_webhook_payload_samples",
-    listWebhookPayloadSamplesSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("list_webhook_payload_samples")
-        return repository.listWebhookPayloadSamples(toolContext(args), args)
-      })
-  )
-
-  registerPublicTool(
-    "preview_import_mapping",
-    previewImportMappingSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("preview_import_mapping")
-        return repository.previewImportMapping(toolContext(args), args)
-      })
-  )
-
-  registerPublicTool(
-    "replay_webhook_payload",
-    replayWebhookPayloadSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("replay_webhook_payload")
-        return repository.replayWebhookPayload(toolContext(args), args)
       })
   )
 
@@ -569,59 +533,6 @@ function registerTools(
         return repository.listSurfPointTools(
           toolContext(args),
           args.surfPointId
-        )
-      })
-  )
-
-  registerPublicTool(
-    "attach_surf_point_tool",
-    attachSurfPointToolSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("attach_surf_point_tool")
-        return repository.attachSurfPointTool(toolContext(args), args)
-      })
-  )
-
-  registerPublicTool(
-    "detach_surf_point_tool",
-    detachSurfPointToolSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("detach_surf_point_tool")
-        return repository.detachSurfPointTool(toolContext(args), args)
-      })
-  )
-
-  registerPublicTool(
-    "list_account_list_profiles",
-    listAccountListProfilesSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("list_account_list_profiles")
-        return repository.listAccountListProfiles(toolContext(args), args)
-      })
-  )
-
-  registerPublicTool(
-    "save_account_list_profile",
-    saveAccountListProfileSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("save_account_list_profile")
-        return repository.saveAccountListProfile(toolContext(args), args)
-      })
-  )
-
-  registerPublicTool(
-    "archive_account_list_profile",
-    archiveAccountListProfileSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("archive_account_list_profile")
-        return repository.archiveAccountListProfile(
-          toolContext(args),
-          args.profileId
         )
       })
   )
@@ -876,29 +787,6 @@ function registerResources(
         await repository.listProductTools(resolveProductContext(context), {
           limit: 200,
         })
-      )
-    }
-  )
-
-  server.registerResource(
-    "signalsurf_account_list_profiles",
-    "signalsurf://account-list-profiles",
-    {
-      title: "SignalSurf Account List ICP Profiles",
-      description: "Reusable Account List / ICP Builder profiles.",
-      mimeType: "application/json",
-    },
-    async (uri) => {
-      assertCanUseCapability(context, "account_lists.read")
-      return jsonResource(
-        uri.href,
-        await repository.listAccountListProfiles(
-          resolveProductContext(context),
-          {
-            includeArchived: true,
-            limit: 100,
-          }
-        )
       )
     }
   )

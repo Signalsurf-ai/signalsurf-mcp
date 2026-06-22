@@ -1340,7 +1340,7 @@ export class SignalSurfRepository {
     }
   }
 
-  private async resolveProductContexts(
+  async resolveProductContexts(
     productIds: string[]
   ): Promise<SignalSurfProductContext[]> {
     const uniqueProductIds = uniqueIds(productIds.filter(Boolean))
@@ -1972,6 +1972,16 @@ export class SignalSurfRepository {
         ...asRecord(existing?.tool_config),
         ...input.toolConfigPatch,
       }
+    }
+    if (updateData.tool_config !== undefined) {
+      // Tool attachment is set here (no dedicated attach/detach tool), so the
+      // referenced auto_tool_ids must be validated against this surf point's
+      // product, exactly as the removed attach_surf_point_tool did. This blocks
+      // a multi-product token from writing another product's tool id.
+      await this.assertProductToolsBelongToProduct(
+        context,
+        uniqueStrings(asRecord(updateData.tool_config).auto_tool_ids)
+      )
     }
     if (input.config !== undefined) updateData.config = input.config
     if (input.configPatch !== undefined) {
@@ -4522,6 +4532,30 @@ export class SignalSurfRepository {
         code: "NOT_FOUND",
         status: 404,
       })
+    }
+  }
+
+  private async assertProductToolsBelongToProduct(
+    context: SignalSurfContext,
+    toolIds: string[]
+  ): Promise<void> {
+    const ids = uniqueStrings(toolIds)
+    if (ids.length === 0) return
+    const { data, error } = await this.db
+      .from("product_tools")
+      .select("id")
+      .eq("product_id", context.productId)
+      .in("id", ids)
+    requireNoDbError(error, "Failed to validate product tool access")
+    const found = new Set(
+      ((data ?? []) as Array<{ id: string }>).map((row) => row.id)
+    )
+    const missing = ids.filter((id) => !found.has(id))
+    if (missing.length > 0) {
+      throw new UserFacingError(
+        `Tool not found or access denied: ${missing.join(", ")}`,
+        { code: "NOT_FOUND", status: 404 }
+      )
     }
   }
 

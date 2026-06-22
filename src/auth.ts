@@ -43,13 +43,21 @@ function matchesToken(entry: TokenEntry, token: string): boolean {
 }
 
 function contextFromTokenEntry(entry: TokenEntry): SignalSurfContext {
-  return {
-    productId: entry.productId,
+  const productId = entry.productId ?? entry.productIds![0]!
+  const context: SignalSurfContext = {
+    productId,
     userId: entry.userId,
     role: entry.role,
     tokenName: entry.name,
     scopes: entry.scopes,
   }
+  if (entry.productIds?.length) {
+    // Keep the primary productId inside the authorized list so a mixed
+    // { productId, productIds } config can never advertise a primary product
+    // that is not actually authorized.
+    context.productIds = [...new Set([productId, ...entry.productIds])]
+  }
+  return context
 }
 
 export type DatabaseTokenResolver = {

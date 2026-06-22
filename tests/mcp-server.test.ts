@@ -15,7 +15,6 @@ const context: SignalSurfContext = {
 const secondProductId = "00000000-0000-4000-8000-000000000002"
 const databaseId = "00000000-0000-4000-8000-000000000201"
 const surfPointId = "00000000-0000-4000-8000-000000000101"
-const accountListProfileId = "00000000-0000-4000-8000-000000000a01"
 
 let cleanup: Array<() => Promise<void>> = []
 
@@ -100,30 +99,6 @@ describe("MCP server", () => {
           updated_at: "2026-06-01T00:00:00Z",
         },
       ],
-      account_list_profiles: [
-        {
-          id: accountListProfileId,
-          product_id: context.productId,
-          name: "Seed SaaS GTM",
-          description: null,
-          status: "active",
-          source: "manual",
-          profile_version: 1,
-          config: {
-            providers: ["apollo", "bycrawl"],
-            company: {
-              fundingStages: ["Seed"],
-            },
-          },
-          sample_accounts: ["Linear"],
-          reject_accounts: [],
-          ai_prompt: null,
-          ai_summary: null,
-          created_by: null,
-          created_at: "2026-06-01T00:00:00Z",
-          updated_at: "2026-06-01T00:00:00Z",
-        },
-      ],
       product_goals: [
         {
           product_id: context.productId,
@@ -141,7 +116,7 @@ describe("MCP server", () => {
         },
       ],
     })
-    const server = createSignalSurfMcpServer({
+    const server = await createSignalSurfMcpServer({
       context,
       repository: new SignalSurfRepository(db as any),
     })
@@ -211,7 +186,6 @@ describe("MCP server", () => {
         `signalsurf://surf-points/${surfPointId}/sources`,
         `signalsurf://surf-points/${surfPointId}/tools`,
         "signalsurf://product-tools",
-        "signalsurf://account-list-profiles",
         "signalsurf://databases",
         `signalsurf://databases/${databaseId}/rows`,
       ])
@@ -266,23 +240,6 @@ describe("MCP server", () => {
       },
     ])
     expect(parsedProductToolsResource.tools[0]).not.toHaveProperty("config")
-
-    const accountListResource = await client.readResource({
-      uri: "signalsurf://account-list-profiles",
-    })
-    const accountListResourceText =
-      accountListResource.contents?.[0]?.text?.toString() ?? ""
-    expect(JSON.parse(accountListResourceText)).toMatchObject({
-      profiles: [
-        {
-          profileId: accountListProfileId,
-          name: "Seed SaaS GTM",
-          accountList: {
-            providers: ["apollo", "bycrawl"],
-          },
-        },
-      ],
-    })
   })
 
   it("advertises the stable public tool contract and denies viewer writes", async () => {
@@ -294,7 +251,7 @@ describe("MCP server", () => {
       user_preferences: [],
       sources: [],
     })
-    const server = createSignalSurfMcpServer({
+    const server = await createSignalSurfMcpServer({
       context,
       repository: new SignalSurfRepository(db as any),
     })
@@ -341,7 +298,7 @@ describe("MCP server", () => {
       role: "editor",
       scopes: ["mcp:tables.read", "mcp:tables.write"],
     }
-    const server = createSignalSurfMcpServer({
+    const server = await createSignalSurfMcpServer({
       context: scopedContext,
       repository: new SignalSurfRepository(db as any),
     })
@@ -374,7 +331,6 @@ describe("MCP server", () => {
       create_table_row: true,
       update_table_row: true,
       delete_table_rows: false,
-      replay_webhook_payload: false,
       get_surf_point: false,
       create_surf_point: false,
       run_surf_point: false,
@@ -382,21 +338,15 @@ describe("MCP server", () => {
       get_surf_job: false,
       wait_for_surf_job: false,
       list_surf_jobs: false,
-      list_database_fields: false,
-      add_database_field: false,
+      list_table_fields: false,
+      add_table_field: false,
       create_relation_field: false,
-      list_surf_point_sources: false,
-      create_surf_point_source: false,
-      update_surf_point_source: false,
-      delete_surf_point_source: false,
-      set_surf_point_source_active: false,
+      list_signals: false,
+      create_signal: false,
+      update_signal: false,
+      delete_signal: false,
       list_product_tools: false,
       list_surf_point_tools: false,
-      attach_surf_point_tool: false,
-      detach_surf_point_tool: false,
-      list_account_list_profiles: false,
-      save_account_list_profile: false,
-      archive_account_list_profile: false,
     })
 
     const tools = await client.listTools()
@@ -436,160 +386,7 @@ describe("MCP server", () => {
       },
     })
 
-    const deniedReplay = await client.callTool({
-      name: "replay_webhook_payload",
-      arguments: {
-        sourceId: "00000000-0000-4000-8000-000000000801",
-        payloadId: "00000000-0000-4000-8000-000000000b01",
-      },
-    })
-    expect(deniedReplay.isError).toBe(true)
-    const deniedReplayText =
-      deniedReplay.content?.[0]?.type === "text"
-        ? deniedReplay.content[0].text
-        : ""
-    expect(JSON.parse(deniedReplayText)).toMatchObject({
-      code: "INSUFFICIENT_SCOPE",
-      details: {
-        oauthError: "insufficient_scope",
-        requiredScopes: ["mcp:sources.read"],
-      },
-    })
     expect(db.tables.playbooks).toHaveLength(0)
-  })
-
-  it("allows scoped agents to manage account list ICP profiles only with account list scopes", async () => {
-    const db = new FakeSupabase({
-      playbooks: [],
-      databases: [],
-      entries: [],
-      surf_jobs: [],
-      user_preferences: [],
-      sources: [],
-      account_list_profiles: [],
-    })
-    const scopedContext: SignalSurfContext = {
-      productId: context.productId,
-      userId: "00000000-0000-4000-8000-000000000010",
-      role: "editor",
-      scopes: ["mcp:account_lists.read", "mcp:account_lists.write"],
-    }
-    const server = createSignalSurfMcpServer({
-      context: scopedContext,
-      repository: new SignalSurfRepository(db as any),
-    })
-    const client = new Client({ name: "test-client", version: "0.0.0" })
-    const [clientTransport, serverTransport] =
-      InMemoryTransport.createLinkedPair()
-    cleanup.push(async () => client.close())
-    cleanup.push(async () => server.close())
-
-    await Promise.all([
-      server.connect(serverTransport),
-      client.connect(clientTransport),
-    ])
-
-    const contextResult = await client.callTool({
-      name: "get_context",
-      arguments: {},
-    })
-    const contextText =
-      contextResult.content?.[0]?.type === "text"
-        ? contextResult.content[0].text
-        : ""
-    expect(JSON.parse(contextText).data.capabilities.tools).toMatchObject({
-      list_account_list_profiles: true,
-      save_account_list_profile: true,
-      archive_account_list_profile: true,
-      create_table_row: false,
-      create_surf_point: false,
-    })
-
-    const saveResult = await client.callTool({
-      name: "save_account_list_profile",
-      arguments: {
-        name: "Series A RevOps",
-        accountList: {
-          enabled: true,
-          providers: ["apollo", "bycrawl"],
-          previewLimit: 50,
-          customProfileMode: "named-account-motion",
-          company: {
-            fundingStages: ["Series A"],
-            technologies: ["HubSpot"],
-            partnerTier: ["strategic"],
-            latestFundingDate: {
-              min: "2025-01-01",
-              freshnessWindow: "18m",
-            },
-          },
-          people: {
-            functions: ["RevOps"],
-            emailStatuses: ["verified"],
-            buyingCommittee: ["revenue-ops"],
-          },
-          liveSignals: {
-            queries: ["hiring SDR"],
-            intentWindows: ["30d"],
-          },
-        },
-        sampleAccounts: ["Linear"],
-      },
-    })
-    expect(saveResult.isError).toBeFalsy()
-    const saveText =
-      saveResult.content?.[0]?.type === "text" ? saveResult.content[0].text : ""
-    const savedProfile = JSON.parse(saveText).data.profile
-    expect(savedProfile).toMatchObject({
-      profileId: expect.any(String),
-      name: "Series A RevOps",
-      accountList: {
-        providers: ["apollo", "bycrawl"],
-        customProfileMode: "named-account-motion",
-        company: {
-          partnerTier: ["strategic"],
-          latestFundingDate: {
-            freshnessWindow: "18m",
-          },
-        },
-        people: {
-          emailStatuses: ["verified"],
-          buyingCommittee: ["revenue-ops"],
-        },
-        liveSignals: {
-          intentWindows: ["30d"],
-        },
-      },
-    })
-
-    const listResult = await client.callTool({
-      name: "list_account_list_profiles",
-      arguments: {},
-    })
-    expect(listResult.isError).toBeFalsy()
-    const listText =
-      listResult.content?.[0]?.type === "text" ? listResult.content[0].text : ""
-    expect(JSON.parse(listText).data.profiles).toMatchObject([
-      {
-        profileId: savedProfile.profileId,
-        name: "Series A RevOps",
-        accountList: {
-          customProfileMode: "named-account-motion",
-        },
-      },
-    ])
-
-    const archiveResult = await client.callTool({
-      name: "archive_account_list_profile",
-      arguments: {
-        profileId: savedProfile.profileId,
-      },
-    })
-    expect(archiveResult.isError).toBeFalsy()
-    expect(db.tables.account_list_profiles[0]).toMatchObject({
-      id: savedProfile.profileId,
-      status: "archived",
-    })
   })
 
   it("requires productId for product-scoped tools when context has multiple products", async () => {
@@ -666,7 +463,7 @@ describe("MCP server", () => {
         },
       ],
     }
-    const server = createSignalSurfMcpServer({
+    const server = await createSignalSurfMcpServer({
       context: multiProductContext,
       repository: new SignalSurfRepository(db as any),
     })

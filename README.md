@@ -26,11 +26,10 @@ not need this repository, a Supabase key, or a local server.
    pass that product's `productId` to product-scoped tool calls.
 
 The hosted MCP currently supports product creation, product-scoped Surf Point
-CRUD, table create/update, table schema edits, Surf Point execution, source
-creation/configuration/deletion, source toggles, tool attachment, reusable
-Account List / ICP profiles, and table row read/create/update/delete. It is a
-safe public subset of Surfer, the agent in SignalSurf Web's right panel; it
-does not expose every internal chat tool.
+CRUD, table create/update, table schema edits, Surf Point execution, signal
+creation/configuration/deletion, signal toggles, tool attachment, and table row
+read/create/update/delete. It is a safe public subset of Surfer, the agent in
+SignalSurf Web's right panel; it does not expose every internal chat tool.
 
 Example:
 
@@ -182,18 +181,17 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 
 ## What It Exposes
 
-- `get_brand_context`, `create_product`
+- `get_context`, `get_brand_context`, `create_product`
 - `list_surf_points`, `get_surf_point`, `create_surf_point`, `update_surf_point`, `run_surf_point`, `get_surf_job`, `wait_for_surf_job`, `list_surf_jobs`, `cancel_surf_job`, `delete_surf_point`
-- `list_databases`, `create_table`, `update_table`, `delete_table`, `list_database_views`, `read_table`, `read_table_view`, `get_table_row`
+- `list_tables`, `create_table`, `update_table`, `delete_table`, `list_table_views`, `read_table`, `read_table_view`, `get_table_row`
 - `create_table_row`, `update_table_row`, `delete_table_rows`
-- `list_database_fields`, `add_database_field`, `update_database_field`, `remove_database_field`, `create_relation_field`
-- `list_surf_point_sources`, `create_surf_point_source`, `update_surf_point_source`, `delete_surf_point_source`, `set_surf_point_source_active`
+- `list_table_fields`, `add_table_field`, `update_table_field`, `remove_table_field`, `create_relation_field`
+- `list_signals`, `create_signal`, `update_signal`, `delete_signal`
 - `enable_quick_surf`, `disable_quick_surf`, `list_quick_surf`, `run_quick_surf`
-- `list_product_tools`, `list_surf_point_tools`, `attach_surf_point_tool`, `detach_surf_point_tool`
-- `list_account_list_profiles`, `save_account_list_profile`, `archive_account_list_profile`
+- `list_product_tools`, `list_surf_point_tools` (attach/detach tools via `update_surf_point` `toolConfigPatch.auto_tool_ids`)
 - `deepline_search_people`, `deepline_search_companies`, `deepline_enrich_contact`, `deepline_search_catalog`, `deepline_execute_tool`
 - Resources for context; single-product tokens also expose surf point, database,
-  surf job, database-row, and account-list-profile resources
+  surf job, and database-row resources
 
 All product-scoped tools execute against one `productId`. A single-product token
 can omit `productId`; a multi-product OAuth token must pass `productId` to every
@@ -220,11 +218,10 @@ capability instead of hiding them behind broad write access:
 - `mcp:sources.read`
 - `mcp:sources.write`
 
-The MCP server also accepts and enforces `mcp:account_lists.read`,
-`mcp:account_lists.write`, `mcp:deepline.read`, and `mcp:deepline.write`, but it
-does not advertise those scopes by default until the hosted authorization server
-registers them. OAuth tokens may also carry `offline_access` for refresh-token
-support. The MCP resource server accepts that scope but does not advertise it as
+The MCP server also accepts and enforces `mcp:deepline.read` and
+`mcp:deepline.write`, but it does not advertise those scopes by default until the
+hosted authorization server registers them. OAuth tokens may also carry
+`offline_access` for refresh-token support. The MCP resource server accepts that scope but does not advertise it as
 a resource requirement, and it grants no tool capability by itself.
 
 ## Architecture
@@ -303,7 +300,7 @@ Surf points:
 
 Tables:
 
-- `list_databases`: lists databases for the selected product. System databases
+- `list_tables`: lists tables for the selected product. System tables
   are hidden unless `includeSystem=true`.
 - `create_table`: creates a product table with optional custom schema, saved
   view config, item type, display order, and existing table folder placement.
@@ -318,7 +315,7 @@ Tables:
   1000, max 5000) so array, date, number, text, and relation comparisons behave
   consistently across JSON fields. Results include `scannedCount` and
   `hasMoreToScan` when a wider scan may be needed.
-- `list_database_views` / `read_table_view`: lists saved views from database
+- `list_table_views` / `read_table_view`: lists saved views from table
   `viewConfigs` and reads rows using compatible saved-view filters/sorts.
 - `get_table_row`: reads one row after verifying its database belongs to the
   token product.
@@ -334,43 +331,42 @@ Tables:
 
 Schema:
 
-- `list_database_fields`: returns schema fields and relation definitions for a
-  database.
+- `list_table_fields`: returns schema fields and relation definitions for a
+  table.
 - `create_table` / `update_table`: accept a complete `schema` object or
-  `schemaPatch`; `item_ref` fields and relation targets must point at databases
+  `schemaPatch`; `item_ref` fields and relation targets must point at tables
   in the same authorized product.
-- `add_database_field` / `update_database_field` / `remove_database_field`:
-  mutate database schema only. They do not backfill or delete row data.
+- `add_table_field` / `update_table_field` / `remove_table_field`:
+  mutate table schema only. They do not backfill or delete row data.
 - `create_relation_field`: adds an `item_ref` field after verifying the target
-  database belongs to the same authorized product.
+  table belongs to the same authorized product.
 
 Sources and surf point tools:
 
-- `list_surf_point_sources`: returns safe source metadata only:
+- `list_signals`: returns safe signal metadata only:
   `sourceId`, `surfPointId`, name, database type, public `sourceType`,
   endpoint, schedule, URL, provider, event type, database id,
-  `webhookUrl` for custom webhook sources, `webhookSecretConfigured`,
-  `isActive`, and timestamps. Source config, credentials, headers, bodies, auth
+  `webhookUrl` for custom webhook signals, `webhookSecretConfigured`,
+  `isActive`, and timestamps. Signal config, credentials, headers, bodies, auth
   settings, and provider payloads are not exposed through MCP.
-- `create_surf_point_source`: creates a SignalSurf source/signal for a Surf
+- `create_signal`: creates a SignalSurf signal for a Surf
   Point. Supported `sourceType` values are `platform`, `custom-pull`, `rss`,
   `webhook`, `web-monitor`, `github`, `coingecko`, `hackernews`,
   `producthunt`, `item-created`, `item-updated`, `manual-trigger`, and
-  `on-schedule`. Creating a `webhook` source also returns top-level
-  `webhookUrl`, matching the URL shown in SignalSurf Web. Platform sources also
+  `on-schedule`. Creating a `webhook` signal also returns top-level
+  `webhookUrl`, matching the URL shown in SignalSurf Web. Platform signals also
   write `keywords` and `trackedAccounts` into the product search-config tables.
-- `update_surf_point_source`: updates source name, active state, typed source
-  config, `pull_config`, `metadata`, or `data_schema`. Secret-bearing config
-  such as headers, bodies, and auth may be written but is not returned by list
-  responses.
-- `delete_surf_point_source`: deletes one or more sources after product-scope
+- `update_signal`: updates signal name, active state, typed signal
+  config, `pull_config`, `metadata`, or `data_schema`. Set the active state here
+  to enable or pause a signal after verifying its surf point belongs to the
+  authorized product. Secret-bearing config such as headers, bodies, and auth
+  may be written but is not returned by list responses.
+- `delete_signal`: deletes one or more signals after product-scope
   validation and removes non-terminal jobs for those source ids.
-- Internal trigger source types (`item-created`, `item-updated`,
+- Internal trigger `sourceType` values (`item-created`, `item-updated`,
   `manual-trigger`, `on-schedule`) are exclusive. A Surf Point can have one
-  internal trigger and no external discovery sources alongside it. Pass
-  `replaceExisting=true` only when intentionally replacing existing sources.
-- `set_surf_point_source_active`: enables or pauses one source after verifying
-  its surf point belongs to the authorized product.
+  internal trigger and no external discovery signals alongside it. Pass
+  `replaceExisting=true` only when intentionally replacing existing signals.
 - `enable_quick_surf` / `disable_quick_surf` / `list_quick_surf` / `run_quick_surf`:
   per-column enrichment. Enable binds a hidden surf point plus an internal
   `manual_trigger` source to one `(databaseId, fieldKey)` with a "what to do"
@@ -387,21 +383,9 @@ Sources and surf point tools:
   list needs `mcp:sources.read`, and run needs `mcp:surf_points.execute`.
 - `list_product_tools`: returns safe product tool metadata from
   `product_tools`; config secrets are not exposed.
-- `list_surf_point_tools`, `attach_surf_point_tool`, and
-  `detach_surf_point_tool`: manage `tool_config.auto_tool_ids` on a surf point
-  idempotently. Attach/detach validates that the tool exists in the authorized
-  product.
-
-Account List / ICP profiles:
-
-- `list_account_list_profiles`: lists reusable ICP profiles for Account List
-  sourcing. Archived profiles are hidden by default.
-- `save_account_list_profile`: creates or updates a profile with the structured
-  `accountList` config used by SignalSurf Web: provider selection, company
-  filters, people filters, live-signal filters, sample accounts, and reject
-  accounts. Updating a profile increments `profile_version`.
-- `archive_account_list_profile`: soft-archives one reusable profile after
-  product-scope validation.
+- `list_surf_point_tools`: lists the tool ids in `tool_config.auto_tool_ids`
+  for a surf point. To attach or detach a tool, set
+  `toolConfigPatch.auto_tool_ids` via `update_surf_point` (shallow-merged).
 
 Roles:
 
@@ -423,7 +407,6 @@ Resources:
 - `signalsurf://surf-points/{surfPointId}/sources` for single-product tokens
 - `signalsurf://surf-points/{surfPointId}/tools` for single-product tokens
 - `signalsurf://product-tools` for single-product tokens
-- `signalsurf://account-list-profiles` for single-product tokens
 - `signalsurf://surf-jobs` for single-product tokens
 - `signalsurf://surf-jobs/{jobId}` for single-product tokens
 - `signalsurf://databases` for single-product tokens

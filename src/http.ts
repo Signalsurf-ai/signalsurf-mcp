@@ -219,7 +219,7 @@ export function createHttpApp(
         return
       }
 
-      const server = createSignalSurfMcpServer({ context, repository })
+      const server = await createSignalSurfMcpServer({ context, repository })
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
       })
