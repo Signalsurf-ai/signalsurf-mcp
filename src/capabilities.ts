@@ -94,30 +94,26 @@ export type PublicMcpToolName =
   | "list_surf_jobs"
   | "cancel_surf_job"
   | "delete_surf_point"
-  | "list_databases"
+  | "list_tables"
   | "create_table"
   | "update_table"
   | "delete_table"
-  | "list_database_views"
+  | "list_table_views"
   | "read_table"
   | "read_table_view"
   | "get_table_row"
   | "create_table_row"
   | "update_table_row"
   | "delete_table_rows"
-  | "list_database_fields"
-  | "add_database_field"
-  | "update_database_field"
-  | "remove_database_field"
+  | "list_table_fields"
+  | "add_table_field"
+  | "update_table_field"
+  | "remove_table_field"
   | "create_relation_field"
-  | "list_surf_point_sources"
-  | "create_surf_point_source"
-  | "update_surf_point_source"
-  | "delete_surf_point_source"
-  | "set_surf_point_source_active"
-  | "list_webhook_payload_samples"
-  | "preview_import_mapping"
-  | "replay_webhook_payload"
+  | "list_signals"
+  | "create_signal"
+  | "update_signal"
+  | "delete_signal"
   | "enable_quick_surf"
   | "disable_quick_surf"
   | "list_quick_surf"
@@ -126,9 +122,6 @@ export type PublicMcpToolName =
   | "list_surf_point_tools"
   | "attach_surf_point_tool"
   | "detach_surf_point_tool"
-  | "list_account_list_profiles"
-  | "save_account_list_profile"
-  | "archive_account_list_profile"
   | "deepline_search_people"
   | "deepline_search_companies"
   | "deepline_enrich_contact"
@@ -306,10 +299,10 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: DELETE_ANNOTATIONS,
   },
-  list_databases: {
-    title: "List Databases",
+  list_tables: {
+    title: "List Tables",
     description:
-      "List databases/tables available in an authorized product. Pass productId when this connection can access multiple products. System databases are hidden unless includeSystem is true.",
+      "List tables available in an authorized product. Pass productId when this connection can access multiple products. System tables are hidden unless includeSystem is true.",
     requiredCapability: "tables.read",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -318,7 +311,7 @@ export const PUBLIC_MCP_TOOLS = {
   create_table: {
     title: "Create Table",
     description:
-      "Create a SignalSurf database/table with optional custom schema, saved-view config, and folder placement in an authorized product.",
+      "Create a SignalSurf table with optional custom schema, saved-view config, and folder placement in an authorized product.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -327,7 +320,7 @@ export const PUBLIC_MCP_TOOLS = {
   update_table: {
     title: "Update Table",
     description:
-      "Update SignalSurf database/table metadata, custom schema, saved-view config, and folder placement after product-scope verification.",
+      "Update SignalSurf table metadata, custom schema, saved-view config, and folder placement after product-scope verification.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -336,16 +329,16 @@ export const PUBLIC_MCP_TOOLS = {
   delete_table: {
     title: "Delete Table",
     description:
-      "Delete one or more user-facing SignalSurf databases/tables after product-scope verification, then unlink the deleted table ids from active Surf Points. Pass productId when this connection can access multiple products.",
+      "Delete one or more user-facing SignalSurf tables after product-scope verification, then unlink the deleted table ids from active Surf Points. Pass productId when this connection can access multiple products.",
     requiredCapability: "tables.delete",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
     annotations: DELETE_ANNOTATIONS,
   },
-  list_database_views: {
-    title: "List Database Views",
+  list_table_views: {
+    title: "List Table Views",
     description:
-      "List saved views configured for a SignalSurf database/table in an authorized product.",
+      "List saved views configured for a SignalSurf table in an authorized product.",
     requiredCapability: "tables.read",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -354,7 +347,7 @@ export const PUBLIC_MCP_TOOLS = {
   read_table: {
     title: "Read Table",
     description:
-      "Read rows from a SignalSurf database/table in an authorized product. Pass productId when this connection can access multiple products. Supports pagination, JSON containment filters, and UI-style data filters/sorts.",
+      "Read rows from a SignalSurf table in an authorized product. Pass productId when this connection can access multiple products. Supports pagination, JSON containment filters, and UI-style data filters/sorts.",
     requiredCapability: "tables.read",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -363,7 +356,7 @@ export const PUBLIC_MCP_TOOLS = {
   read_table_view: {
     title: "Read Table View",
     description:
-      "Read rows using a database saved view, with optional additional filters and sorts.",
+      "Read rows using a table saved view, with optional additional filters and sorts.",
     requiredCapability: "tables.read",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -381,7 +374,7 @@ export const PUBLIC_MCP_TOOLS = {
   create_table_row: {
     title: "Create Table Row",
     description:
-      "Create a row/item in a SignalSurf database/table after verifying it belongs to an authorized product. Pass productId when this connection can access multiple products.",
+      "Create a row/item in a SignalSurf table after verifying it belongs to an authorized product. Pass productId when this connection can access multiple products.",
     requiredCapability: "tables.write",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -405,37 +398,37 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: DELETE_ANNOTATIONS,
   },
-  list_database_fields: {
-    title: "List Database Fields",
+  list_table_fields: {
+    title: "List Table Fields",
     description:
-      "List schema fields and relation definitions for an authorized SignalSurf database/table.",
+      "List schema fields and relation definitions for an authorized SignalSurf table.",
     requiredCapability: "schemas.read",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
-  add_database_field: {
-    title: "Add Database Field",
+  add_table_field: {
+    title: "Add Table Field",
     description:
-      "Add one schema field to an authorized SignalSurf database/table. This changes schema only; existing row data is not backfilled.",
+      "Add one schema field to an authorized SignalSurf table. This changes schema only; existing row data is not backfilled.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
-  update_database_field: {
-    title: "Update Database Field",
+  update_table_field: {
+    title: "Update Table Field",
     description:
-      "Patch one schema field in an authorized SignalSurf database/table.",
+      "Patch one schema field in an authorized SignalSurf table.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
-  remove_database_field: {
-    title: "Remove Database Field",
+  remove_table_field: {
+    title: "Remove Table Field",
     description:
-      "Remove one schema field from an authorized SignalSurf database/table. This changes schema only and does not delete row data.",
+      "Remove one schema field from an authorized SignalSurf table. This changes schema only and does not delete row data.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -444,84 +437,47 @@ export const PUBLIC_MCP_TOOLS = {
   create_relation_field: {
     title: "Create Relation Field",
     description:
-      "Create an item_ref relation field from one authorized database to another product-owned database.",
+      "Create an item_ref relation field from one authorized table to another product-owned table.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
-  list_surf_point_sources: {
-    title: "List Surf Point Sources",
+  list_signals: {
+    title: "List Signals",
     description:
-      "List safe source metadata for an authorized surf point. Source config and credentials are not exposed.",
+      "List safe signal metadata for an authorized surf point. Signal config and credentials are not exposed.",
     requiredCapability: "sources.read",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
-  create_surf_point_source: {
-    title: "Create Surf Point Source",
+  create_signal: {
+    title: "Create Signal",
     description:
-      "Create a SignalSurf source/signal for an authorized surf point. Supports platform, custom-pull, RSS, webhook, web-monitor, GitHub, CoinGecko, Hacker News, Product Hunt, and the four exclusive internal trigger types. Webhook sources return the callable SignalSurf webhookUrl.",
+      "Create a SignalSurf signal for an authorized surf point. Supports platform, custom-pull, RSS, webhook, web-monitor, GitHub, CoinGecko, Hacker News, Product Hunt, and the four exclusive internal trigger types. Webhook signals return the callable SignalSurf webhookUrl.",
     requiredCapability: "sources.write",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
     annotations: CREATE_ANNOTATIONS,
   },
-  update_surf_point_source: {
-    title: "Update Surf Point Source",
+  update_signal: {
+    title: "Update Signal",
     description:
-      "Update one source/signal after verifying its surf point belongs to an authorized product. Supports source name, active state, typed config rebuilds, and safe pull_config/metadata/data_schema replacements or shallow patches.",
+      "Update one signal after verifying its surf point belongs to an authorized product. Supports signal name, active state (enable/pause via isActive), typed config rebuilds, and safe pull_config/metadata/data_schema replacements or shallow patches.",
     requiredCapability: "sources.write",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
-  delete_surf_point_source: {
-    title: "Delete Surf Point Source",
+  delete_signal: {
+    title: "Delete Signal",
     description:
-      "Hard-delete one or more sources/signals after product-scope validation and remove non-terminal jobs for those source ids.",
+      "Hard-delete one or more signals after product-scope validation and remove non-terminal jobs for those signal ids.",
     requiredCapability: "sources.write",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
     annotations: DELETE_ANNOTATIONS,
-  },
-  set_surf_point_source_active: {
-    title: "Set Surf Point Source Active",
-    description:
-      "Enable or pause one source after verifying its surf point belongs to an authorized product.",
-    requiredCapability: "sources.write",
-    surferSurface: "manage_surf_points",
-    publicStatus: "supported",
-    annotations: MUTATE_ANNOTATIONS,
-  },
-  list_webhook_payload_samples: {
-    title: "List Webhook Payload Samples",
-    description:
-      "List recent captured raw webhook payload samples for a product-scoped webhook source. Payload samples may contain user-provided data, but source credentials and secrets are not exposed.",
-    requiredCapability: "sources.read",
-    surferSurface: "manage_surf_points",
-    publicStatus: "supported",
-    annotations: READ_ANNOTATIONS,
-  },
-  preview_import_mapping: {
-    title: "Preview Webhook Import Mapping",
-    description:
-      "Preview how an import mapping would transform a captured or inline webhook payload into table upserts without writing rows.",
-    requiredCapability: "sources.read",
-    surferSurface: "manage_surf_points",
-    publicStatus: "supported",
-    annotations: READ_ANNOTATIONS,
-  },
-  replay_webhook_payload: {
-    title: "Replay Webhook Payload",
-    description:
-      "Replay one captured webhook payload through a saved or provided import mapping and upsert mapped rows into tables attached to the source surf point.",
-    requiredCapability: "tables.write",
-    requiredCapabilities: ["sources.read", "tables.write"],
-    surferSurface: "manage_data",
-    publicStatus: "supported",
-    annotations: MUTATE_ANNOTATIONS,
   },
   list_product_tools: {
     title: "List Product Tools",
@@ -544,7 +500,7 @@ export const PUBLIC_MCP_TOOLS = {
   attach_surf_point_tool: {
     title: "Attach Surf Point Tool",
     description:
-      "Attach one tool id to a surf point by adding it to toolConfig.auto_tool_ids.",
+      "Auto-attach one product integration tool (from list_product_tools) to a surf point so it runs automatically during execution, by adding its tool id to toolConfig.auto_tool_ids. This manages tool wiring, not signals or surf-point CRUD.",
     requiredCapability: "surf_points.write",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
@@ -553,36 +509,9 @@ export const PUBLIC_MCP_TOOLS = {
   detach_surf_point_tool: {
     title: "Detach Surf Point Tool",
     description:
-      "Detach one tool id from a surf point by removing it from toolConfig.auto_tool_ids.",
+      "Stop auto-attaching one product integration tool to a surf point by removing its tool id from toolConfig.auto_tool_ids. This manages tool wiring, not signals or surf-point CRUD.",
     requiredCapability: "surf_points.write",
     surferSurface: "manage_surf_points",
-    publicStatus: "supported",
-    annotations: MUTATE_ANNOTATIONS,
-  },
-  list_account_list_profiles: {
-    title: "List Account List ICP Profiles",
-    description:
-      "List reusable Account List / ICP Builder profiles for an authorized product. Pass productId when this connection can access multiple products.",
-    requiredCapability: "account_lists.read",
-    surferSurface: "account_list_icp_builder",
-    publicStatus: "supported",
-    annotations: READ_ANNOTATIONS,
-  },
-  save_account_list_profile: {
-    title: "Save Account List ICP Profile",
-    description:
-      "Create or update a reusable Account List / ICP Builder profile with structured provider, company, people, and live-signal filters for an authorized product.",
-    requiredCapability: "account_lists.write",
-    surferSurface: "account_list_icp_builder",
-    publicStatus: "supported",
-    annotations: MUTATE_ANNOTATIONS,
-  },
-  archive_account_list_profile: {
-    title: "Archive Account List ICP Profile",
-    description:
-      "Soft-archive a reusable Account List / ICP Builder profile after verifying it belongs to an authorized product.",
-    requiredCapability: "account_lists.write",
-    surferSurface: "account_list_icp_builder",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
