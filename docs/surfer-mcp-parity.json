@@ -28,6 +28,7 @@
     "enable_quick_surf",
     "get_brand_context",
     "get_context",
+    "get_enrichment_context",
     "get_surf_job",
     "get_surf_point",
     "get_table_row",
