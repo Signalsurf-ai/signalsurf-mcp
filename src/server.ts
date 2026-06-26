@@ -34,10 +34,15 @@ import {
   deleteSurfPointSchema,
   deleteTableSchema,
   deleteTableRowsSchema,
+  applyFlowEditsSchema,
+  createCampaignSchema,
   findCapabilitiesSchema,
   getBrandContextSchema,
   getEnrichmentContextSchema,
+  getNodeUpstreamContextSchema,
   getSurfPointSchema,
+  testSurfPointNodeSchema,
+  updateSurfPointFlowSchema,
   getSurfJobSchema,
   getTableRowSchema,
   listDatabasesSchema,
@@ -87,6 +92,8 @@ I want to… →
 - Enrich a whole table → use the enrich_table prompt; it scripts get_enrichment_context → enable_quick_surf → run_quick_surf(scope="all") → wait_for_surf_job.
 - Set up a new surf point (playbook) → use the set_up_surf_point prompt.
 - Build a lead list with Deepline → use the build_lead_list prompt.
+- Build a multi-step / branching surf point → a surf point is a node graph (Flow V2). Call describe_node_types first, then update_surf_point_flow (whole graph) or apply_flow_edits (incremental); get_node_upstream_context before mapping create_row fields.
+- Build a contact-list email drip → use create_campaign (do not hand-wire it); pass a connected Unipile mailbox id.
 - Decide what to write into a column → call get_enrichment_context(databaseId[, fieldKey]) for brand context, schema, popular existing values, and field conventions.
 - Run or monitor a surf point → run_surf_point, then list_surf_jobs / wait_for_surf_job.
 - Inspect data → list_tables, read_table, list_database_fields.
@@ -349,6 +356,82 @@ function registerTools(
       runJsonTool(async () => {
         assertToolAllowed("delete_surf_point")
         return repository.deleteSurfPoints(toolContext(args), args.surfPointIds)
+      })
+  )
+
+  registerPublicTool("describe_node_types", undefined, async () =>
+    runJsonTool(async () => {
+      assertToolAllowed("describe_node_types")
+      return repository.describeNodeTypes()
+    })
+  )
+
+  registerPublicTool(
+    "update_surf_point_flow",
+    updateSurfPointFlowSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("update_surf_point_flow")
+        return repository.updateSurfPointFlow(toolContext(args), {
+          playbookId: args.playbookId,
+          flow: args.flow,
+        })
+      })
+  )
+
+  registerPublicTool(
+    "apply_flow_edits",
+    applyFlowEditsSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("apply_flow_edits")
+        return repository.applyFlowEdits(toolContext(args), {
+          playbookId: args.playbookId,
+          edits: args.edits,
+        })
+      })
+  )
+
+  registerPublicTool(
+    "get_node_upstream_context",
+    getNodeUpstreamContextSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("get_node_upstream_context")
+        return repository.getNodeUpstreamContext(toolContext(args), {
+          playbookId: args.playbookId,
+          nodeId: args.nodeId,
+        })
+      })
+  )
+
+  registerPublicTool(
+    "create_campaign",
+    createCampaignSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("create_campaign")
+        return repository.createCampaign(toolContext(args), {
+          playbookId: args.playbookId,
+          contactTableId: args.contactTableId,
+          recipientField: args.recipientField,
+          mailbox: args.mailbox,
+          steps: args.steps,
+        })
+      })
+  )
+
+  registerPublicTool(
+    "test_surf_point_node",
+    testSurfPointNodeSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("test_surf_point_node")
+        return repository.testSurfPointNode(toolContext(args), {
+          playbookId: args.playbookId,
+          nodeId: args.nodeId,
+          sampleText: args.sampleText,
+        })
       })
   )
 
