@@ -26,6 +26,7 @@
     "delete_table_rows",
     "disable_quick_surf",
     "enable_quick_surf",
+    "find_capabilities",
     "get_brand_context",
     "get_context",
     "get_enrichment_context",

@@ -84,6 +84,7 @@ export type PublicMcpToolName =
   | "get_context"
   | "get_brand_context"
   | "get_enrichment_context"
+  | "find_capabilities"
   | "create_product"
   | "list_surf_points"
   | "get_surf_point"
@@ -205,6 +206,15 @@ export const PUBLIC_MCP_TOOLS = {
       "Bundle everything an agent needs before filling or enriching a table column: brand/positioning context, the table schema (fields, types, options, entry key, relations), the most popular existing values per tag/array field, and SignalSurf field conventions. Call this before writing whatToDo for enable_quick_surf or before manual row edits. Pass productId when this connection can access multiple products; pass fieldKey to scope popular values to one column.",
     requiredCapability: "tables.read",
     surferSurface: "enrichment context",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  find_capabilities: {
+    title: "Find Capabilities",
+    description:
+      "Search this MCP's tools and guided prompts by intent (e.g. \"enrich a table\", \"find leads\", \"set up a surf point\") instead of scanning the whole tool list. Returns the best-matching tools and prompts (filtered to what your token can use) plus a hint on how to proceed. Start here when you are unsure which tool or prompt fits the task. Pass an empty query to see the available guided workflows.",
+    requiredCapability: "context.read",
+    surferSurface: "tool discovery",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },

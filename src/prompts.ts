@@ -97,6 +97,12 @@ const PROMPTS: PromptDefinition[] = [
   },
 ]
 
+export const PROMPT_CATALOG = PROMPTS.map(({ name, title, description }) => ({
+  name,
+  title,
+  description,
+}))
+
 export function registerPrompts(server: McpServer): void {
   for (const prompt of PROMPTS) {
     server.registerPrompt(

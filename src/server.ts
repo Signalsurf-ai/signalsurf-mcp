@@ -18,8 +18,9 @@ import {
   type PublicMcpToolName,
 } from "./capabilities.js"
 import { jsonResource, runJsonTool } from "./mcp-results.js"
-import { registerPrompts } from "./prompts.js"
+import { PROMPT_CATALOG, registerPrompts } from "./prompts.js"
 import { SignalSurfRepository } from "./repository.js"
+import { searchCapabilities } from "./tool-search.js"
 import {
   createSurfPointSourceSchema,
   createProductSchema,
@@ -33,6 +34,7 @@ import {
   deleteSurfPointSchema,
   deleteTableSchema,
   deleteTableRowsSchema,
+  findCapabilitiesSchema,
   getBrandContextSchema,
   getEnrichmentContextSchema,
   getSurfPointSchema,
@@ -81,6 +83,7 @@ Golden rule: call get_context FIRST. Resolve real ids before any id-typed parame
 Execution model: enrichment runs on the SignalSurf server brain via Quick Surf and surf points. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
 
 I want to… →
+- Not sure which tool or prompt fits → call find_capabilities(query) to search by intent.
 - Enrich a whole table → use the enrich_table prompt; it scripts get_enrichment_context → enable_quick_surf → run_quick_surf(scope="all") → wait_for_surf_job.
 - Set up a new surf point (playbook) → use the set_up_surf_point prompt.
 - Build a lead list with Deepline → use the build_lead_list prompt.
@@ -229,6 +232,28 @@ function registerTools(
           databaseId: args.databaseId,
           fieldKey: args.fieldKey,
         })
+      })
+  )
+
+  registerPublicTool(
+    "find_capabilities",
+    findCapabilitiesSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("find_capabilities")
+        const tools = PUBLIC_MCP_TOOL_NAMES.filter(
+          (name) =>
+            name !== "find_capabilities" &&
+            canUseCapability(context, PUBLIC_MCP_TOOLS[name].requiredCapability)
+        ).map((name) => ({
+          name,
+          title: PUBLIC_MCP_TOOLS[name].title,
+          description: PUBLIC_MCP_TOOLS[name].description,
+        }))
+        return searchCapabilities(
+          typeof args?.query === "string" ? args.query : "",
+          { tools, prompts: PROMPT_CATALOG }
+        )
       })
   )
 

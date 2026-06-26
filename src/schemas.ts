@@ -376,6 +376,10 @@ export const getEnrichmentContextSchema = {
   fieldKey: z.string().min(1).max(100).optional(),
 }
 
+export const findCapabilitiesSchema = {
+  query: z.string().max(200).optional(),
+}
+
 export const addDatabaseFieldSchema = {
   ...productTargetSchema,
   databaseId: uuidSchema,
