@@ -39,6 +39,19 @@ import { UserFacingError } from "./errors.js"
 import { FIELD_CONVENTIONS } from "./conventions.js"
 import { aggregatePopularValues } from "./popular-values.js"
 import {
+  FLOW_VERSION,
+  applyFlowEdits as applyFlowEditsToGraph,
+  buildCampaignFlow,
+  buildUpstreamContext,
+  describeNodeTypes as describeFlowNodeTypes,
+  flowEntryNodeIds,
+  surfPointFlowV2Schema,
+  validateFieldReferences,
+  validateFlow,
+  type FlowEditOp,
+  type SurfPointFlowV2,
+} from "./surf-flow/index.js"
+import {
   evaluateRunCondition,
   parseRunCondition,
   type RunCondition,
@@ -2056,6 +2069,414 @@ export class SignalSurfRepository {
       surfPoint: formatSurfPoint(data as SurfPointRow),
       changedFields: changedKeys,
     }
+  }
+
+  // ── Flow V2 node-graph tools (SIG-977) + Campaigns (SIG-1023) ──────────────
+
+  describeNodeTypes() {
+    return describeFlowNodeTypes()
+  }
+
+  private async loadPlaybookFlow(
+    context: SignalSurfContext,
+    playbookId: string
+  ): Promise<{
+    name: string | null
+    config: JsonRecord
+    flow: SurfPointFlowV2
+  }> {
+    const { data, error } = await this.db
+      .from("playbooks")
+      .select("id, name, config")
+      .eq("id", playbookId)
+      .eq("product_id", context.productId)
+      .is("deleted_at", null)
+      .maybeSingle()
+    requireNoDbError(error, "Failed to load surf point")
+    if (!data) {
+      throw new UserFacingError("Surf point not found or access denied.", {
+        code: "NOT_FOUND",
+        status: 404,
+      })
+    }
+    const row = data as { name?: string | null; config?: unknown }
+    const config = asRecord(row.config)
+    let flow: SurfPointFlowV2 = { version: FLOW_VERSION, nodes: [], edges: [] }
+    if (config.flow != null) {
+      const parsed = surfPointFlowV2Schema.safeParse(config.flow)
+      if (parsed.success) flow = parsed.data
+    }
+    return {
+      name: typeof row.name === "string" ? row.name : null,
+      config,
+      flow,
+    }
+  }
+
+  private async loadDatabaseColumns(
+    context: SignalSurfContext,
+    databaseId: string
+  ): Promise<string[]> {
+    const database = await this.getDatabaseAndValidateProduct(
+      context,
+      databaseId
+    )
+    return schemaFields(asRecord(database.schema))
+      .map((field) =>
+        field && typeof field === "object"
+          ? (field as Record<string, unknown>).key
+          : undefined
+      )
+      .filter((key): key is string => typeof key === "string")
+  }
+
+  private async columnsForActionTargets(
+    context: SignalSurfContext,
+    flow: SurfPointFlowV2
+  ): Promise<Record<string, string[]>> {
+    const dbIds = new Set<string>()
+    for (const node of flow.nodes) {
+      if (node.type !== "action") continue
+      if (node.actionKind !== "create_row" && node.actionKind !== "object_sink")
+        continue
+      const cfg = asRecord(node.actionConfig)
+      if (typeof cfg.database_id === "string" && cfg.database_id) {
+        dbIds.add(cfg.database_id)
+      }
+    }
+    const columnsByDatabaseId: Record<string, string[]> = {}
+    for (const dbId of dbIds) {
+      columnsByDatabaseId[dbId] = await this.loadDatabaseColumns(context, dbId)
+    }
+    return columnsByDatabaseId
+  }
+
+  private async persistPlaybookFlow(
+    context: SignalSurfContext,
+    playbookId: string,
+    config: JsonRecord,
+    flow: SurfPointFlowV2
+  ) {
+    const problems = validateFlow(flow)
+    const blocking = problems.filter(
+      (problem) =>
+        problem.code === "cycle" || problem.code === "dangling_edge"
+    )
+    if (blocking.length > 0) {
+      throw new UserFacingError(
+        `Flow graph has blocking structural problems: ${blocking
+          .map((problem) => problem.message)
+          .join("; ")}`,
+        { code: "BAD_REQUEST", status: 400, details: { blocking } }
+      )
+    }
+
+    const tables = await this.columnsForActionTargets(context, flow)
+    const fieldProblems = validateFieldReferences(flow, tables)
+    if (fieldProblems.length > 0) {
+      throw new UserFacingError(
+        `Some create_row/object_sink fields map to columns that don't exist: ${fieldProblems
+          .map((problem) => problem.message)
+          .join("; ")}`,
+        { code: "BAD_REQUEST", status: 400, details: { fieldProblems, tables } }
+      )
+    }
+
+    const firstRule = flow.nodes.find((node) => node.type === "rule")
+    const firstAgent = flow.nodes.find((node) => node.type === "agent")
+    const updateData: Record<string, unknown> = {
+      config: { ...config, flow },
+      updated_at: new Date().toISOString(),
+    }
+    if (firstRule && "prompt" in firstRule && firstRule.prompt != null) {
+      updateData.scoring_rubric = firstRule.prompt
+    }
+    if (
+      firstRule &&
+      "relevanceThreshold" in firstRule &&
+      firstRule.relevanceThreshold != null
+    ) {
+      updateData.relevance_threshold = firstRule.relevanceThreshold
+    }
+    if (firstAgent && "prompt" in firstAgent && firstAgent.prompt != null) {
+      updateData.surf_prompt = firstAgent.prompt
+    }
+    if (
+      updateData.scoring_rubric !== undefined ||
+      updateData.surf_prompt !== undefined
+    ) {
+      updateData.prompt_template = joinPromptSections(
+        (updateData.scoring_rubric as string | null | undefined) ?? null,
+        (updateData.surf_prompt as string | null | undefined) ?? null
+      )
+    }
+
+    const { error } = await this.db
+      .from("playbooks")
+      .update(updateData)
+      .eq("id", playbookId)
+      .eq("product_id", context.productId)
+      .is("deleted_at", null)
+    requireNoDbError(error, "Failed to save surf point flow")
+
+    const warnings = problems.filter(
+      (problem) =>
+        problem.code !== "cycle" && problem.code !== "dangling_edge"
+    )
+    return {
+      nodeCount: flow.nodes.length,
+      edgeCount: flow.edges.length,
+      entryNodeIds: flowEntryNodeIds(flow),
+      warnings,
+      ...(Object.keys(tables).length > 0 ? { tables } : {}),
+    }
+  }
+
+  async updateSurfPointFlow(
+    context: SignalSurfContext,
+    input: { playbookId: string; flow: unknown }
+  ) {
+    const parsed = surfPointFlowV2Schema.safeParse(input.flow)
+    if (!parsed.success) {
+      throw new UserFacingError(
+        `Invalid flow graph: ${parsed.error.issues
+          .map((issue) => issue.message)
+          .join("; ")}`,
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
+    const summary = await this.persistPlaybookFlow(
+      context,
+      input.playbookId,
+      loaded.config,
+      parsed.data
+    )
+    return { playbookId: input.playbookId, name: loaded.name, ...summary }
+  }
+
+  async applyFlowEdits(
+    context: SignalSurfContext,
+    input: { playbookId: string; edits: FlowEditOp[] }
+  ) {
+    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
+    const result = applyFlowEditsToGraph(
+      loaded.flow,
+      input.edits,
+      (kind) => `${kind}-${randomUUID().slice(0, 8)}`
+    )
+    if (!result.ok) {
+      return { playbookId: input.playbookId, applied: false, results: result.results }
+    }
+    const summary = await this.persistPlaybookFlow(
+      context,
+      input.playbookId,
+      loaded.config,
+      result.flow
+    )
+    return {
+      playbookId: input.playbookId,
+      applied: true,
+      refs: result.refs,
+      results: result.results,
+      ...summary,
+    }
+  }
+
+  async getNodeUpstreamContext(
+    context: SignalSurfContext,
+    input: { playbookId: string; nodeId: string }
+  ) {
+    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
+    if (!loaded.flow.nodes.some((node) => node.id === input.nodeId)) {
+      throw new UserFacingError(
+        `No node "${input.nodeId}" in this surf point's flow. Existing node ids: ${loaded.flow.nodes
+          .map((node) => node.id)
+          .join(", ")}`,
+        { code: "NOT_FOUND", status: 404 }
+      )
+    }
+    return buildUpstreamContext(loaded.flow, input.nodeId, {
+      tableColumns: (databaseId: string) =>
+        this.loadDatabaseColumns(context, databaseId),
+    })
+  }
+
+  async createCampaign(
+    context: SignalSurfContext,
+    input: {
+      playbookId: string
+      contactTableId: string
+      recipientField?: string
+      mailbox?: string
+      steps: Array<{ copy: string; delayDays?: number; gate?: string }>
+    }
+  ) {
+    const recipientField = input.recipientField?.trim() || "email"
+    const mailbox = input.mailbox?.trim()
+    if (!mailbox) {
+      throw new UserFacingError(
+        "mailbox is required. Pass a connected Unipile email account id. The SignalSurf MCP does not list Unipile accounts directly — connect a mailbox in the app, then pass its account id here.",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+
+    const steps = input.steps
+      .map((step) => ({
+        copy: step.copy?.trim() ?? "",
+        gate: (step.gate === "replied" || step.gate === "not_replied"
+          ? step.gate
+          : "none") as "none" | "replied" | "not_replied",
+        delaySeconds: Math.round(Math.max(0, step.delayDays ?? 0) * 86400),
+      }))
+      .filter((step) => step.copy.length > 0)
+    if (steps.length === 0) {
+      throw new UserFacingError(
+        "steps must be a non-empty array; each step needs copy (what that email says).",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+
+    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
+
+    const { data: table, error: tableError } = await this.db
+      .from("databases")
+      .select("id, item_type, name")
+      .eq("id", input.contactTableId)
+      .eq("product_id", context.productId)
+      .is("deleted_at", null)
+      .maybeSingle()
+    requireNoDbError(tableError, "Failed to load contact table")
+    if (!table) {
+      throw new UserFacingError(
+        `Contact table "${input.contactTableId}" not found in this product.`,
+        { code: "NOT_FOUND", status: 404 }
+      )
+    }
+    const contactTable = table as { item_type?: string; name?: string }
+    if (contactTable.item_type !== "contact") {
+      throw new UserFacingError(
+        `"${contactTable.name ?? input.contactTableId}" is not a Contacts list (item_type=${contactTable.item_type}). A campaign enrols from a Contacts table.`,
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+
+    const { data: product, error: productError } = await this.db
+      .from("products")
+      .select("owner_id")
+      .eq("id", context.productId)
+      .single()
+    requireNoDbError(productError, "Failed to resolve product owner")
+    const ownerId = (product as { owner_id?: string } | null)?.owner_id
+    if (!ownerId) {
+      throw new UserFacingError(`Product not found (id: ${context.productId}).`, {
+        code: "NOT_FOUND",
+        status: 404,
+      })
+    }
+
+    const { data: toolRow, error: toolError } = await this.db
+      .from("product_tools")
+      .insert({
+        product_id: context.productId,
+        user_id: ownerId,
+        tool_type: "unipile_email",
+        config: {
+          unipile_account_id: mailbox,
+          recipient_field: recipientField,
+          recipient_table_id: input.contactTableId,
+          nickname: `${loaded.name ?? "Campaign"} mailbox`,
+          enabled: true,
+        },
+        is_enabled: true,
+      })
+      .select("id")
+      .single()
+    requireNoDbError(toolError, "Failed to create the sending mailbox tool")
+    const toolId = (toolRow as { id: string }).id
+
+    // Authorize the mailbox tool on the surf point pool before persisting the
+    // flow so the step agents' allowedToolIds resolve against it.
+    const existing = await this.getSurfPointForUpdate(context, input.playbookId)
+    const toolConfig = asRecord(existing?.tool_config)
+    const autoToolIds = uniqueStrings([
+      ...(Array.isArray(toolConfig.auto_tool_ids)
+        ? toolConfig.auto_tool_ids
+        : []),
+      toolId,
+    ])
+    const { error: linkError } = await this.db
+      .from("playbooks")
+      .update({
+        tool_config: { ...toolConfig, auto_tool_ids: autoToolIds },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.playbookId)
+      .eq("product_id", context.productId)
+      .is("deleted_at", null)
+    requireNoDbError(linkError, "Failed to attach the mailbox tool")
+
+    const built = buildCampaignFlow(
+      { contactTableId: input.contactTableId, recipientField, toolId, steps },
+      (kind) => `${kind}-${randomUUID().slice(0, 8)}`
+    )
+    await this.persistPlaybookFlow(
+      context,
+      input.playbookId,
+      loaded.config,
+      built.flow
+    )
+
+    return {
+      playbookId: input.playbookId,
+      sequenceNodeId: built.sequenceNodeId,
+      stepAgentIds: built.stepAgentIds,
+      mailboxToolId: toolId,
+      mailboxAccountId: mailbox,
+      stepCount: steps.length,
+      message:
+        "Campaign built. It does NOT enrol contacts automatically — open the surf point in SignalSurf and click Enroll to start the drip.",
+    }
+  }
+
+  async testSurfPointNode(
+    context: SignalSurfContext,
+    input: { playbookId: string; nodeId: string; sampleText?: string }
+  ) {
+    await this.assertSurfPointBelongsToProduct(context, input.playbookId)
+    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
+    if (!loaded.flow.nodes.some((node) => node.id === input.nodeId)) {
+      throw new UserFacingError(
+        `No node "${input.nodeId}" in this surf point's flow. Existing node ids: ${loaded.flow.nodes
+          .map((node) => node.id)
+          .join(", ")}`,
+        { code: "NOT_FOUND", status: 404 }
+      )
+    }
+    if (!this.db.functions) {
+      throw new UserFacingError(
+        "Node dry-run is unavailable: the surf-flow-debug edge function is not reachable from this MCP deployment.",
+        { code: "UNSUPPORTED", status: 501 }
+      )
+    }
+    const secret =
+      process.env.SIGNALSURF_MCP_INTERNAL_API_SECRET ??
+      process.env.INTERNAL_API_SECRET
+    const { data, error } = await this.db.functions.invoke("surf-flow-debug", {
+      body: {
+        playbookId: input.playbookId,
+        nodeId: input.nodeId,
+        ...(input.sampleText ? { sampleText: input.sampleText } : {}),
+      },
+      ...(secret ? { headers: { "x-internal-secret": secret } } : {}),
+    })
+    if (error) {
+      throw new UserFacingError(
+        `Node dry-run failed: ${error.message ?? "surf-flow-debug error"}`,
+        { code: "UPSTREAM_ERROR", status: 502 }
+      )
+    }
+    return { playbookId: input.playbookId, nodeId: input.nodeId, result: data }
   }
 
   async runSurfPoint(context: SignalSurfContext, input: RunSurfPointInput) {

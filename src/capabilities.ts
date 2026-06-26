@@ -84,6 +84,7 @@ export type PublicMcpToolName =
   | "get_context"
   | "get_brand_context"
   | "get_enrichment_context"
+  | "find_capabilities"
   | "create_product"
   | "list_surf_points"
   | "get_surf_point"
@@ -95,6 +96,12 @@ export type PublicMcpToolName =
   | "list_surf_jobs"
   | "cancel_surf_job"
   | "delete_surf_point"
+  | "describe_node_types"
+  | "update_surf_point_flow"
+  | "apply_flow_edits"
+  | "get_node_upstream_context"
+  | "create_campaign"
+  | "test_surf_point_node"
   | "list_tables"
   | "create_table"
   | "update_table"
@@ -208,6 +215,15 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
+  find_capabilities: {
+    title: "Find Capabilities",
+    description:
+      "Search this MCP's tools and guided prompts by intent (e.g. \"enrich a table\", \"find leads\", \"set up a surf point\") instead of scanning the whole tool list. Returns the best-matching tools and prompts (filtered to what your token can use) plus a hint on how to proceed. Start here when you are unsure which tool or prompt fits the task. Pass an empty query to see the available guided workflows.",
+    requiredCapability: "context.read",
+    surferSurface: "tool discovery",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
   create_product: {
     title: "Create Product",
     description:
@@ -306,6 +322,60 @@ export const PUBLIC_MCP_TOOLS = {
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
     annotations: DELETE_ANNOTATIONS,
+  },
+  describe_node_types: {
+    title: "Describe Flow Node Types",
+    description:
+      "List the SurfPoint Flow V2 node types (trigger, rule, agent, action, wait, sequence), their fields, and the legal edge conditions. A SurfPoint is now a node graph (DAG); call this before building or editing a flow so you shape nodes and wire edges correctly. No args.",
+    requiredCapability: "surf_points.read",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  update_surf_point_flow: {
+    title: "Update Surf Point Flow",
+    description:
+      "Create or replace a surf point's multi-step Flow V2 graph (stored at config.flow). Input { playbookId, flow } where flow is { version: 2, nodes, edges }. Validates the graph (rejects cycles and dangling edges) and blocks create_row/object_sink fields that map to non-existent columns. Use this for a whole-graph build; use apply_flow_edits for incremental edits. Call describe_node_types first if unsure of node shapes.",
+    requiredCapability: "surf_points.write",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  apply_flow_edits: {
+    title: "Apply Flow Edits",
+    description:
+      "Apply several Flow V2 edits to a surf point in one atomic call — prefer this for multi-step builds/edits. Input { playbookId, edits }. edits is an ordered list of ops: {op:'add_node', ref?, node}, {op:'connect', source, target, condition?}, {op:'update_node', nodeId, patch}, {op:'remove_node', nodeId}, {op:'remove_edge', edgeId}. An add_node may set a ref so later ops reference the new node before its id exists. If any op is invalid the whole batch is rejected (applied:false with the failing op). For create_row/object_sink nodes call get_node_upstream_context first.",
+    requiredCapability: "surf_points.write",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  get_node_upstream_context: {
+    title: "Get Node Upstream Context",
+    description:
+      "Resolve what data is in scope at a flow node before you configure it: the upstream node chain, upstream triggers and their sources, upstream agent write targets (databaseId + columns), this node's own target-table columns (for create_row/object_sink), and signal fields you can reference as {{signal.<field>}}. Always call this before mapping a create_row/object_sink node's fields. Input { playbookId, nodeId }.",
+    requiredCapability: "surf_points.read",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  create_campaign: {
+    title: "Create Campaign",
+    description:
+      "Build a native cold-email Campaign (a contact-list drip) on a surf point: a sequence node enrolling from a Contacts table, then one agent per step sending through a connected mailbox, wired correct-by-construction. Input { playbookId, contactTableId, mailbox, steps:[{copy, delayDays?, gate?}] }. The contact table must have item_type=contact. You MUST pass mailbox (a connected Unipile email account id) — this MCP does not list Unipile accounts. Replaces the surf point's flow. Does NOT enrol contacts; the user enrols from the app.",
+    requiredCapability: "surf_points.write",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  test_surf_point_node: {
+    title: "Test Surf Point Node",
+    description:
+      "Dry-run one flow node via the surf-flow-debug runner (no commit). Input { playbookId, nodeId, sampleText? }. Returns the node result (rule pass/fail + score, classify branch, or an agent's proposed writes). Requires the surf-flow-debug edge function to be reachable from this deployment.",
+    requiredCapability: "surf_points.read",
+    surferSurface: "manage_surf_points",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
   },
   list_tables: {
     title: "List Tables",

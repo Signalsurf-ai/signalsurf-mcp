@@ -88,4 +88,13 @@ export type SupabaseLike = {
     data: unknown
     error: { message: string; code?: string } | null
   }>
+  functions?: {
+    invoke: (
+      name: string,
+      options?: { body?: unknown; headers?: Record<string, string> }
+    ) => Promise<{
+      data: unknown
+      error: { message?: string } | null
+    }>
+  }
 }

@@ -34,15 +34,18 @@ export function buildSetUpSurfPointPrompt(args: PromptArgs): string {
 
 ${productLine(args)}
 
+A surf point is a node graph (Flow V2): trigger → rule/agent/action/wait nodes, with branching edges. Simple ones can stay as a scoring rubric + surf prompt; multi-step or branching ones use the flow graph.
+
 Follow these steps in order:
 1. Call get_context${args.productId ? "" : " and pick the productId if multiple are returned"}.
 2. Decide the target table(s): call list_tables and pick the databaseId(s) this surf point should write into (use create_table first if the table does not exist yet).
 3. Call create_surf_point({ name, databaseIds }) to create the playbook. Keep the returned surfPointId.
 4. Attach a signal source: call create_signal({ surfPointId, type, ... }). Choose the type that matches the source (platform, custom-pull, rss, webhook, web-monitor, github, etc.). A webhook signal returns a callable webhookUrl.
-5. (Optional) Tune behavior with update_surf_point: set scoring_rubric and surf_prompt, and attach product tools via toolConfigPatch.auto_tool_ids (discover ids with list_product_tools).
-6. Trigger a first run with run_surf_point({ surfPointId }), then poll with wait_for_surf_job / list_surf_jobs and report the result.
+5. Simple surf point: tune behavior with update_surf_point — set scoring_rubric and surf_prompt, and attach product tools via toolConfigPatch.auto_tool_ids (ids from list_product_tools).
+6. Multi-step / branching surf point: call describe_node_types to learn the node types and legal edge conditions, then build the graph with update_surf_point_flow (whole graph) or apply_flow_edits (incremental, atomic). Before mapping a create_row/object_sink node's fields, call get_node_upstream_context so the keys are real columns. For a contact-list email drip, use create_campaign instead of hand-wiring a sequence.
+7. Trigger a first run with run_surf_point({ surfPointId }), then poll with wait_for_surf_job / list_surf_jobs and report the result.
 
-Never pass a null or guessed id — resolve productId, databaseId, and surfPointId from the calls above before using them.`
+Never pass a null or guessed id — resolve productId, databaseId, surfPointId, and node ids from the calls above before using them.`
 }
 
 export function buildBuildLeadListPrompt(args: PromptArgs): string {
@@ -96,6 +99,12 @@ const PROMPTS: PromptDefinition[] = [
     build: buildBuildLeadListPrompt,
   },
 ]
+
+export const PROMPT_CATALOG = PROMPTS.map(({ name, title, description }) => ({
+  name,
+  title,
+  description,
+}))
 
 export function registerPrompts(server: McpServer): void {
   for (const prompt of PROMPTS) {

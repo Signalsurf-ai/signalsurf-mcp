@@ -376,6 +376,99 @@ export const getEnrichmentContextSchema = {
   fieldKey: z.string().min(1).max(100).optional(),
 }
 
+export const findCapabilitiesSchema = {
+  query: z.string().max(200).optional(),
+}
+
+// ── Flow V2 node-graph + Campaign tools (SIG-977 / SIG-1023) ─────────────────
+// The `flow`/`edits` shapes are documented loosely here; the server re-validates
+// with the strict SurfPointFlowV2 schema and returns field-level errors/hints.
+const flowGraphInputSchema = z
+  .object({
+    version: z.literal(2),
+    nodes: z
+      .array(z.record(z.string(), z.unknown()))
+      .describe(
+        "Flow nodes. type is trigger | rule | agent | action | wait | sequence. Call describe_node_types for each type's fields."
+      ),
+    edges: z
+      .array(z.record(z.string(), z.unknown()))
+      .describe(
+        "Directed edges { id, source, target, condition }. condition: always | on_pass | on_fail | category:<label> | step:<index>."
+      ),
+  })
+  .describe("SurfPointFlowV2 graph: { version: 2, nodes: [...], edges: [...] }.")
+
+const flowEditOpInputSchema = z.object({
+  op: z.enum(["add_node", "connect", "update_node", "remove_node", "remove_edge"]),
+  ref: z
+    .string()
+    .optional()
+    .describe("add_node: a local handle later ops in this batch can reference."),
+  node: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe("add_node: the node to add (without id; the server mints it)."),
+  source: z.string().optional().describe("connect: source node id or batch ref."),
+  target: z.string().optional().describe("connect: target node id or batch ref."),
+  condition: z.string().optional().describe("connect: edge condition."),
+  nodeId: z.string().optional().describe("update_node / remove_node: node id or ref."),
+  patch: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe("update_node: fields to merge into the node."),
+  edgeId: z.string().optional().describe("remove_edge: edge id."),
+})
+
+export const updateSurfPointFlowSchema = {
+  ...productTargetSchema,
+  playbookId: uuidSchema,
+  flow: flowGraphInputSchema,
+}
+
+export const applyFlowEditsSchema = {
+  ...productTargetSchema,
+  playbookId: uuidSchema,
+  edits: z.array(flowEditOpInputSchema).min(1),
+}
+
+export const getNodeUpstreamContextSchema = {
+  ...productTargetSchema,
+  playbookId: uuidSchema,
+  nodeId: z.string().min(1),
+}
+
+export const createCampaignSchema = {
+  ...productTargetSchema,
+  playbookId: uuidSchema,
+  contactTableId: uuidSchema,
+  recipientField: z.string().min(1).max(100).optional(),
+  mailbox: z.string().min(1).optional(),
+  steps: z
+    .array(
+      z.object({
+        copy: z.string().min(1).describe("What this step's email should say."),
+        delayDays: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("Days to wait before this step (step 1 from enrolment)."),
+        gate: z
+          .enum(["none", "replied", "not_replied"])
+          .optional()
+          .describe("Condition after the wait. Step 1 is always unconditional."),
+      })
+    )
+    .min(1),
+}
+
+export const testSurfPointNodeSchema = {
+  ...productTargetSchema,
+  playbookId: uuidSchema,
+  nodeId: z.string().min(1),
+  sampleText: z.string().optional(),
+}
+
 export const addDatabaseFieldSchema = {
   ...productTargetSchema,
   databaseId: uuidSchema,
