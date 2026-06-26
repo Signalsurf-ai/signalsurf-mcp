@@ -34,10 +34,15 @@ import {
   deleteSurfPointSchema,
   deleteTableSchema,
   deleteTableRowsSchema,
+  applyFlowEditsSchema,
+  createCampaignSchema,
   findCapabilitiesSchema,
   getBrandContextSchema,
   getEnrichmentContextSchema,
+  getNodeUpstreamContextSchema,
   getSurfPointSchema,
+  testSurfPointNodeSchema,
+  updateSurfPointFlowSchema,
   getSurfJobSchema,
   getTableRowSchema,
   listDatabasesSchema,
@@ -349,6 +354,82 @@ function registerTools(
       runJsonTool(async () => {
         assertToolAllowed("delete_surf_point")
         return repository.deleteSurfPoints(toolContext(args), args.surfPointIds)
+      })
+  )
+
+  registerPublicTool("describe_node_types", undefined, async () =>
+    runJsonTool(async () => {
+      assertToolAllowed("describe_node_types")
+      return repository.describeNodeTypes()
+    })
+  )
+
+  registerPublicTool(
+    "update_surf_point_flow",
+    updateSurfPointFlowSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("update_surf_point_flow")
+        return repository.updateSurfPointFlow(toolContext(args), {
+          playbookId: args.playbookId,
+          flow: args.flow,
+        })
+      })
+  )
+
+  registerPublicTool(
+    "apply_flow_edits",
+    applyFlowEditsSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("apply_flow_edits")
+        return repository.applyFlowEdits(toolContext(args), {
+          playbookId: args.playbookId,
+          edits: args.edits,
+        })
+      })
+  )
+
+  registerPublicTool(
+    "get_node_upstream_context",
+    getNodeUpstreamContextSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("get_node_upstream_context")
+        return repository.getNodeUpstreamContext(toolContext(args), {
+          playbookId: args.playbookId,
+          nodeId: args.nodeId,
+        })
+      })
+  )
+
+  registerPublicTool(
+    "create_campaign",
+    createCampaignSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("create_campaign")
+        return repository.createCampaign(toolContext(args), {
+          playbookId: args.playbookId,
+          contactTableId: args.contactTableId,
+          recipientField: args.recipientField,
+          mailbox: args.mailbox,
+          steps: args.steps,
+        })
+      })
+  )
+
+  registerPublicTool(
+    "test_surf_point_node",
+    testSurfPointNodeSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("test_surf_point_node")
+        return repository.testSurfPointNode(toolContext(args), {
+          playbookId: args.playbookId,
+          nodeId: args.nodeId,
+          sampleText: args.sampleText,
+        })
       })
   )
 
