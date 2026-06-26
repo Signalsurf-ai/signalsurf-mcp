@@ -74,6 +74,20 @@ export type CreateServerOptions = {
   repository: SignalSurfRepository
 }
 
+export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
+
+Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter — productId from get_context (when multiple products), databaseId from list_tables, surfPointId from list_surf_points. Never pass a null or guessed id.
+
+Execution model: enrichment runs on the SignalSurf server brain via Quick Surf and surf points. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
+
+I want to… →
+- Enrich a whole table → use the enrich_table prompt; it scripts get_enrichment_context → enable_quick_surf → run_quick_surf(scope="all") → wait_for_surf_job.
+- Decide what to write into a column → call get_enrichment_context(databaseId[, fieldKey]) for brand context, schema, popular existing values, and field conventions.
+- Run or monitor a surf point → run_surf_point, then list_surf_jobs / wait_for_surf_job.
+- Inspect data → list_tables, read_table, list_database_fields.
+
+When multiple products are authorized, pass products[].productId (from get_context) on every product-scoped call.`
+
 export async function createSignalSurfMcpServer(
   options: CreateServerOptions
 ): Promise<McpServer> {
@@ -102,8 +116,7 @@ export async function createSignalSurfMcpServer(
         tools: {},
         prompts: {},
       },
-      instructions:
-        "Use these tools to work with SignalSurf products authorized for this MCP token. Call get_context first; choose products by products[].name and pass products[].productId to every product-scoped tool call when multiple products are authorized.",
+      instructions: SERVER_INSTRUCTIONS,
     }
   )
 
