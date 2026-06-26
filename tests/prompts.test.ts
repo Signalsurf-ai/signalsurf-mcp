@@ -1,7 +1,11 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { afterEach, describe, expect, it } from "vitest"
-import { buildEnrichTablePrompt } from "../src/prompts.js"
+import {
+  buildBuildLeadListPrompt,
+  buildEnrichTablePrompt,
+  buildSetUpSurfPointPrompt,
+} from "../src/prompts.js"
 import { createSignalSurfMcpServer } from "../src/server.js"
 import type { SignalSurfContext } from "../src/types.js"
 
@@ -18,6 +22,31 @@ describe("buildEnrichTablePrompt", () => {
   it("embeds the resolved databaseId when provided", () => {
     const text = buildEnrichTablePrompt({ databaseId: "db-42" })
     expect(text).toContain("db-42")
+  })
+})
+
+describe("buildSetUpSurfPointPrompt", () => {
+  it("scripts surf point creation, signal, and a first run", () => {
+    const text = buildSetUpSurfPointPrompt({})
+    expect(text).toMatch(/create_surf_point/)
+    expect(text).toMatch(/create_signal/)
+    expect(text).toMatch(/run_surf_point/)
+    expect(text).toMatch(/wait_for_surf_job/)
+  })
+})
+
+describe("buildBuildLeadListPrompt", () => {
+  it("scripts Deepline search, row creation, and email enrichment", () => {
+    const text = buildBuildLeadListPrompt({})
+    expect(text).toMatch(/deepline_search_people/)
+    expect(text).toMatch(/create_table_row/)
+    expect(text).toMatch(/deepline_enrich_contact/)
+    expect(text).toMatch(/update_table_row/)
+  })
+
+  it("embeds the resolved databaseId when provided", () => {
+    const text = buildBuildLeadListPrompt({ databaseId: "db-77" })
+    expect(text).toContain("db-77")
   })
 })
 
@@ -48,7 +77,10 @@ describe("enrich_table prompt over MCP", () => {
     ])
 
     const prompts = await client.listPrompts()
-    expect(prompts.prompts.map((p) => p.name)).toContain("enrich_table")
+    const names = prompts.prompts.map((p) => p.name)
+    expect(names).toContain("enrich_table")
+    expect(names).toContain("set_up_surf_point")
+    expect(names).toContain("build_lead_list")
 
     const got = await client.getPrompt({
       name: "enrich_table",

@@ -82,6 +82,8 @@ Execution model: enrichment runs on the SignalSurf server brain via Quick Surf a
 
 I want to… →
 - Enrich a whole table → use the enrich_table prompt; it scripts get_enrichment_context → enable_quick_surf → run_quick_surf(scope="all") → wait_for_surf_job.
+- Set up a new surf point (playbook) → use the set_up_surf_point prompt.
+- Build a lead list with Deepline → use the build_lead_list prompt.
 - Decide what to write into a column → call get_enrichment_context(databaseId[, fieldKey]) for brand context, schema, popular existing values, and field conventions.
 - Run or monitor a surf point → run_surf_point, then list_surf_jobs / wait_for_surf_job.
 - Inspect data → list_tables, read_table, list_database_fields.
