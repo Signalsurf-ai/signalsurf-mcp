@@ -18,6 +18,7 @@ import {
   type PublicMcpToolName,
 } from "./capabilities.js"
 import { jsonResource, runJsonTool } from "./mcp-results.js"
+import { registerPrompts } from "./prompts.js"
 import { SignalSurfRepository } from "./repository.js"
 import {
   createSurfPointSourceSchema,
@@ -99,6 +100,7 @@ export async function createSignalSurfMcpServer(
       capabilities: {
         resources: {},
         tools: {},
+        prompts: {},
       },
       instructions:
         "Use these tools to work with SignalSurf products authorized for this MCP token. Call get_context first; choose products by products[].name and pass products[].productId to every product-scoped tool call when multiple products are authorized.",
@@ -107,6 +109,7 @@ export async function createSignalSurfMcpServer(
 
   registerResources(server, repository, context)
   registerTools(server, repository, context)
+  registerPrompts(server)
   return server
 }
 
