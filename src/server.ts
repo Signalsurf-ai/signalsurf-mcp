@@ -18,6 +18,7 @@ import {
   type PublicMcpToolName,
 } from "./capabilities.js"
 import { jsonResource, runJsonTool } from "./mcp-results.js"
+import { registerPrompts } from "./prompts.js"
 import { SignalSurfRepository } from "./repository.js"
 import {
   createSurfPointSourceSchema,
@@ -33,6 +34,7 @@ import {
   deleteTableSchema,
   deleteTableRowsSchema,
   getBrandContextSchema,
+  getEnrichmentContextSchema,
   getSurfPointSchema,
   getSurfJobSchema,
   getTableRowSchema,
@@ -72,6 +74,22 @@ export type CreateServerOptions = {
   repository: SignalSurfRepository
 }
 
+export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
+
+Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter — productId from get_context (when multiple products), databaseId from list_tables, surfPointId from list_surf_points. Never pass a null or guessed id.
+
+Execution model: enrichment runs on the SignalSurf server brain via Quick Surf and surf points. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
+
+I want to… →
+- Enrich a whole table → use the enrich_table prompt; it scripts get_enrichment_context → enable_quick_surf → run_quick_surf(scope="all") → wait_for_surf_job.
+- Set up a new surf point (playbook) → use the set_up_surf_point prompt.
+- Build a lead list with Deepline → use the build_lead_list prompt.
+- Decide what to write into a column → call get_enrichment_context(databaseId[, fieldKey]) for brand context, schema, popular existing values, and field conventions.
+- Run or monitor a surf point → run_surf_point, then list_surf_jobs / wait_for_surf_job.
+- Inspect data → list_tables, read_table, list_database_fields.
+
+When multiple products are authorized, pass products[].productId (from get_context) on every product-scoped call.`
+
 export async function createSignalSurfMcpServer(
   options: CreateServerOptions
 ): Promise<McpServer> {
@@ -98,14 +116,15 @@ export async function createSignalSurfMcpServer(
       capabilities: {
         resources: {},
         tools: {},
+        prompts: {},
       },
-      instructions:
-        "Use these tools to work with SignalSurf products authorized for this MCP token. Call get_context first; choose products by products[].name and pass products[].productId to every product-scoped tool call when multiple products are authorized.",
+      instructions: SERVER_INSTRUCTIONS,
     }
   )
 
   registerResources(server, repository, context)
   registerTools(server, repository, context)
+  registerPrompts(server)
   return server
 }
 
@@ -197,6 +216,19 @@ function registerTools(
       runJsonTool(async () => {
         assertToolAllowed("get_brand_context")
         return repository.getBrandContext(toolContext(args))
+      })
+  )
+
+  registerPublicTool(
+    "get_enrichment_context",
+    getEnrichmentContextSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("get_enrichment_context")
+        return repository.getEnrichmentContext(toolContext(args), {
+          databaseId: args.databaseId,
+          fieldKey: args.fieldKey,
+        })
       })
   )
 

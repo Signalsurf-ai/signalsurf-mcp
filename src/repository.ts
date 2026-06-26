@@ -36,11 +36,16 @@ import {
   unwrapDeepline,
 } from "./deepline.js"
 import { UserFacingError } from "./errors.js"
+import { FIELD_CONVENTIONS } from "./conventions.js"
+import { aggregatePopularValues } from "./popular-values.js"
 import {
   evaluateRunCondition,
   parseRunCondition,
   type RunCondition,
 } from "./run-condition.js"
+
+export const POPULAR_VALUES_SCAN_LIMIT = 1000
+export const POPULAR_VALUES_TOP_N = 30
 
 type DeeplineSearchInput = {
   productId?: string
@@ -3342,6 +3347,60 @@ export class SignalSurfRepository {
       databaseId,
       fields: schemaFields(schema),
       relations: Array.isArray(schema.relations) ? schema.relations : [],
+    }
+  }
+
+  async getEnrichmentContext(
+    context: SignalSurfContext,
+    input: { databaseId: string; fieldKey?: string }
+  ) {
+    const database = await this.getDatabaseAndValidateProduct(
+      context,
+      input.databaseId
+    )
+    const schema = asRecord(database.schema)
+    const fields = schemaFields(schema)
+    const relations = Array.isArray(schema.relations) ? schema.relations : []
+
+    const fieldKeys = fields
+      .map((field) =>
+        field && typeof field === "object"
+          ? (field as Record<string, unknown>).key
+          : undefined
+      )
+      .filter((key): key is string => typeof key === "string")
+
+    if (input.fieldKey && !fieldKeys.includes(input.fieldKey)) {
+      throw new UserFacingError(
+        `Unknown fieldKey "${input.fieldKey}". Valid field keys: ${fieldKeys.join(", ")}`,
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+
+    const scanKeys = input.fieldKey ? [input.fieldKey] : fieldKeys
+    const { data: rows, error } = await this.db
+      .from("entries")
+      .select("data")
+      .eq("database_id", input.databaseId)
+      .order("updated_at", { ascending: false })
+      .limit(POPULAR_VALUES_SCAN_LIMIT)
+    requireNoDbError(error, "Failed to scan rows for popular values")
+
+    const popularValues = aggregatePopularValues(
+      (rows ?? []) as Array<{ data: unknown }>,
+      scanKeys,
+      POPULAR_VALUES_TOP_N
+    )
+
+    const { brandContext } = await this.getBrandContext(context)
+
+    return {
+      databaseId: input.databaseId,
+      brand: brandContext,
+      table: { fields, relations },
+      relations,
+      conventions: FIELD_CONVENTIONS,
+      popularValues,
     }
   }
 

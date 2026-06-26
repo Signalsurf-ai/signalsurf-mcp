@@ -83,6 +83,7 @@ export type McpCapability =
 export type PublicMcpToolName =
   | "get_context"
   | "get_brand_context"
+  | "get_enrichment_context"
   | "create_product"
   | "list_surf_points"
   | "get_surf_point"
@@ -195,6 +196,15 @@ export const PUBLIC_MCP_TOOLS = {
       "Read the active product's brand and positioning context: brand name, brand description, product description, product categories, selling points, target audience, competitors, and official website. Pass productId when this connection can access multiple products. Returns empty fields when the product has not completed brand setup.",
     requiredCapability: "context.read",
     surferSurface: "connection context",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  get_enrichment_context: {
+    title: "Get Enrichment Context",
+    description:
+      "Bundle everything an agent needs before filling or enriching a table column: brand/positioning context, the table schema (fields, types, options, entry key, relations), the most popular existing values per tag/array field, and SignalSurf field conventions. Call this before writing whatToDo for enable_quick_surf or before manual row edits. Pass productId when this connection can access multiple products; pass fieldKey to scope popular values to one column.",
+    requiredCapability: "tables.read",
+    surferSurface: "enrichment context",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
