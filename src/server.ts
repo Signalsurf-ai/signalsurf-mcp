@@ -33,6 +33,7 @@ import {
   deleteTableSchema,
   deleteTableRowsSchema,
   getBrandContextSchema,
+  getEnrichmentContextSchema,
   getSurfPointSchema,
   getSurfJobSchema,
   getTableRowSchema,
@@ -197,6 +198,19 @@ function registerTools(
       runJsonTool(async () => {
         assertToolAllowed("get_brand_context")
         return repository.getBrandContext(toolContext(args))
+      })
+  )
+
+  registerPublicTool(
+    "get_enrichment_context",
+    getEnrichmentContextSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("get_enrichment_context")
+        return repository.getEnrichmentContext(toolContext(args), {
+          databaseId: args.databaseId,
+          fieldKey: args.fieldKey,
+        })
       })
   )
 

@@ -370,6 +370,12 @@ export const listDatabaseFieldsSchema = {
   databaseId: uuidSchema,
 }
 
+export const getEnrichmentContextSchema = {
+  ...productTargetSchema,
+  databaseId: uuidSchema,
+  fieldKey: z.string().min(1).max(100).optional(),
+}
+
 export const addDatabaseFieldSchema = {
   ...productTargetSchema,
   databaseId: uuidSchema,
