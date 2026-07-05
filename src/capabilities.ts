@@ -112,6 +112,7 @@ export type PublicMcpToolName =
   | "get_table_row"
   | "create_table_row"
   | "update_table_row"
+  | "update_table_rows"
   | "delete_table_rows"
   | "list_table_fields"
   | "add_table_field"
@@ -462,6 +463,15 @@ export const PUBLIC_MCP_TOOLS = {
     title: "Update Table Row",
     description:
       "Modify a row/item in an authorized product. Pass productId when this connection can access multiple products. Use dataPatch for shallow field updates or data to replace the row data object.",
+    requiredCapability: "tables.write",
+    surferSurface: "manage_data",
+    publicStatus: "supported",
+    annotations: MUTATE_ANNOTATIONS,
+  },
+  update_table_rows: {
+    title: "Update Table Rows (Batch)",
+    description:
+      "Apply a distinct edit to each of up to 100 rows/items in one atomic call — prefer this over looping update_table_row when writing back different values per row (e.g. after enrichment). Input { productId, edits }. Each edit is { rowId, data } or { rowId, dataPatch } (data replaces the row's data object; dataPatch shallow-merges it) — exactly one of the two, and rowIds must be unique. If any rowId is not found/authorized or any edit is invalid, the whole batch is rejected and nothing is written.",
     requiredCapability: "tables.write",
     surferSurface: "manage_data",
     publicStatus: "supported",
