@@ -139,6 +139,17 @@ export class FakeSupabase {
       row.updated_at = "rpc-updated"
       return { data: null, error: null }
     }
+    if (name === "update_entries_with_source_batch") {
+      const entries =
+        (args.p_entries as Array<{ entry_id: string; data: unknown }>) ?? []
+      for (const entry of entries) {
+        const row = this.tables.entries.find((e) => e.id === entry.entry_id)
+        if (!row) continue
+        row.data = clone(entry.data)
+        row.updated_at = "rpc-updated"
+      }
+      return { data: null, error: null }
+    }
     return { data: null, error: null }
   }
 

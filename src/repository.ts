@@ -592,6 +592,14 @@ type UpdateTableRowInput = {
   playbookId?: string | null
 }
 
+type UpdateTableRowsInput = {
+  edits: Array<{
+    rowId: string
+    data?: JsonRecord
+    dataPatch?: JsonRecord
+  }>
+}
+
 const SURF_POINT_COLUMNS = [
   "id",
   "product_id",
@@ -3737,6 +3745,66 @@ export class SignalSurfRepository {
 
     const updated = await this.getEntryAndValidateProduct(context, input.rowId)
     return { row: formatEntry(updated) }
+  }
+
+  async updateTableRows(context: SignalSurfContext, input: UpdateTableRowsInput) {
+    const rowIds = input.edits.map((edit) => edit.rowId)
+    const ids = uniqueIds(rowIds)
+    if (ids.length !== rowIds.length) {
+      throw new UserFacingError("Each edit must reference a unique rowId.", {
+        code: "BAD_REQUEST",
+        status: 400,
+      })
+    }
+
+    const entries = await this.getEntriesAndValidateProduct(context, ids)
+    const byId = new Map(entries.map((entry) => [entry.id, entry]))
+    const missing = ids.filter((id) => !byId.has(id))
+    if (missing.length > 0) {
+      throw new UserFacingError(
+        `Rows not found or access denied: ${missing.join(", ")}`,
+        { code: "NOT_FOUND", status: 404 }
+      )
+    }
+
+    const patches: Array<{ entry_id: string; data: JsonRecord }> = []
+    for (const edit of input.edits) {
+      if (edit.data !== undefined && edit.dataPatch !== undefined) {
+        throw new UserFacingError(
+          `Edit for row ${edit.rowId}: pass either data or dataPatch, not both.`,
+          { code: "BAD_REQUEST", status: 400 }
+        )
+      }
+      if (edit.data === undefined && edit.dataPatch === undefined) {
+        throw new UserFacingError(
+          `Edit for row ${edit.rowId} must include data or dataPatch.`,
+          { code: "BAD_REQUEST", status: 400 }
+        )
+      }
+
+      const existing = byId.get(edit.rowId)!
+      const nextData =
+        edit.data !== undefined
+          ? edit.data
+          : { ...asRecord(existing.data), ...edit.dataPatch }
+
+      await this.validateEntryDataReferences(
+        context,
+        existing.database_id as string,
+        nextData
+      )
+      patches.push({ entry_id: edit.rowId, data: nextData })
+    }
+
+    const { error } = await this.db.rpc("update_entries_with_source_batch", {
+      p_entries: patches,
+      p_source: "mcp",
+      p_source_ref: context.tokenName ?? null,
+    })
+    requireNoDbError(error, "Failed to update rows")
+
+    const updated = await this.getEntriesAndValidateProduct(context, ids)
+    return { rows: updated.map((row) => formatEntry(row)) }
   }
 
   async deleteTableRows(context: SignalSurfContext, rowIds: string[]) {

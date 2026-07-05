@@ -58,6 +58,7 @@
     "update_table",
     "update_table_field",
     "update_table_row",
+    "update_table_rows",
     "wait_for_surf_job"
   ],
   "operationMappings": {

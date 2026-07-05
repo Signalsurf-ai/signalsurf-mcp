@@ -72,6 +72,7 @@ import {
   updateSurfPointSchema,
   updateTableSchema,
   updateTableRowSchema,
+  updateTableRowsSchema,
   waitForSurfJobSchema,
 } from "./schemas.js"
 import type { SignalSurfContext } from "./types.js"
@@ -514,6 +515,16 @@ function registerTools(
       runJsonTool(async () => {
         assertToolAllowed("update_table_row")
         return repository.updateTableRow(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "update_table_rows",
+    updateTableRowsSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("update_table_rows")
+        return repository.updateTableRows(toolContext(args), args)
       })
   )
 

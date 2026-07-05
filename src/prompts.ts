@@ -64,7 +64,7 @@ Follow these steps in order:
 3. Find prospects: call deepline_search_people (or deepline_search_companies) with Apollo-shaped filters (e.g. person_titles, person_seniorities, person_locations, organization_num_employees_ranges as ["11,50"]). These return preview rows + match counts; emails are NOT included here.
 4. For each prospect, call create_table_row mapping the preview fields onto the schema from step 2 (follow the field conventions).
 5. Find emails: call deepline_enrich_contact({ firstName, lastName, domain|companyName }) per lead. Credits are spent only on a hit; misses are free.
-6. Write each found email back with update_table_row, then report how many leads were created and enriched.
+6. Write the found emails back with update_table_rows (one edit per row, all in a single call), then report how many leads were created and enriched.
 
 Never pass a null or guessed id — resolve productId and databaseId from the calls above first.`
 }

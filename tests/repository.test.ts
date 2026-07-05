@@ -2420,6 +2420,109 @@ describe("SignalSurfRepository", () => {
     })
   })
 
+  it("batch-updates distinct data across rows in a single atomic RPC call", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    const result = await repo.updateTableRows(context, {
+      edits: [
+        { rowId: row1, dataPatch: { stage: "contacted" } },
+        { rowId: row2, data: { name: "Beta Corp" } },
+      ],
+    })
+
+    expect(result.rows).toHaveLength(2)
+    expect(result.rows.find((row) => row.id === row1)?.data).toMatchObject({
+      name: "Acme",
+      stage: "contacted",
+    })
+    expect(result.rows.find((row) => row.id === row2)?.data).toEqual({
+      name: "Beta Corp",
+    })
+    expect(db.rpcCalls).toHaveLength(1)
+    expect(db.rpcCalls[0]).toMatchObject({
+      name: "update_entries_with_source_batch",
+      args: { p_source: "mcp", p_source_ref: "test-agent" },
+    })
+    expect(db.rpcCalls[0].args.p_entries).toHaveLength(2)
+  })
+
+  it("rejects a batch with a duplicate rowId without writing anything", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.updateTableRows(context, {
+        edits: [
+          { rowId: row1, dataPatch: { stage: "a" } },
+          { rowId: row1, dataPatch: { stage: "b" } },
+        ],
+      })
+    ).rejects.toThrow("unique rowId")
+
+    expect(db.rpcCalls).toHaveLength(0)
+    expect(db.tables.entries.find((e) => e.id === row1)?.data.stage).toBe("new")
+  })
+
+  it("rejects the whole batch when any row is not found or unauthorized", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.updateTableRows(context, {
+        edits: [
+          { rowId: row1, dataPatch: { stage: "contacted" } },
+          { rowId: otherProductRow, dataPatch: { stage: "contacted" } },
+        ],
+      })
+    ).rejects.toThrow("Row not found or access denied")
+
+    expect(db.rpcCalls).toHaveLength(0)
+    expect(db.tables.entries.find((e) => e.id === row1)?.data.stage).toBe("new")
+  })
+
+  it("rejects an edit with neither data nor dataPatch", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.updateTableRows(context, {
+        edits: [{ rowId: row1 }],
+      })
+    ).rejects.toThrow("must include data or dataPatch")
+  })
+
+  it("rejects an edit with both data and dataPatch", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.updateTableRows(context, {
+        edits: [{ rowId: row1, data: { name: "X" }, dataPatch: { stage: "y" } }],
+      })
+    ).rejects.toThrow("pass either data or dataPatch, not both")
+  })
+
+  it("validates item references for every edit before writing the batch", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.updateTableRows(context, {
+        edits: [
+          {
+            rowId: row1,
+            dataPatch: {
+              parent: { database_id: otherProductDb, entry_id: otherProductRow },
+            },
+          },
+        ],
+      })
+    ).rejects.toThrow("Referenced entry not found or access denied")
+
+    expect(db.rpcCalls).toHaveLength(0)
+  })
+
   it("rejects partial row deletes without deleting the valid subset", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)

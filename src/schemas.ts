@@ -351,6 +351,17 @@ export const deleteTableRowsSchema = {
   rowIds: z.array(uuidSchema).min(1).max(100),
 }
 
+const updateTableRowEditSchema = z.object({
+  rowId: uuidSchema,
+  data: jsonObjectSchema.optional(),
+  dataPatch: jsonObjectSchema.optional(),
+})
+
+export const updateTableRowsSchema = {
+  ...productTargetSchema,
+  edits: z.array(updateTableRowEditSchema).min(1).max(100),
+}
+
 const databaseFieldSchema = z
   .object({
     key: z

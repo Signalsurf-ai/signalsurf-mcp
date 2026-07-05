@@ -330,6 +330,7 @@ describe("MCP server", () => {
       delete_table: false,
       create_table_row: true,
       update_table_row: true,
+      update_table_rows: true,
       delete_table_rows: false,
       get_surf_point: false,
       create_surf_point: false,
