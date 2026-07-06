@@ -72,8 +72,7 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `read_table_view`              | `tables.read`         | No          | Reads rows using compatible saved-view filters/sorts                                                    |
 | `get_table_row`                | `tables.read`         | No          | Reads one product-scoped row                                                                            |
 | `create_table_row`             | `tables.write`        | No          | Creates rows with server-side MCP provenance                                                            |
-| `update_table_row`             | `tables.write`        | No          | Uses changelog-preserving row update RPCs                                                               |
-| `update_table_rows`            | `tables.write`        | No          | Batch-edits up to 100 rows with distinct data per row in one atomic, changelog-preserving RPC call       |
+| `update_table_rows`            | `tables.write`        | No          | Edits 1-100 rows (array-based, single or batch) with distinct data/note/playbookId per row, changelog-preserving RPCs |
 | `delete_table_rows`            | `tables.delete`       | Yes         | Hard-deletes rows after product-scope verification                                                      |
 | `list_table_fields`            | `schemas.read`        | No          | Lists schema fields and relation definitions                                                            |
 | `add_table_field`              | `schemas.write`       | No          | Adds one schema field without backfilling row data                                                      |

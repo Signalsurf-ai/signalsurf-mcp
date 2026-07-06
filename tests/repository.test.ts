@@ -2310,20 +2310,21 @@ describe("SignalSurfRepository", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
-  it("updates row data through the entry changelog RPC", async () => {
+  it("updates row data through the batch changelog RPC (single-edit call)", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    const result = await repo.updateTableRow(context, {
-      rowId: row1,
-      dataPatch: { stage: "contacted" },
+    const result = await repo.updateTableRows(context, {
+      edits: [{ rowId: row1, dataPatch: { stage: "contacted" } }],
     })
 
-    expect(result.row.data).toMatchObject({ name: "Acme", stage: "contacted" })
+    expect(result.rows[0]?.data).toMatchObject({
+      name: "Acme",
+      stage: "contacted",
+    })
     expect(db.rpcCalls[0]).toMatchObject({
-      name: "update_entry_with_source",
+      name: "update_entries_with_source_batch",
       args: {
-        p_entry_id: "00000000-0000-4000-8000-000000000301",
         p_source: "mcp",
         p_source_ref: "test-agent",
       },
@@ -2348,14 +2349,18 @@ describe("SignalSurfRepository", () => {
     ).rejects.toThrow("Referenced entry not found or access denied")
 
     await expect(
-      repo.updateTableRow(context, {
-        rowId: row1,
-        dataPatch: {
-          parent: {
-            database_id: otherProductDb,
-            entry_id: otherProductRow,
+      repo.updateTableRows(context, {
+        edits: [
+          {
+            rowId: row1,
+            dataPatch: {
+              parent: {
+                database_id: otherProductDb,
+                entry_id: otherProductRow,
+              },
+            },
           },
-        },
+        ],
       })
     ).rejects.toThrow("Referenced entry not found or access denied")
   })
@@ -2393,9 +2398,8 @@ describe("SignalSurfRepository", () => {
     ).rejects.toThrow("is not configured to write to database")
 
     await expect(
-      repo.updateTableRow(context, {
-        rowId: row1,
-        playbookId: surfPoint2,
+      repo.updateTableRows(context, {
+        edits: [{ rowId: row1, playbookId: surfPoint2 }],
       })
     ).rejects.toThrow("is not configured to write to database")
   })
@@ -2404,12 +2408,11 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    const result = await repo.updateTableRow(context, {
-      rowId: row1,
-      note: "Follow up next week.",
+    const result = await repo.updateTableRows(context, {
+      edits: [{ rowId: row1, note: "Follow up next week." }],
     })
 
-    expect(result.row.note).toBe("Follow up next week.")
+    expect(result.rows[0]?.note).toBe("Follow up next week.")
     expect(db.rpcCalls[0]).toMatchObject({
       name: "update_entry_note_with_source",
       args: {
@@ -2418,6 +2421,19 @@ describe("SignalSurfRepository", () => {
         p_source_ref: "test-agent",
       },
     })
+  })
+
+  it("checks a per-edit databaseId against the row's actual database", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.updateTableRows(context, {
+        edits: [{ rowId: row1, databaseId: db2, dataPatch: { stage: "x" } }],
+      })
+    ).rejects.toThrow(`belongs to database ${db1}`)
+
+    expect(db.rpcCalls).toHaveLength(0)
   })
 
   it("batch-updates distinct data across rows in a single atomic RPC call", async () => {
@@ -2481,7 +2497,7 @@ describe("SignalSurfRepository", () => {
     expect(db.tables.entries.find((e) => e.id === row1)?.data.stage).toBe("new")
   })
 
-  it("rejects an edit with neither data nor dataPatch", async () => {
+  it("rejects a no-op edit with none of data, dataPatch, note, or playbookId", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
@@ -2489,7 +2505,23 @@ describe("SignalSurfRepository", () => {
       repo.updateTableRows(context, {
         edits: [{ rowId: row1 }],
       })
-    ).rejects.toThrow("must include data or dataPatch")
+    ).rejects.toThrow(
+      "must include at least one of data, dataPatch, note, or playbookId"
+    )
+  })
+
+  it("accepts a note-only edit with no data change", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    const result = await repo.updateTableRows(context, {
+      edits: [{ rowId: row1, note: "Note only, no data change." }],
+    })
+
+    expect(result.rows[0]?.note).toBe("Note only, no data change.")
+    expect(
+      db.rpcCalls.some((call) => call.name === "update_entries_with_source_batch")
+    ).toBe(false)
   })
 
   it("rejects an edit with both data and dataPatch", async () => {

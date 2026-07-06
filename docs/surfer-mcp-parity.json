@@ -57,7 +57,6 @@
     "update_surf_point_flow",
     "update_table",
     "update_table_field",
-    "update_table_row",
     "update_table_rows",
     "wait_for_surf_job"
   ],
@@ -80,7 +79,7 @@
     "attach_tool_to_surf_point": ["update_surf_point"],
     "create_item": ["create_table_row"],
     "list_items": ["read_table"],
-    "update_item": ["update_table_row"],
+    "update_item": ["update_table_rows"],
     "delete_item": ["delete_table_rows"],
     "search_items": ["read_table"],
     "query_project": ["read_table"],
@@ -102,9 +101,9 @@
       "deepline_search_people",
       "deepline_search_companies",
       "create_table_row",
-      "update_table_row"
+      "update_table_rows"
     ],
-    "lead_gen_enrich_run": ["deepline_enrich_contact", "update_table_row"],
+    "lead_gen_enrich_run": ["deepline_enrich_contact", "update_table_rows"],
     "enable_quick_surf": ["enable_quick_surf"],
     "disable_quick_surf": ["disable_quick_surf"],
     "list_quick_surf": ["list_quick_surf"],

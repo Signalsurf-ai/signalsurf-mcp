@@ -336,25 +336,20 @@ export const createTableRowSchema = {
   note: z.string().max(500000).nullish(),
 }
 
-export const updateTableRowSchema = {
+export const deleteTableRowsSchema = {
   ...productTargetSchema,
+  rowIds: z.array(uuidSchema).min(1).max(100),
+}
+
+// One edit shape for both single-row and batch calls (edits: [one] for
+// single) — mirrors deleteTableRowsSchema's array-always convention.
+const updateTableRowEditSchema = z.object({
   rowId: uuidSchema,
   databaseId: uuidSchema.optional(),
   data: jsonObjectSchema.optional(),
   dataPatch: jsonObjectSchema.optional(),
   note: z.string().max(500000).nullable().optional(),
   playbookId: uuidSchema.nullable().optional(),
-}
-
-export const deleteTableRowsSchema = {
-  ...productTargetSchema,
-  rowIds: z.array(uuidSchema).min(1).max(100),
-}
-
-const updateTableRowEditSchema = z.object({
-  rowId: uuidSchema,
-  data: jsonObjectSchema.optional(),
-  dataPatch: jsonObjectSchema.optional(),
 })
 
 export const updateTableRowsSchema = {
