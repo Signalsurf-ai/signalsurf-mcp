@@ -583,20 +583,14 @@ type CreateTableRowInput = {
   note?: string | null
 }
 
-type UpdateTableRowInput = {
-  rowId: string
-  databaseId?: string
-  data?: JsonRecord
-  dataPatch?: JsonRecord
-  note?: string | null
-  playbookId?: string | null
-}
-
 type UpdateTableRowsInput = {
   edits: Array<{
     rowId: string
+    databaseId?: string
     data?: JsonRecord
     dataPatch?: JsonRecord
+    note?: string | null
+    playbookId?: string | null
   }>
 }
 
@@ -3677,76 +3671,14 @@ export class SignalSurfRepository {
     return { row: formatEntry(data as EntryRow) }
   }
 
-  async updateTableRow(context: SignalSurfContext, input: UpdateTableRowInput) {
-    const existing = await this.getEntryAndValidateProduct(context, input.rowId)
-    if (input.databaseId && existing.database_id !== input.databaseId) {
-      throw new UserFacingError(
-        `Row belongs to database ${existing.database_id}, not ${input.databaseId}`,
-        { code: "BAD_REQUEST", status: 400 }
-      )
-    }
-    if (input.playbookId) {
-      await this.assertSurfPointCanWriteDatabase(
-        context,
-        input.playbookId,
-        existing.database_id as string
-      )
-    }
-
-    let nextData: JsonRecord | undefined
-    if (input.data !== undefined && input.dataPatch !== undefined) {
-      throw new UserFacingError("Pass either data or dataPatch, not both.", {
-        code: "BAD_REQUEST",
-        status: 400,
-      })
-    }
-    if (input.data !== undefined) nextData = input.data
-    if (input.dataPatch !== undefined) {
-      nextData = { ...asRecord(existing.data), ...input.dataPatch }
-    }
-
-    if (nextData !== undefined) {
-      await this.validateEntryDataReferences(
-        context,
-        existing.database_id as string,
-        nextData
-      )
-      const { error } = await this.db.rpc("update_entry_with_source", {
-        p_entry_id: input.rowId,
-        p_data: nextData,
-        p_source: "mcp",
-        p_source_ref: context.tokenName ?? null,
-      })
-      requireNoDbError(error, "Failed to update row data")
-    }
-
-    if (input.note !== undefined) {
-      const { error } = await this.db.rpc("update_entry_note_with_source", {
-        p_entry_id: input.rowId,
-        p_note: input.note,
-        p_source: "mcp",
-        p_source_ref: context.tokenName ?? null,
-      })
-      requireNoDbError(error, "Failed to update row note")
-    }
-
-    const directUpdate: Record<string, unknown> = {}
-    if (input.playbookId !== undefined)
-      directUpdate.playbook_id = input.playbookId
-
-    if (Object.keys(directUpdate).length > 0) {
-      directUpdate.updated_at = new Date().toISOString()
-      const { error } = await this.db
-        .from("entries")
-        .update(directUpdate)
-        .eq("id", input.rowId)
-      requireNoDbError(error, "Failed to update row metadata")
-    }
-
-    const updated = await this.getEntryAndValidateProduct(context, input.rowId)
-    return { row: formatEntry(updated) }
-  }
-
+  // Handles both single-row (edits: [one]) and batch (edits: [many]) calls —
+  // one array-based tool, same as deleteTableRows. `data`/`dataPatch` writes
+  // for the whole batch go through ONE atomic update_entries_with_source_batch
+  // call; `note`/`playbookId` have no batch RPC equivalent so they write
+  // per-edit, same cost as the old single-row tool called N times for just
+  // those fields. Every edit is validated (ownership, item_ref references,
+  // playbook/database match) before ANY write, so one bad edit rejects the
+  // whole call.
   async updateTableRows(context: SignalSurfContext, input: UpdateTableRowsInput) {
     const rowIds = input.edits.map((edit) => edit.rowId)
     const ids = uniqueIds(rowIds)
@@ -3767,21 +3699,43 @@ export class SignalSurfRepository {
       )
     }
 
-    const patches: Array<{ entry_id: string; data: JsonRecord }> = []
     for (const edit of input.edits) {
+      const existing = byId.get(edit.rowId)!
+      if (edit.databaseId && existing.database_id !== edit.databaseId) {
+        throw new UserFacingError(
+          `Row ${edit.rowId} belongs to database ${existing.database_id}, not ${edit.databaseId}`,
+          { code: "BAD_REQUEST", status: 400 }
+        )
+      }
       if (edit.data !== undefined && edit.dataPatch !== undefined) {
         throw new UserFacingError(
           `Edit for row ${edit.rowId}: pass either data or dataPatch, not both.`,
           { code: "BAD_REQUEST", status: 400 }
         )
       }
-      if (edit.data === undefined && edit.dataPatch === undefined) {
+      if (
+        edit.data === undefined &&
+        edit.dataPatch === undefined &&
+        edit.note === undefined &&
+        edit.playbookId === undefined
+      ) {
         throw new UserFacingError(
-          `Edit for row ${edit.rowId} must include data or dataPatch.`,
+          `Edit for row ${edit.rowId} must include at least one of data, dataPatch, note, or playbookId.`,
           { code: "BAD_REQUEST", status: 400 }
         )
       }
+      if (edit.playbookId) {
+        await this.assertSurfPointCanWriteDatabase(
+          context,
+          edit.playbookId,
+          existing.database_id as string
+        )
+      }
+    }
 
+    const patches: Array<{ entry_id: string; data: JsonRecord }> = []
+    for (const edit of input.edits) {
+      if (edit.data === undefined && edit.dataPatch === undefined) continue
       const existing = byId.get(edit.rowId)!
       const nextData =
         edit.data !== undefined
@@ -3796,12 +3750,37 @@ export class SignalSurfRepository {
       patches.push({ entry_id: edit.rowId, data: nextData })
     }
 
-    const { error } = await this.db.rpc("update_entries_with_source_batch", {
-      p_entries: patches,
-      p_source: "mcp",
-      p_source_ref: context.tokenName ?? null,
-    })
-    requireNoDbError(error, "Failed to update rows")
+    if (patches.length > 0) {
+      const { error } = await this.db.rpc("update_entries_with_source_batch", {
+        p_entries: patches,
+        p_source: "mcp",
+        p_source_ref: context.tokenName ?? null,
+      })
+      requireNoDbError(error, "Failed to update rows")
+    }
+
+    for (const edit of input.edits) {
+      if (edit.note === undefined) continue
+      const { error } = await this.db.rpc("update_entry_note_with_source", {
+        p_entry_id: edit.rowId,
+        p_note: edit.note,
+        p_source: "mcp",
+        p_source_ref: context.tokenName ?? null,
+      })
+      requireNoDbError(error, "Failed to update row note")
+    }
+
+    for (const edit of input.edits) {
+      if (edit.playbookId === undefined) continue
+      const { error } = await this.db
+        .from("entries")
+        .update({
+          playbook_id: edit.playbookId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", edit.rowId)
+      requireNoDbError(error, "Failed to update row metadata")
+    }
 
     const updated = await this.getEntriesAndValidateProduct(context, ids)
     return { rows: updated.map((row) => formatEntry(row)) }

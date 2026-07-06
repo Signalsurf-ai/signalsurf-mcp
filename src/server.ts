@@ -71,7 +71,6 @@ import {
   toolOutputSchema,
   updateSurfPointSchema,
   updateTableSchema,
-  updateTableRowSchema,
   updateTableRowsSchema,
   waitForSurfJobSchema,
 } from "./schemas.js"
@@ -505,16 +504,6 @@ function registerTools(
       runJsonTool(async () => {
         assertToolAllowed("create_table_row")
         return repository.createTableRow(toolContext(args), args)
-      })
-  )
-
-  registerPublicTool(
-    "update_table_row",
-    updateTableRowSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("update_table_row")
-        return repository.updateTableRow(toolContext(args), args)
       })
   )
 
