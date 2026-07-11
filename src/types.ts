@@ -17,6 +17,7 @@ export type SignalSurfContext = {
   scopes?: string[]
   authKind?: "env" | "manual" | "oauth"
   oauthTokenId?: string
+  oauthGrantId?: string
   oauthClientId?: string
 }
 

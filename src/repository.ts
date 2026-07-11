@@ -458,6 +458,7 @@ type McpOAuthTokenRow = {
   scope: string
   resource: string
   access_token_expires_at: string
+  refresh_token_family_id?: string | null
   revoked_at: string | null
 }
 
@@ -1379,6 +1380,7 @@ export class SignalSurfRepository {
       scopes,
       authKind: "oauth",
       oauthTokenId: row.id,
+      oauthGrantId: row.refresh_token_family_id ?? row.id,
       oauthClientId: row.client_id,
     }
   }
@@ -1827,6 +1829,7 @@ export class SignalSurfRepository {
     if (
       context.authKind !== "oauth" ||
       !context.oauthTokenId ||
+      !context.oauthGrantId ||
       !context.userId ||
       !context.oauthClientId
     ) {
@@ -1854,7 +1857,7 @@ export class SignalSurfRepository {
         this.db
           .from("mcp_action_approvals")
           .select("id, expires_at")
-          .eq("oauth_token_id", context.oauthTokenId)
+          .eq("oauth_grant_id", context.oauthGrantId)
           .eq("user_id", context.userId)
           .eq("client_id", context.oauthClientId)
           .eq("product_id", context.productId)
@@ -1879,7 +1882,7 @@ export class SignalSurfRepository {
         const { error: expireError } = await this.db
           .from("mcp_action_approvals")
           .update({ status: "expired", updated_at: nowIso })
-          .eq("oauth_token_id", context.oauthTokenId)
+          .eq("oauth_grant_id", context.oauthGrantId)
           .eq("user_id", context.userId)
           .eq("client_id", context.oauthClientId)
           .eq("product_id", context.productId)
@@ -1904,6 +1907,7 @@ export class SignalSurfRepository {
             product_id: context.productId,
             user_id: context.userId,
             oauth_token_id: context.oauthTokenId,
+            oauth_grant_id: context.oauthGrantId,
             client_id: context.oauthClientId,
             tool_name: "deepline_execute_tool",
             provider_tool_id: input.toolId,
@@ -1970,7 +1974,7 @@ export class SignalSurfRepository {
         updated_at: executionStartedAt,
       })
       .eq("id", approvalRequestId)
-      .eq("oauth_token_id", context.oauthTokenId)
+      .eq("oauth_grant_id", context.oauthGrantId)
       .eq("user_id", context.userId)
       .eq("client_id", context.oauthClientId)
       .eq("product_id", context.productId)
@@ -2017,7 +2021,7 @@ export class SignalSurfRepository {
           updated_at: finalizedAt,
         })
         .eq("id", approvalRequestId)
-        .eq("oauth_token_id", context.oauthTokenId)
+        .eq("oauth_grant_id", context.oauthGrantId)
         .eq("user_id", context.userId)
         .eq("client_id", context.oauthClientId)
         .eq("product_id", context.productId)

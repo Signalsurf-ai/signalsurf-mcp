@@ -18,6 +18,7 @@ const oauthContext: SignalSurfContext = {
   ...context,
   authKind: "oauth",
   oauthTokenId: "00000000-0000-4000-8000-000000000099",
+  oauthGrantId: "00000000-0000-4000-8000-000000000088",
   oauthClientId: "ssmcp_client_test",
 }
 
@@ -40,6 +41,7 @@ function approvalRow(
   return {
     id: "00000000-0000-4000-8000-000000000777",
     oauth_token_id: oauthContext.oauthTokenId,
+    oauth_grant_id: oauthContext.oauthGrantId,
     user_id: oauthContext.userId,
     client_id: oauthContext.oauthClientId,
     product_id: oauthContext.productId,
@@ -210,6 +212,34 @@ describe("Deepline capabilities", () => {
     })
   })
 
+  it("execute_tool preserves an approval across access-token rotation in the same grant", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    const fetchMock = stubFetch({
+      status: "completed",
+      toolResponse: { raw: { id: "contact_123", ok: true } },
+    })
+    const payload = { email: "jane@acme.com" }
+    const db = new FakeSupabase({
+      integration_accounts: dbWithKey().tables.integration_accounts,
+      mcp_action_approvals: [
+        approvalRow(payload, {
+          oauth_token_id: "00000000-0000-4000-8000-000000000077",
+        }),
+      ],
+    })
+    const repo = new SignalSurfRepository(db as never)
+
+    await expect(
+      repo.deeplineExecuteTool(oauthContext, {
+        toolId: "hubspot_create_contact",
+        approvalRequestId: "00000000-0000-4000-8000-000000000777",
+        payload,
+      })
+    ).resolves.toMatchObject({ ok: true })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(db.tables.mcp_action_approvals[0].status).toBe("executed")
+  })
+
   it("execute_tool creates a redacted pending request when approvalRequestId is missing", async () => {
     vi.stubEnv("DEEPLINE_DISABLED", "")
     vi.stubEnv(
@@ -244,6 +274,7 @@ describe("Deepline capabilities", () => {
     expect(db.tables.mcp_action_approvals).toHaveLength(1)
     expect(db.tables.mcp_action_approvals[0]).toMatchObject({
       oauth_token_id: oauthContext.oauthTokenId,
+      oauth_grant_id: oauthContext.oauthGrantId,
       user_id: oauthContext.userId,
       client_id: oauthContext.oauthClientId,
       product_id: oauthContext.productId,
@@ -343,7 +374,7 @@ describe("Deepline capabilities", () => {
     const cases = [
       approvalRow(payload, { status: "pending" }),
       approvalRow(payload, {
-        oauth_token_id: "00000000-0000-4000-8000-000000000098",
+        oauth_grant_id: "00000000-0000-4000-8000-000000000098",
       }),
       approvalRow(payload, { expires_at: "2020-01-01T00:00:00.000Z" }),
       approvalRow(payload, { status: "executed" }),

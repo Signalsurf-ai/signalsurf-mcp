@@ -12,6 +12,8 @@ The hosted MCP reads or writes these Web-owned columns:
 - `id uuid`
 - `product_id uuid`
 - `oauth_token_id uuid` referencing `mcp_oauth_tokens.id`
+- `oauth_grant_id uuid` set to the token family's stable
+  `refresh_token_family_id` (or the token id when no family exists)
 - `tool_name text`
 - `provider_tool_id text`
 - `payload_sha256 text` constrained to lowercase SHA-256 hex
@@ -32,7 +34,8 @@ Hosted MCP creates or reuses requests as `pending`; it stores only a redacted
 preview containing the tool ids, payload keys/count, and serialized byte count.
 Identical unexpired pending requests are reused. Web resolves them with
 compare-and-set to `approved` or `rejected`. A partial unique index over the
-OAuth/user/client/product/tool/provider/digest binding for `status = 'pending'`
+OAuth-grant/user/client/product/tool/provider/digest binding for
+`status = 'pending'`
 is required so simultaneous retries deduplicate at the database boundary.
 
 The authorization server accepts
@@ -56,7 +59,7 @@ Before calling Deepline with an approved request, hosted MCP performs one atomic
 ```text
 approved -> executing
 where id = approvalRequestId
-  and oauth_token_id = active OAuth token id
+  and oauth_grant_id = active OAuth grant id
   and product_id = active product id
   and tool_name = deepline_execute_tool
   and provider_tool_id = toolId
