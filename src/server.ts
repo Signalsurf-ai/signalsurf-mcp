@@ -73,6 +73,7 @@ import {
   updateTableSchema,
   updateTableRowsSchema,
   waitForSurfJobSchema,
+  PUBLIC_MCP_TOOL_SCHEMAS,
 } from "./schemas.js"
 import type { SignalSurfContext } from "./types.js"
 
@@ -143,6 +144,8 @@ function registerTools(
   repository: SignalSurfRepository,
   context: SignalSurfContext
 ) {
+  const registeredTools = new Set<PublicMcpToolName>()
+
   function toolConfig(name: PublicMcpToolName, inputSchema?: any) {
     const definition = PUBLIC_MCP_TOOLS[name]
     const config = {
@@ -172,6 +175,15 @@ function registerTools(
     inputSchema: any,
     handler: (args: any) => Promise<any>
   ) {
+    if (inputSchema !== PUBLIC_MCP_TOOL_SCHEMAS[name]) {
+      throw new Error(
+        `Public MCP tool ${name} was registered with a non-canonical input schema.`
+      )
+    }
+    if (registeredTools.has(name)) {
+      throw new Error(`Public MCP tool ${name} was registered more than once.`)
+    }
+    registeredTools.add(name)
     server.registerTool(name, toolConfig(name, inputSchema), handler)
   }
 
@@ -726,6 +738,15 @@ function registerTools(
         return repository.deeplineExecuteTool(toolContext(args), args)
       })
   )
+
+  const missingTools = PUBLIC_MCP_TOOL_NAMES.filter(
+    (name) => !registeredTools.has(name)
+  )
+  if (missingTools.length > 0) {
+    throw new Error(
+      `Public MCP registry is missing executable handlers: ${missingTools.join(", ")}`
+    )
+  }
 }
 
 function registerResources(

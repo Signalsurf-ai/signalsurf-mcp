@@ -118,6 +118,15 @@ compatibility, while granular scopes support least-privilege access to Surf
 Points, execution, table data, schemas, safe source controls, and product
 creation.
 
+Generic Deepline execution has an additional per-action boundary. This server
+creates or reuses a redacted, short-lived pending `mcp_action_approvals` row;
+SignalSurf Web alone resolves it. The server later atomically claims one exact
+`approved` row as `executing`, bound to the active stable OAuth grant id,
+user, client, product, MCP tool name, provider tool id, canonical payload
+SHA-256, and expiry. Only the successful claimant may call the provider. It then records
+`executed`, `failed`, or `ambiguous`; no terminal or in-flight approval is
+replayable. Missing table/schema support fails closed before any provider call.
+
 ## Product Scope Guards
 
 `src/repository.ts` is the only layer that talks to Supabase. It must keep all
@@ -251,7 +260,7 @@ suppressed; agents should use tools with an explicit `productId`.
 
 When adding a tool:
 
-1. Add a Zod schema in `src/schemas.ts`.
+1. Add a Zod schema and exhaustive registry entry in `src/schemas.ts`.
 2. Add the repository method in `src/repository.ts`.
 3. Validate product scope before every read or write.
 4. Prefer existing SignalSurf RPCs/helpers when they preserve changelog,
@@ -260,7 +269,8 @@ When adding a tool:
 6. Register the tool in `src/server.ts` with accurate MCP annotations.
 7. Add tests for read/write authorization, scope rejection, product-boundary rejection, and any
    destructive side effects.
-8. Update `README.md`, `docs/capabilities.md`, and the Web-side Surfer
+8. Update `README.md`, `docs/capabilities.md`,
+   `docs/public-tool-contract.json`, and the Web-side Surfer
    capability matrix when the public contract changes.
 
 Do not add a tool that accepts raw SQL, table names, arbitrary filters, or

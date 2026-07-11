@@ -172,7 +172,7 @@ describe("auth", () => {
     ])
   })
 
-  it("grants Deepline read and execute through Deepline scopes", () => {
+  it("keeps Deepline read, enrichment, and generic execution scopes separate", () => {
     const readContext = {
       productId: "00000000-0000-4000-8000-000000000001",
       role: "editor" as const,
@@ -186,19 +186,48 @@ describe("auth", () => {
       assertCanUseCapability(readContext, "deepline.execute")
     ).toThrow("Token scope does not allow")
 
-    const writeContext = {
+    const enrichContext = {
       ...readContext,
+      scopes: ["mcp:deepline.enrich"],
+    }
+    expect(listContextCapabilities(enrichContext)).toEqual([
+      "context.read",
+      "deepline.read",
+      "deepline.enrich",
+    ])
+    expect(() =>
+      assertCanUseCapability(enrichContext, "deepline.execute")
+    ).toThrow("Token scope does not allow")
+
+    const executeContext = {
+      ...readContext,
+      scopes: ["mcp:deepline.execute"],
+    }
+    expect(listContextCapabilities(executeContext)).toEqual([
+      "context.read",
+      "deepline.read",
+      "deepline.execute",
+    ])
+    expect(() =>
+      assertCanUseCapability(executeContext, "deepline.enrich")
+    ).toThrow("Token scope does not allow")
+    expect(() =>
+      assertCanUseCapability(executeContext, "deepline.execute")
+    ).not.toThrow()
+  })
+
+  it("accepts the legacy Deepline write alias without advertising it as the new scope hint", () => {
+    const legacyContext = {
+      productId: "00000000-0000-4000-8000-000000000001",
+      role: "editor" as const,
       scopes: ["mcp:deepline.write"],
     }
-    expect(listContextCapabilities(writeContext)).toEqual([
+    expect(listContextCapabilities(legacyContext)).toEqual([
       "context.read",
       "deepline.read",
       "deepline.enrich",
       "deepline.execute",
     ])
-    expect(() =>
-      assertCanUseCapability(writeContext, "deepline.execute")
-    ).not.toThrow()
   })
 
   it("treats explicit empty scopes as no capability grant", () => {

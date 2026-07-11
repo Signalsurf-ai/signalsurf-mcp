@@ -184,7 +184,7 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - `get_context`, `get_brand_context`, `create_product`
 - `list_surf_points`, `get_surf_point`, `create_surf_point`, `update_surf_point`, `run_surf_point`, `get_surf_job`, `wait_for_surf_job`, `list_surf_jobs`, `cancel_surf_job`, `delete_surf_point`
 - `list_tables`, `create_table`, `update_table`, `delete_table`, `list_table_views`, `read_table`, `read_table_view`, `get_table_row`
-- `create_table_row`, `update_table_row`, `delete_table_rows`
+- `create_table_row`, `update_table_rows`, `delete_table_rows`
 - `list_table_fields`, `add_table_field`, `update_table_field`, `remove_table_field`, `create_relation_field`
 - `list_signals`, `create_signal`, `update_signal`, `delete_signal`
 - `enable_quick_surf`, `disable_quick_surf`, `list_quick_surf`, `run_quick_surf`
@@ -199,6 +199,11 @@ product-scoped tool call. The server uses Supabase service-role credentials
 internally, so every operation explicitly validates product ownership before
 touching rows. Surf point deletion is a soft delete (`deleted_at`), matching the
 web app behavior.
+
+Generic `deepline_execute_tool` calls use a two-step approval flow. Omit
+`approvalRequestId` to create or reuse a redacted pending request, approve it in
+SignalSurf Web, then repeat the exact tool id and payload with the returned
+request id. The MCP server never approves requests itself.
 
 OAuth clients can request broad compatibility scopes (`mcp:read`, `mcp:write`)
 or granular scopes. The protected resource metadata advertises the registered
@@ -217,10 +222,14 @@ capability instead of hiding them behind broad write access:
 - `mcp:schemas.write`
 - `mcp:sources.read`
 - `mcp:sources.write`
+- `mcp:deepline.read`
+- `mcp:deepline.enrich`
+- `mcp:deepline.execute`
 
-The MCP server also accepts and enforces `mcp:deepline.read` and
-`mcp:deepline.write`, but it does not advertise those scopes by default until the
-hosted authorization server registers them. OAuth tokens may also carry
+Default authorization requests include `mcp:deepline.read`, but not the
+higher-risk enrichment or execution scopes. The MCP server still accepts the
+legacy `mcp:deepline.write` alias for existing grants without advertising it.
+OAuth tokens may also carry
 `offline_access` for refresh-token support. The MCP resource server accepts that scope but does not advertise it as
 a resource requirement, and it grants no tool capability by itself.
 
@@ -242,6 +251,7 @@ Key files:
 - `src/stdio.ts`: stdio transport for local MCP clients
 - `src/auth.ts`: token hashing, bearer parsing, and role checks
 - `src/capabilities.ts`: public scope, capability, and tool contract
+- `docs/public-tool-contract.json`: shared schema fingerprints and semantic fixtures
 - `src/repository.ts`: SignalSurf product-scope and mutation logic
 - `src/server.ts`: MCP tools and resources
 - `src/schemas.ts`: Zod input schemas exposed to MCP clients
@@ -323,10 +333,10 @@ Tables:
   must target the row's database. The server stamps `origin="mcp"` and
   `origin_ref` from the token name; callers cannot forge provenance, triggered
   state, or dedupe keys.
-- `update_table_row`: updates row data with SignalSurf's
-  `update_entry_with_source` RPC so changelog behavior matches the web app.
-  `item_ref` fields are validated against the database schema and must point to
-  rows in the same product.
+- `update_table_rows`: updates one or more rows through changelog-preserving
+  RPCs; pass an `edits` array even for a single row. `item_ref` fields are
+  validated against the database schema and must point to rows in the same
+  product.
 - `delete_table_rows`: hard-deletes table rows after every row is product-scoped.
 
 Schema:

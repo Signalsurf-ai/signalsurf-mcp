@@ -6,6 +6,7 @@ type TableStore = Record<string, Row[]>
 type FakeDbError = { message: string; code?: string }
 type FakeSupabaseOptions = {
   rpcErrors?: Record<string, FakeDbError>
+  tableErrors?: Record<string, FakeDbError>
 }
 
 function clone<T>(value: T): T {
@@ -42,6 +43,10 @@ export class FakeSupabase {
   from(table: string) {
     if (!this.tables[table]) this.tables[table] = []
     return new FakeQuery(this, table)
+  }
+
+  tableError(table: string): FakeDbError | undefined {
+    return this.options.tableErrors?.[table]
   }
 
   async rpc(name: string, args: Record<string, unknown> = {}) {
@@ -229,6 +234,16 @@ class FakeQuery implements PromiseLike<any> {
     return this
   }
 
+  gt(key: string, value: unknown) {
+    this.filters.push((row) => row[key] > value)
+    return this
+  }
+
+  lte(key: string, value: unknown) {
+    this.filters.push((row) => row[key] <= value)
+    return this
+  }
+
   is(key: string, value: unknown) {
     this.filters.push((row) => row[key] === value)
     return this
@@ -280,6 +295,8 @@ class FakeQuery implements PromiseLike<any> {
   }
 
   private execute() {
+    const configuredError = this.db.tableError(this.table)
+    if (configuredError) return { data: null, error: configuredError }
     const rows = this.db.tables[this.table]
     if (this.op.type === "insert") {
       const values = Array.isArray(this.op.values) ? this.op.values : [this.op.values]

@@ -15,6 +15,9 @@ export const MCP_GRANULAR_SCOPES = [
   "mcp:schemas.write",
   "mcp:sources.read",
   "mcp:sources.write",
+  "mcp:deepline.read",
+  "mcp:deepline.enrich",
+  "mcp:deepline.execute",
 ] as const
 
 // account_lists scopes are understood and enforced by this MCP server, but the
@@ -29,24 +32,16 @@ export const MCP_ACCOUNT_LIST_SCOPES = [
   "mcp:account_lists.write",
 ] as const
 
-// deepline scopes follow the same "enforced but NOT advertised" pattern as
-// account_lists above: the authorization server does not register them yet, so
-// requesting them at /authorize would break OAuth. Keep them supported (so the
-// mcp:write fallback grants them) but exclude from the advertised resource
-// scopes until the auth server registers them. deepline.read = catalog and
-// curated people/company search; deepline.enrich = contact enrichment;
-// deepline.execute = arbitrary selected catalog tool execution.
-export const MCP_DEEPLINE_SCOPES = [
-  "mcp:deepline.read",
-  "mcp:deepline.write",
-] as const
+// The old combined write scope remains accepted but is not advertised. New
+// grants split paid enrichment from open-ended provider execution.
+export const MCP_DEEPLINE_LEGACY_SCOPES = ["mcp:deepline.write"] as const
 
 export const MCP_SUPPORTED_SCOPES = [
   MCP_LEGACY_READ_SCOPE,
   MCP_LEGACY_WRITE_SCOPE,
   ...MCP_GRANULAR_SCOPES,
   ...MCP_ACCOUNT_LIST_SCOPES,
-  ...MCP_DEEPLINE_SCOPES,
+  ...MCP_DEEPLINE_LEGACY_SCOPES,
   MCP_OFFLINE_ACCESS_SCOPE,
 ] as const
 
@@ -56,7 +51,9 @@ export const MCP_RESOURCE_SCOPES = [
   ...MCP_GRANULAR_SCOPES,
 ] as const
 
-export const MCP_DEFAULT_RESOURCE_SCOPES = [...MCP_GRANULAR_SCOPES] as const
+export const MCP_DEFAULT_RESOURCE_SCOPES = MCP_GRANULAR_SCOPES.filter(
+  (scope) => scope !== "mcp:deepline.enrich" && scope !== "mcp:deepline.execute"
+)
 
 export type McpScope = (typeof MCP_SUPPORTED_SCOPES)[number]
 
@@ -614,7 +611,7 @@ export const PUBLIC_MCP_TOOLS = {
   deepline_execute_tool: {
     title: "Execute Deepline Tool",
     description:
-      "Execute a selected Deepline v2 tool id with a JSON payload for an authorized product. Use deepline_search_catalog first unless the tool id is already known. May spend Deepline credits depending on the provider and result. Requires a Deepline integration key on the product.",
+      "Execute a selected Deepline v2 tool id with a JSON payload for an authorized product. Requires an approved, unexpired, one-time action request bound to the active OAuth grant, product, tool id, and exact payload. Use deepline_search_catalog first unless the tool id is already known. May spend Deepline credits depending on the provider and result. Requires a Deepline integration key on the product.",
     requiredCapability: "deepline.execute",
     surferSurface: "deepline",
     publicStatus: "supported",
@@ -731,6 +728,8 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "account_lists.write",
   ],
   "mcp:deepline.read": ["context.read", "deepline.read"],
+  "mcp:deepline.enrich": ["context.read", "deepline.read", "deepline.enrich"],
+  "mcp:deepline.execute": ["context.read", "deepline.read", "deepline.execute"],
   "mcp:deepline.write": [
     "context.read",
     "deepline.read",
@@ -756,8 +755,8 @@ const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "account_lists.read": ["mcp:account_lists.read"],
   "account_lists.write": ["mcp:account_lists.write"],
   "deepline.read": ["mcp:deepline.read"],
-  "deepline.enrich": ["mcp:deepline.write"],
-  "deepline.execute": ["mcp:deepline.write"],
+  "deepline.enrich": ["mcp:deepline.enrich"],
+  "deepline.execute": ["mcp:deepline.execute"],
 }
 
 export function parseStoredScopes(scope: string | undefined | null): string[] {

@@ -1,0 +1,102 @@
+{
+  "contractVersion": 1,
+  "canonicalization": "Recursively sort object keys, preserve array order, omit undefined object members, then SHA-256 the compact JSON.",
+  "inputSchemaSha256": {
+    "add_table_field": "5ee37d59c4b987a8f86900e054b8157d44d718d9157a2f54c67bc3ad7dd29bb9",
+    "apply_flow_edits": "2dd268408c89a3ffc5cded8571e618e4eab2ec65c30db60c2e69af698718c386",
+    "cancel_surf_job": "b02ff66695c4cf150463bad231dbe365dd4b5f1c7286a85e492fd34b17a3a1c2",
+    "create_campaign": "9c09b7f791fbb1808e95ce9947978230e5658d7720160bcb3a0f6d30ebf2e886",
+    "create_product": "64a712763bf80100c6fb0453e9ed54db1ec1d30e8896e9c9eb0b15e84d210f5e",
+    "create_relation_field": "7e4c6ac06ed64e6d4c8edd490cdd6017c43e55f09e423ff3a9fe867292524836",
+    "create_signal": "037d5d4f58d456437e20e1c75df4f4c6998c2e5282bd540c60748430f5976000",
+    "create_surf_point": "9ced59ca51b3e73368e30cf129639b7f24d0db102fcd9f33dd9f8a0883cbfc30",
+    "create_table": "09026a7b3d7b4e7042aac4fc797df275c79c68b0110c0919de9379e2c877782d",
+    "create_table_row": "655f6146cdb35da8b68f90612d2077e7857f534b98a192ca1a9b5fbefe910ef9",
+    "deepline_enrich_contact": "920dab03c93a4674c5dea8b6993f78664d53ddf89068425c729078e1c72f1365",
+    "deepline_execute_tool": "ddc00d136b0b73d0373953f27d524d8aeb5f3040c3d95dc8b48070148e0c4efc",
+    "deepline_search_catalog": "c0925c1d0a2285fbe3616059eea6f54f7141462723c223d448c09d6ac750a895",
+    "deepline_search_companies": "aae839b9be6f7ca37ac139eb11403f6afc69c356cbe330a32d536977e78a4a57",
+    "deepline_search_people": "aae839b9be6f7ca37ac139eb11403f6afc69c356cbe330a32d536977e78a4a57",
+    "delete_signal": "410aa6abe17bb991e89937d0868633d9554c0c61a0039d67f4d419e7d98c1b08",
+    "delete_surf_point": "0584c8600d874ae3d633451f74cf4732e7a7292f96f5ca3205940cfba22311f9",
+    "delete_table": "c1cdbe19ad327e7c906830066d3b3d3620e4924b008b948c62717041a0217ef5",
+    "delete_table_rows": "8a55c6e7e82b965b107232bfc9a38635f5f238f0c9ebc1fb98c6ca87facad153",
+    "describe_node_types": "efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49",
+    "disable_quick_surf": "113b03a1ad01ac9b3b467b79ea37388d0bf39ba1cf78896af4ca1d77694ef066",
+    "enable_quick_surf": "a50420d79c99017d09962426ee2bc8f9d6d7e0041ebbbc8d708b737bd30860a0",
+    "find_capabilities": "780608dd04f21ab9299af2df358deb9fb0b13178b49823e756b9e289b7d733b8",
+    "get_brand_context": "7a047174577717786c80120c1b8bc26f318ccdfc9b393b9bbb1b8f7e694e2db9",
+    "get_context": "efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49",
+    "get_enrichment_context": "b6ef20f045607fa62e5b0071bf5e1ea9db3dd4bc4b30572dac9106301ba7fb5e",
+    "get_node_upstream_context": "6c9e26bfa6bdd2f0b2e4942eb1930c249c8c424c16bd1f0867086c89ef5a2c45",
+    "get_surf_job": "b02ff66695c4cf150463bad231dbe365dd4b5f1c7286a85e492fd34b17a3a1c2",
+    "get_surf_point": "2d0e9780fa21d49900f941cca3af891b18b704fc47c0892302e085bbe897d8ab",
+    "get_table_row": "988367254984fad8b057fd24324303cc08327029aca8e62b27a01207397bef59",
+    "list_product_tools": "42925c0fde10777e909e202b4f59f640135d2ed974030038c8854d8e0d7abb86",
+    "list_quick_surf": "e52e394216932c43808150d7d4d05bbbdca77af82b8a498120cda38df6b055a6",
+    "list_signals": "2d0e9780fa21d49900f941cca3af891b18b704fc47c0892302e085bbe897d8ab",
+    "list_surf_jobs": "492f924446764c15926174bdb069747412a2e8b60ab9df5d59a5b539f512ffd2",
+    "list_surf_point_tools": "2d0e9780fa21d49900f941cca3af891b18b704fc47c0892302e085bbe897d8ab",
+    "list_surf_points": "d81df119b1c7c0afacf906a8194c2cc7eecd62bd2f1cbc61ce70c84f03c1677a",
+    "list_table_fields": "e52e394216932c43808150d7d4d05bbbdca77af82b8a498120cda38df6b055a6",
+    "list_table_views": "e52e394216932c43808150d7d4d05bbbdca77af82b8a498120cda38df6b055a6",
+    "list_tables": "8f453abdc62a10e58f9893531202670edfaef5f552afb6a4051811d336ae722c",
+    "read_table": "4bfe23e9f6b2a3a115a2bca2b5a824c279b34657db35500c83b41558f266a6f9",
+    "read_table_view": "f70116ef07702700fa64abe648ff0487bca64ddb2d0ffd56addd4ba150540004",
+    "remove_table_field": "113b03a1ad01ac9b3b467b79ea37388d0bf39ba1cf78896af4ca1d77694ef066",
+    "run_quick_surf": "74372ba3ff823f129554256cd2c6d6ddca4c102a7cd601c84235577da92566e1",
+    "run_surf_point": "800a3c8bfa52045238ced038a1f5538578681be21e249a2a7e7e60aec8350370",
+    "test_surf_point_node": "745edec507f3408916196bf3ea368cfcc739776d4aa2e2cc4baaedb2b823faeb",
+    "update_signal": "240d95324ff776f807d375c05a9f05d556ff8b288067e7a3eb0d807f93efd2b8",
+    "update_surf_point": "44b139cdc5f2dfd7e738e1ab3d5900bc0e87a306c0a4456b9d5d176ce6b946b9",
+    "update_surf_point_flow": "ffe22203402f3c533e4ce32cec33d14c7e8fc3d0c1cfde0538661b932d303e82",
+    "update_table": "49086af19b498da3028869441b4a051859f566a58716ea00c79a0041b79bfca8",
+    "update_table_field": "163308439e0cf459ccf27101947e735a74dcfe64c710cc900b2c6ed15ca0a6d6",
+    "update_table_rows": "8f112935d8aedda0699c3262d7df9cf0def4c7def6325c2fe5ab66e1254dd8ef",
+    "wait_for_surf_job": "ed75b9d72cc36b4d40ce48206d7d90fef1d95cf87de5558ad89996aa1a070662"
+  },
+  "semanticFixtures": {
+    "deepline_enrich_contact": {
+      "valid": [
+        {
+          "firstName": "Jane",
+          "lastName": "Doe",
+          "domain": "acme.com"
+        }
+      ],
+      "invalid": [
+        {
+          "lastName": "Doe",
+          "domain": "acme.com"
+        }
+      ]
+    },
+    "deepline_execute_tool": {
+      "valid": [
+        {
+          "toolId": "hubspot_create_contact",
+          "payload": {
+            "email": "jane@acme.com"
+          }
+        },
+        {
+          "toolId": "hubspot_create_contact",
+          "approvalRequestId": "00000000-0000-4000-8000-000000000777",
+          "payload": {
+            "email": "jane@acme.com"
+          }
+        }
+      ],
+      "invalid": [
+        {
+          "toolId": "hubspot_create_contact",
+          "approvalRequestId": "not-a-uuid",
+          "payload": {}
+        }
+      ]
+    }
+  },
+  "legacyScopeAliases": {
+    "mcp:deepline.write": ["mcp:deepline.enrich", "mcp:deepline.execute"]
+  }
+}

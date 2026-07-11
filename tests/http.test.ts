@@ -371,6 +371,9 @@ describe("HTTP transport", () => {
     expect(response.headers.get("www-authenticate")).not.toContain(
       MCP_OFFLINE_ACCESS_SCOPE
     )
+    expect(MCP_DEFAULT_RESOURCE_SCOPES).toContain("mcp:deepline.read")
+    expect(MCP_DEFAULT_RESOURCE_SCOPES).not.toContain("mcp:deepline.enrich")
+    expect(MCP_DEFAULT_RESOURCE_SCOPES).not.toContain("mcp:deepline.execute")
   })
 
   it("serves OAuth protected resource metadata", async () => {
@@ -396,6 +399,14 @@ describe("HTTP transport", () => {
       scopes_supported: MCP_RESOURCE_SCOPES,
     })
     expect(body.scopes_supported).not.toContain(MCP_OFFLINE_ACCESS_SCOPE)
+    expect(body.scopes_supported).toEqual(
+      expect.arrayContaining([
+        "mcp:deepline.read",
+        "mcp:deepline.enrich",
+        "mcp:deepline.execute",
+      ])
+    )
+    expect(body.scopes_supported).not.toContain("mcp:deepline.write")
   })
 
   it("resolves OAuth access tokens with harmless additive scopes", async () => {
