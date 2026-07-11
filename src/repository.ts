@@ -62,6 +62,12 @@ import {
 export const POPULAR_VALUES_SCAN_LIMIT = 1000
 export const POPULAR_VALUES_TOP_N = 30
 export const MCP_ACTION_APPROVAL_TTL_MS = 10 * 60 * 1000
+const APPROVAL_PREVIEW_MAX_DEPTH = 4
+const APPROVAL_PREVIEW_MAX_FIELDS = 50
+const APPROVAL_PREVIEW_MAX_ARRAY_ITEMS = 20
+const APPROVAL_PREVIEW_MAX_STRING_LENGTH = 500
+const APPROVAL_PREVIEW_SENSITIVE_KEY =
+  /(authorization|cookie|credential|password|secret|token|apikey)/i
 
 type DeeplineSearchInput = {
   productId?: string
@@ -790,6 +796,42 @@ function requireNoDbError(
       status: 500,
     })
   }
+}
+
+function redactApprovalPreviewValue(value: unknown, depth = 0): unknown {
+  if (value === null || typeof value === "boolean" || typeof value === "number") {
+    return value
+  }
+  if (typeof value === "string") {
+    if (value.length <= APPROVAL_PREVIEW_MAX_STRING_LENGTH) return value
+    return `${value.slice(0, APPROVAL_PREVIEW_MAX_STRING_LENGTH)}…[truncated]`
+  }
+  if (depth >= APPROVAL_PREVIEW_MAX_DEPTH) return "[TRUNCATED]"
+  if (Array.isArray(value)) {
+    const preview = value
+      .slice(0, APPROVAL_PREVIEW_MAX_ARRAY_ITEMS)
+      .map((item) => redactApprovalPreviewValue(item, depth + 1))
+    if (value.length > APPROVAL_PREVIEW_MAX_ARRAY_ITEMS) {
+      preview.push(`[${value.length - APPROVAL_PREVIEW_MAX_ARRAY_ITEMS} more items]`)
+    }
+    return preview
+  }
+  if (typeof value !== "object") return String(value)
+
+  const entries = Object.entries(value as Record<string, unknown>).sort(
+    ([left], [right]) => left.localeCompare(right)
+  )
+  const preview: JsonRecord = {}
+  for (const [key, nestedValue] of entries.slice(0, APPROVAL_PREVIEW_MAX_FIELDS)) {
+    const normalizedKey = key.replace(/[^a-z0-9]/gi, "")
+    preview[key] = APPROVAL_PREVIEW_SENSITIVE_KEY.test(normalizedKey)
+      ? "[REDACTED]"
+      : redactApprovalPreviewValue(nestedValue, depth + 1)
+  }
+  if (entries.length > APPROVAL_PREVIEW_MAX_FIELDS) {
+    preview.__truncatedFields = entries.length - APPROVAL_PREVIEW_MAX_FIELDS
+  }
+  return preview
 }
 
 function asRecord(value: unknown): JsonRecord {
@@ -1916,7 +1958,7 @@ export class SignalSurfRepository {
               toolName: "deepline_execute_tool",
               providerToolId: input.toolId,
               payload: {
-                keys: payloadKeys.slice(0, 50),
+                values: redactApprovalPreviewValue(payload),
                 fieldCount: payloadKeys.length,
                 byteLength: Buffer.byteLength(canonicalJson(payload), "utf8"),
               },

@@ -255,7 +255,11 @@ describe("Deepline capabilities", () => {
     try {
       await repo.deeplineExecuteTool(oauthContext, {
         toolId: "hubspot_create_contact",
-        payload: { email: "jane@acme.com" },
+        payload: {
+          email: "jane@acme.com",
+          apiKey: "secret-api-key",
+          headers: { authorization: "Bearer secret-token" },
+        },
       })
     } catch (error) {
       firstError = error
@@ -280,25 +284,38 @@ describe("Deepline capabilities", () => {
       product_id: oauthContext.productId,
       tool_name: "deepline_execute_tool",
       provider_tool_id: "hubspot_create_contact",
-      payload_sha256: mcpActionPayloadSha256({ email: "jane@acme.com" }),
+      payload_sha256: mcpActionPayloadSha256({
+        email: "jane@acme.com",
+        apiKey: "secret-api-key",
+        headers: { authorization: "Bearer secret-token" },
+      }),
       status: "pending",
       preview: {
         payload: {
-          keys: ["email"],
-          fieldCount: 1,
+          values: {
+            apiKey: "[REDACTED]",
+            email: "jane@acme.com",
+            headers: { authorization: "[REDACTED]" },
+          },
+          fieldCount: 3,
           byteLength: expect.any(Number),
         },
       },
     })
-    expect(JSON.stringify(db.tables.mcp_action_approvals[0].preview)).not.toContain(
-      "jane@acme.com"
-    )
+    const preview = JSON.stringify(db.tables.mcp_action_approvals[0].preview)
+    expect(preview).toContain("jane@acme.com")
+    expect(preview).not.toContain("secret-api-key")
+    expect(preview).not.toContain("secret-token")
 
     let secondError: unknown
     try {
       await repo.deeplineExecuteTool(oauthContext, {
         toolId: "hubspot_create_contact",
-        payload: { email: "jane@acme.com" },
+        payload: {
+          email: "jane@acme.com",
+          apiKey: "secret-api-key",
+          headers: { authorization: "Bearer secret-token" },
+        },
       })
     } catch (error) {
       secondError = error
