@@ -577,6 +577,45 @@ describe("Deepline capabilities", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it("keeps the timeout active while reading the provider response body", async () => {
+    let bodyController: ReadableStreamDefaultController<Uint8Array> | undefined
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        bodyController = controller
+      },
+    })
+    const fetchMock = vi.fn(
+      async (_url: string | URL | Request, init?: RequestInit) => {
+        init?.signal?.addEventListener("abort", () =>
+          bodyController?.error(new DOMException("aborted", "AbortError"))
+        )
+        return new Response(body, { status: 200 })
+      }
+    )
+
+    const outcome = await Promise.race([
+      executeDeeplineTool(
+        "hubspot_create_contact",
+        { email: "jane@acme.com" },
+        "dl_test",
+        fetchMock as typeof fetch,
+        5
+      ).then(
+        () => "resolved",
+        (error: unknown) =>
+          error instanceof DOMException && error.name === "AbortError"
+            ? "aborted"
+            : "rejected"
+      ),
+      new Promise<"pending">((resolve) =>
+        setTimeout(() => resolve("pending"), 50)
+      ),
+    ])
+
+    expect(outcome).toBe("aborted")
+    if (outcome === "pending") bodyController?.error(new Error("test cleanup"))
+  })
+
   it("never persists provider response bodies in approval errors", async () => {
     vi.stubEnv("DEEPLINE_DISABLED", "")
     stubFetch(

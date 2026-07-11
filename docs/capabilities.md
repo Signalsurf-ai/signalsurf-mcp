@@ -135,9 +135,9 @@ scope needed for step-up authorization.
 redacted `pending` request and returns `APPROVAL_REQUIRED` with its id and the
 SignalSurf Web approval URL. This request cannot approve itself. On a follow-up
 call, `approvalRequestId` must identify an `mcp_action_approvals` row whose
-`oauth_token_id`, `product_id`, `tool_name`, `provider_tool_id`, and
-`payload_sha256` match the active call and whose status is `approved` with a
-future `expires_at`.
+stable `oauth_grant_id`, `user_id`, `client_id`, `product_id`, `tool_name`,
+`provider_tool_id`, and `payload_sha256` match the active call and whose status
+is `approved` with a future `expires_at`.
 
 The server claims the approval with one conditional update from `approved` to
 `executing` before reading credentials or making the provider request. A second

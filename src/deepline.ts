@@ -115,9 +115,8 @@ export async function executeDeeplineTool(
 ): Promise<DeeplineEnvelope> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
-  let res: Response
   try {
-    res = await fetchImpl(
+    const res = await fetchImpl(
       `${baseUrl()}/api/v2/integrations/${encodeURIComponent(toolId)}/execute`,
       {
         method: "POST",
@@ -130,11 +129,11 @@ export async function executeDeeplineTool(
         signal: controller.signal,
       }
     )
+    if (!res.ok) {
+      throw new Error(`Deepline ${toolId} -> HTTP ${res.status}`)
+    }
+    return (await res.json()) as DeeplineEnvelope
   } finally {
     clearTimeout(timeout)
   }
-  if (!res.ok) {
-    throw new Error(`Deepline ${toolId} -> HTTP ${res.status}`)
-  }
-  return (await res.json()) as DeeplineEnvelope
 }
