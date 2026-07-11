@@ -42,7 +42,7 @@ export const deeplineSearchCatalogSchema = {
 export const deeplineExecuteToolSchema = {
   ...productTargetSchema,
   toolId: z.string().trim().min(1).max(200),
-  approvalRequestId: uuidSchema,
+  approvalRequestId: uuidSchema.optional(),
   payload: jsonObjectSchema.default({}).optional(),
 }
 

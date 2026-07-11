@@ -13,7 +13,7 @@
     "create_table": "09026a7b3d7b4e7042aac4fc797df275c79c68b0110c0919de9379e2c877782d",
     "create_table_row": "655f6146cdb35da8b68f90612d2077e7857f534b98a192ca1a9b5fbefe910ef9",
     "deepline_enrich_contact": "920dab03c93a4674c5dea8b6993f78664d53ddf89068425c729078e1c72f1365",
-    "deepline_execute_tool": "ec4fe57ce6bcac6d75c29085b15be56d3bfea70fa66c032e228932e5d7b0de3d",
+    "deepline_execute_tool": "ddc00d136b0b73d0373953f27d524d8aeb5f3040c3d95dc8b48070148e0c4efc",
     "deepline_search_catalog": "c0925c1d0a2285fbe3616059eea6f54f7141462723c223d448c09d6ac750a895",
     "deepline_search_companies": "aae839b9be6f7ca37ac139eb11403f6afc69c356cbe330a32d536977e78a4a57",
     "deepline_search_people": "aae839b9be6f7ca37ac139eb11403f6afc69c356cbe330a32d536977e78a4a57",
@@ -75,6 +75,12 @@
       "valid": [
         {
           "toolId": "hubspot_create_contact",
+          "payload": {
+            "email": "jane@acme.com"
+          }
+        },
+        {
+          "toolId": "hubspot_create_contact",
           "approvalRequestId": "00000000-0000-4000-8000-000000000777",
           "payload": {
             "email": "jane@acme.com"
@@ -84,9 +90,8 @@
       "invalid": [
         {
           "toolId": "hubspot_create_contact",
-          "payload": {
-            "email": "jane@acme.com"
-          }
+          "approvalRequestId": "not-a-uuid",
+          "payload": {}
         }
       ]
     }

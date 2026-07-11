@@ -18,6 +18,7 @@ const oauthContext: SignalSurfContext = {
   ...context,
   authKind: "oauth",
   oauthTokenId: "00000000-0000-4000-8000-000000000099",
+  oauthClientId: "ssmcp_client_test",
 }
 
 function dbWithKey(apiKey = "dl_test") {
@@ -39,6 +40,8 @@ function approvalRow(
   return {
     id: "00000000-0000-4000-8000-000000000777",
     oauth_token_id: oauthContext.oauthTokenId,
+    user_id: oauthContext.userId,
+    client_id: oauthContext.oauthClientId,
     product_id: oauthContext.productId,
     tool_name: "deepline_execute_tool",
     provider_tool_id: "hubspot_create_contact",
@@ -207,8 +210,80 @@ describe("Deepline capabilities", () => {
     })
   })
 
-  it("execute_tool rejects missing approval before resolving credentials or calling the provider", async () => {
+  it("execute_tool creates a redacted pending request when approvalRequestId is missing", async () => {
     vi.stubEnv("DEEPLINE_DISABLED", "")
+    vi.stubEnv(
+      "SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL",
+      "https://www.signalsurf.ai"
+    )
+    const noop = vi.fn()
+    vi.stubGlobal("fetch", noop)
+    const db = dbWithKey()
+    const repo = new SignalSurfRepository(db as never)
+
+    let firstError: unknown
+    try {
+      await repo.deeplineExecuteTool(oauthContext, {
+        toolId: "hubspot_create_contact",
+        payload: { email: "jane@acme.com" },
+      })
+    } catch (error) {
+      firstError = error
+    }
+    expect(firstError).toMatchObject({
+      code: "APPROVAL_REQUIRED",
+      details: {
+        requestId: expect.any(String),
+        approvalUrl: expect.stringMatching(
+          /^https:\/\/www\.signalsurf\.ai\/approvals\?mcpAction=/
+        ),
+        status: "pending",
+        expiresAt: expect.any(String),
+      },
+    })
+    expect(db.tables.mcp_action_approvals).toHaveLength(1)
+    expect(db.tables.mcp_action_approvals[0]).toMatchObject({
+      oauth_token_id: oauthContext.oauthTokenId,
+      user_id: oauthContext.userId,
+      client_id: oauthContext.oauthClientId,
+      product_id: oauthContext.productId,
+      tool_name: "deepline_execute_tool",
+      provider_tool_id: "hubspot_create_contact",
+      payload_sha256: mcpActionPayloadSha256({ email: "jane@acme.com" }),
+      status: "pending",
+      preview: {
+        payload: {
+          keys: ["email"],
+          fieldCount: 1,
+          byteLength: expect.any(Number),
+        },
+      },
+    })
+    expect(JSON.stringify(db.tables.mcp_action_approvals[0].preview)).not.toContain(
+      "jane@acme.com"
+    )
+
+    let secondError: unknown
+    try {
+      await repo.deeplineExecuteTool(oauthContext, {
+        toolId: "hubspot_create_contact",
+        payload: { email: "jane@acme.com" },
+      })
+    } catch (error) {
+      secondError = error
+    }
+    expect(secondError).toMatchObject({
+      code: "APPROVAL_REQUIRED",
+      details: {
+        requestId: db.tables.mcp_action_approvals[0].id,
+      },
+    })
+    expect(db.tables.mcp_action_approvals).toHaveLength(1)
+    expect(noop).not.toHaveBeenCalled()
+  })
+
+  it("returns the pending request id with a null URL when the Web base URL is not configured", async () => {
+    vi.stubEnv("SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL", "")
     const noop = vi.fn()
     vi.stubGlobal("fetch", noop)
     const db = dbWithKey()
@@ -219,8 +294,44 @@ describe("Deepline capabilities", () => {
         toolId: "hubspot_create_contact",
         payload: { email: "jane@acme.com" },
       })
+    ).rejects.toMatchObject({
+      code: "APPROVAL_REQUIRED",
+      details: {
+        requestId: expect.any(String),
+        approvalUrl: null,
+      },
+    })
+    expect(db.tables.mcp_action_approvals).toHaveLength(1)
+    expect(noop).not.toHaveBeenCalled()
+  })
+
+  it("expires an old pending request before creating its replacement", async () => {
+    const noop = vi.fn()
+    vi.stubGlobal("fetch", noop)
+    const payload = { email: "jane@acme.com" }
+    const db = new FakeSupabase({
+      integration_accounts: dbWithKey().tables.integration_accounts,
+      mcp_action_approvals: [
+        approvalRow(payload, {
+          status: "pending",
+          expires_at: "2020-01-01T00:00:00.000Z",
+          created_at: "2020-01-01T00:00:00.000Z",
+        }),
+      ],
+    })
+    const repo = new SignalSurfRepository(db as never)
+
+    await expect(
+      repo.deeplineExecuteTool(oauthContext, {
+        toolId: "hubspot_create_contact",
+        payload,
+      })
     ).rejects.toMatchObject({ code: "APPROVAL_REQUIRED" })
-    expect(db.rpcCalls).toHaveLength(0)
+    expect(db.tables.mcp_action_approvals).toHaveLength(2)
+    expect(db.tables.mcp_action_approvals.map((row) => row.status).sort()).toEqual([
+      "expired",
+      "pending",
+    ])
     expect(noop).not.toHaveBeenCalled()
   })
 

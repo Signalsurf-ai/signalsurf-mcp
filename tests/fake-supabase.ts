@@ -234,6 +234,11 @@ class FakeQuery implements PromiseLike<any> {
     return this
   }
 
+  lte(key: string, value: unknown) {
+    this.filters.push((row) => row[key] <= value)
+    return this
+  }
+
   is(key: string, value: unknown) {
     this.filters.push((row) => row[key] === value)
     return this

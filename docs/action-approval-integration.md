@@ -28,8 +28,14 @@ Web may additionally retain `user_id`, `client_id`, `preview`, `resolved_by`,
 Service-role access must be able to perform the conditional updates below;
 authenticated users should only read approvals authorized by product membership.
 
-Web creates requests as `pending` and resolves them with compare-and-set to
-`approved` or `rejected`. The authorization server accepts
+Hosted MCP creates or reuses requests as `pending`; it stores only a redacted
+preview containing the tool ids, payload keys/count, and serialized byte count.
+Identical unexpired pending requests are reused. Web resolves them with
+compare-and-set to `approved` or `rejected`. A partial unique index over the
+OAuth/user/client/product/tool/provider/digest binding for `status = 'pending'`
+is required so simultaneous retries deduplicate at the database boundary.
+
+The authorization server accepts
 `mcp:deepline.read`, `mcp:deepline.enrich`, and `mcp:deepline.execute`; the
 default grant includes only `mcp:deepline.read`.
 
@@ -39,7 +45,13 @@ For a call with `toolId` and `payload`, hosted MCP computes
 `SHA-256(canonicalJson(payload))`. Canonical JSON recursively sorts object keys,
 preserves array order, omits undefined object members, and emits compact JSON.
 
-Before calling Deepline, hosted MCP performs one atomic conditional update:
+If `approvalRequestId` is omitted, hosted MCP returns `APPROVAL_REQUIRED` with
+`requestId`, a ten-minute expiry, and (when
+`SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL` is configured)
+`<authorization-server>/approvals?mcpAction=<requestId>`. Without that env var,
+the URL is null but the request id remains usable.
+
+Before calling Deepline with an approved request, hosted MCP performs one atomic conditional update:
 
 ```text
 approved -> executing

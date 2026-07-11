@@ -130,8 +130,11 @@ scope needed for step-up authorization.
 
 ## External Action Approval Contract
 
-`deepline_execute_tool` is fail-closed and hosted-OAuth-only. Its
-`approvalRequestId` must identify an `mcp_action_approvals` row whose
+`deepline_execute_tool` is fail-closed and hosted-OAuth-only. When
+`approvalRequestId` is omitted, the server creates or reuses a short-lived,
+redacted `pending` request and returns `APPROVAL_REQUIRED` with its id and the
+SignalSurf Web approval URL. This request cannot approve itself. On a follow-up
+call, `approvalRequestId` must identify an `mcp_action_approvals` row whose
 `oauth_token_id`, `product_id`, `tool_name`, `provider_tool_id`, and
 `payload_sha256` match the active call and whose status is `approved` with a
 future `expires_at`.
@@ -143,9 +146,9 @@ never calls Deepline. The known terminal states are `executed` and `failed`.
 Transport failures after dispatch are recorded as `ambiguous` and are never
 automatically replayed; a new action requires a new Web approval.
 
-SignalSurf Web owns request creation and human resolution. The shared contract
-artifact at `docs/public-tool-contract.json` pins the public input schemas and
-valid/invalid semantic fixtures so Web and this server can reject drift in CI.
+SignalSurf Web owns human resolution. The shared contract artifact at
+`docs/public-tool-contract.json` pins the public input schemas and valid/invalid
+semantic fixtures so Web and this server can reject drift in CI.
 
 Do not add raw SQL, arbitrary table-name access, service-role-like operations,
 or tools that bypass SignalSurf's existing provenance, changelog, job, or

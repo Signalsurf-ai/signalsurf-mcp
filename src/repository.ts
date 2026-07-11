@@ -37,7 +37,7 @@ import {
   unwrapDeepline,
 } from "./deepline.js"
 import { UserFacingError } from "./errors.js"
-import { canonicalSha256 } from "./canonical-json.js"
+import { canonicalJson, canonicalSha256 } from "./canonical-json.js"
 import { FIELD_CONVENTIONS } from "./conventions.js"
 import { aggregatePopularValues } from "./popular-values.js"
 import {
@@ -61,6 +61,7 @@ import {
 
 export const POPULAR_VALUES_SCAN_LIMIT = 1000
 export const POPULAR_VALUES_TOP_N = 30
+export const MCP_ACTION_APPROVAL_TTL_MS = 10 * 60 * 1000
 
 type DeeplineSearchInput = {
   productId?: string
@@ -809,6 +810,20 @@ function readTrimmedString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null
 }
 
+function mcpActionApprovalUrl(requestId: string): string | null {
+  const authorizationServerUrl = readTrimmedString(
+    process.env.SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL
+  )
+  if (!authorizationServerUrl) return null
+  try {
+    const url = new URL("/approvals", authorizationServerUrl)
+    url.searchParams.set("mcpAction", requestId)
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
 export function mcpActionPayloadSha256(payload: JsonRecord): string {
   return canonicalSha256(payload)
 }
@@ -1364,6 +1379,7 @@ export class SignalSurfRepository {
       scopes,
       authKind: "oauth",
       oauthTokenId: row.id,
+      oauthClientId: row.client_id,
     }
   }
 
@@ -1811,14 +1827,131 @@ export class SignalSurfRepository {
     if (
       context.authKind !== "oauth" ||
       !context.oauthTokenId ||
-      !approvalRequestId
+      !context.userId ||
+      !context.oauthClientId
     ) {
       throw new UserFacingError(
-        "deepline_execute_tool requires an approved, unexpired one-time action request from SignalSurf Web.",
+        "deepline_execute_tool requires a hosted OAuth connection and an approved, unexpired one-time action request from SignalSurf Web.",
         {
           code: "APPROVAL_REQUIRED",
           status: 409,
           details: {
+            mcpToolName: "deepline_execute_tool",
+            externalAction,
+            payloadSha256,
+          },
+        }
+      )
+    }
+
+    if (!approvalRequestId) {
+      const now = new Date()
+      const nowIso = now.toISOString()
+      const expiresAt = new Date(
+        now.getTime() + MCP_ACTION_APPROVAL_TTL_MS
+      ).toISOString()
+      const findActivePending = async () =>
+        this.db
+          .from("mcp_action_approvals")
+          .select("id, expires_at")
+          .eq("oauth_token_id", context.oauthTokenId)
+          .eq("user_id", context.userId)
+          .eq("client_id", context.oauthClientId)
+          .eq("product_id", context.productId)
+          .eq("tool_name", "deepline_execute_tool")
+          .eq("provider_tool_id", input.toolId)
+          .eq("payload_sha256", payloadSha256)
+          .eq("status", "pending")
+          .gt("expires_at", nowIso)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle()
+
+      let { data: pending, error: pendingError } = await findActivePending()
+      if (pendingError) {
+        throw new UserFacingError(
+          "The action approval service is unavailable; no external action was attempted.",
+          { code: "APPROVAL_UNAVAILABLE", status: 503 }
+        )
+      }
+
+      if (!pending) {
+        const { error: expireError } = await this.db
+          .from("mcp_action_approvals")
+          .update({ status: "expired", updated_at: nowIso })
+          .eq("oauth_token_id", context.oauthTokenId)
+          .eq("user_id", context.userId)
+          .eq("client_id", context.oauthClientId)
+          .eq("product_id", context.productId)
+          .eq("tool_name", "deepline_execute_tool")
+          .eq("provider_tool_id", input.toolId)
+          .eq("payload_sha256", payloadSha256)
+          .eq("status", "pending")
+          .lte("expires_at", nowIso)
+        if (expireError) {
+          throw new UserFacingError(
+            "The action approval service is unavailable; no external action was attempted.",
+            { code: "APPROVAL_UNAVAILABLE", status: 503 }
+          )
+        }
+
+        const requestId = randomUUID()
+        const payloadKeys = Object.keys(payload).sort()
+        const { data: inserted, error: insertError } = await this.db
+          .from("mcp_action_approvals")
+          .insert({
+            id: requestId,
+            product_id: context.productId,
+            user_id: context.userId,
+            oauth_token_id: context.oauthTokenId,
+            client_id: context.oauthClientId,
+            tool_name: "deepline_execute_tool",
+            provider_tool_id: input.toolId,
+            payload_sha256: payloadSha256,
+            preview: {
+              toolName: "deepline_execute_tool",
+              providerToolId: input.toolId,
+              payload: {
+                keys: payloadKeys.slice(0, 50),
+                fieldCount: payloadKeys.length,
+                byteLength: Buffer.byteLength(canonicalJson(payload), "utf8"),
+              },
+            },
+            status: "pending",
+            expires_at: expiresAt,
+            created_at: nowIso,
+            updated_at: nowIso,
+          })
+          .select("id, expires_at")
+          .single()
+
+        if (insertError || !inserted) {
+          // A concurrent identical request may have won the Web-side partial
+          // unique index. Re-read it instead of returning a second request.
+          const retry = await findActivePending()
+          if (retry.error || !retry.data) {
+            throw new UserFacingError(
+              "The action approval request could not be created; no external action was attempted.",
+              { code: "APPROVAL_UNAVAILABLE", status: 503 }
+            )
+          }
+          pending = retry.data
+        } else {
+          pending = inserted
+        }
+      }
+
+      const requestId = String(pending.id)
+      throw new UserFacingError(
+        "This external action is pending approval in SignalSurf Web; no external action was attempted.",
+        {
+          code: "APPROVAL_REQUIRED",
+          status: 409,
+          details: {
+            requestId,
+            approvalUrl: mcpActionApprovalUrl(requestId),
+            status: "pending",
+            expiresAt: pending.expires_at,
             mcpToolName: "deepline_execute_tool",
             externalAction,
             payloadSha256,
@@ -1838,6 +1971,8 @@ export class SignalSurfRepository {
       })
       .eq("id", approvalRequestId)
       .eq("oauth_token_id", context.oauthTokenId)
+      .eq("user_id", context.userId)
+      .eq("client_id", context.oauthClientId)
       .eq("product_id", context.productId)
       .eq("tool_name", "deepline_execute_tool")
       .eq("provider_tool_id", input.toolId)
@@ -1883,6 +2018,8 @@ export class SignalSurfRepository {
         })
         .eq("id", approvalRequestId)
         .eq("oauth_token_id", context.oauthTokenId)
+        .eq("user_id", context.userId)
+        .eq("client_id", context.oauthClientId)
         .eq("product_id", context.productId)
         .eq("status", "executing")
         .select("id")

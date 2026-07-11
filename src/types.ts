@@ -17,6 +17,7 @@ export type SignalSurfContext = {
   scopes?: string[]
   authKind?: "env" | "manual" | "oauth"
   oauthTokenId?: string
+  oauthClientId?: string
 }
 
 export type JsonRecord = Record<string, unknown>
