@@ -3,7 +3,9 @@
 `deepline_execute_tool` depends on the SignalSurf Web migration and approval UI
 for `public.mcp_action_approvals`. Deploy Web first; until the table is present,
 generic Deepline execution fails closed with `APPROVAL_UNAVAILABLE` and makes no
-provider request.
+provider request. The Web migration keeps a temporary database-side compatibility
+trigger that derives `oauth_grant_id` from `oauth_token_id`, so the previous
+hosted writer remains available during the migrate-before-MCP rollout.
 
 ## Required Web Contract
 
