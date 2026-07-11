@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { SignalSurfRepository } from "../src/repository.js"
+import {
+  mcpActionPayloadSha256,
+  SignalSurfRepository,
+} from "../src/repository.js"
 import type { SignalSurfContext } from "../src/types.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
@@ -9,6 +12,12 @@ const context: SignalSurfContext = {
   userId: "00000000-0000-4000-8000-000000000010",
   role: "editor",
   tokenName: "test-agent",
+}
+
+const oauthContext: SignalSurfContext = {
+  ...context,
+  authKind: "oauth",
+  oauthTokenId: "00000000-0000-4000-8000-000000000099",
 }
 
 function dbWithKey(apiKey = "dl_test") {
@@ -21,6 +30,23 @@ function dbWithKey(apiKey = "dl_test") {
       },
     ],
   })
+}
+
+function approvalRow(
+  payload: Record<string, unknown>,
+  overrides: Record<string, unknown> = {}
+) {
+  return {
+    id: "00000000-0000-4000-8000-000000000777",
+    oauth_token_id: oauthContext.oauthTokenId,
+    product_id: oauthContext.productId,
+    tool_name: "deepline_execute_tool",
+    provider_tool_id: "hubspot_create_contact",
+    payload_sha256: mcpActionPayloadSha256(payload),
+    status: "approved",
+    expires_at: "2099-01-01T00:00:00.000Z",
+    ...overrides,
+  }
 }
 
 function stubFetch(body: unknown, init: { ok?: boolean; status?: number } = {}) {
@@ -140,14 +166,20 @@ describe("Deepline capabilities", () => {
         },
       },
     })
-    const repo = new SignalSurfRepository(dbWithKey() as never)
-    const res = await repo.deeplineExecuteTool(context, {
+    const payload = {
+      email: "jane@acme.com",
+      note: "",
+      metadata: { nullable: null },
+    }
+    const db = new FakeSupabase({
+      integration_accounts: dbWithKey().tables.integration_accounts,
+      mcp_action_approvals: [approvalRow(payload)],
+    })
+    const repo = new SignalSurfRepository(db as never)
+    const res = await repo.deeplineExecuteTool(oauthContext, {
       toolId: "hubspot_create_contact",
-      payload: {
-        email: "jane@acme.com",
-        note: "",
-        metadata: { nullable: null },
-      },
+      approvalRequestId: "00000000-0000-4000-8000-000000000777",
+      payload,
     })
     expect(res).toMatchObject({
       toolId: "hubspot_create_contact",
@@ -167,6 +199,82 @@ describe("Deepline capabilities", () => {
       note: "",
       metadata: { nullable: null },
     })
+    expect(db.tables.mcp_action_approvals[0]).toMatchObject({
+      status: "executed",
+      execution_started_at: expect.any(String),
+      executed_at: expect.any(String),
+      error: null,
+    })
+  })
+
+  it("execute_tool rejects missing approval before resolving credentials or calling the provider", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    const noop = vi.fn()
+    vi.stubGlobal("fetch", noop)
+    const db = dbWithKey()
+    const repo = new SignalSurfRepository(db as never)
+
+    await expect(
+      repo.deeplineExecuteTool(oauthContext, {
+        toolId: "hubspot_create_contact",
+        payload: { email: "jane@acme.com" },
+      })
+    ).rejects.toMatchObject({ code: "APPROVAL_REQUIRED" })
+    expect(db.rpcCalls).toHaveLength(0)
+    expect(noop).not.toHaveBeenCalled()
+  })
+
+  it("execute_tool rejects pending, mismatched, expired, or replayed approvals before the provider call", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    const noop = vi.fn()
+    vi.stubGlobal("fetch", noop)
+    const payload = { email: "different@acme.com" }
+    const cases = [
+      approvalRow(payload, { status: "pending" }),
+      approvalRow(payload, {
+        oauth_token_id: "00000000-0000-4000-8000-000000000098",
+      }),
+      approvalRow(payload, { expires_at: "2020-01-01T00:00:00.000Z" }),
+      approvalRow(payload, { status: "executed" }),
+      approvalRow({ email: "approved@acme.com" }),
+    ]
+
+    for (const approval of cases) {
+      const db = new FakeSupabase({
+        integration_accounts: dbWithKey().tables.integration_accounts,
+        mcp_action_approvals: [approval],
+      })
+      const repo = new SignalSurfRepository(db as never)
+      const originalStatus = approval.status
+
+      await expect(
+        repo.deeplineExecuteTool(oauthContext, {
+          toolId: "hubspot_create_contact",
+          approvalRequestId: "00000000-0000-4000-8000-000000000777",
+          payload,
+        })
+      ).rejects.toMatchObject({ code: "APPROVAL_REQUIRED" })
+      expect(db.tables.mcp_action_approvals[0].status).toBe(originalStatus)
+    }
+    expect(noop).not.toHaveBeenCalled()
+  })
+
+  it("execute_tool rejects non-OAuth credentials even when an approval id is supplied", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    const noop = vi.fn()
+    vi.stubGlobal("fetch", noop)
+    const db = dbWithKey()
+    const repo = new SignalSurfRepository(db as never)
+
+    await expect(
+      repo.deeplineExecuteTool(context, {
+        toolId: "hubspot_create_contact",
+        approvalRequestId: "00000000-0000-4000-8000-000000000777",
+        payload: { email: "jane@acme.com" },
+      })
+    ).rejects.toMatchObject({ code: "APPROVAL_REQUIRED" })
+    expect(db.rpcCalls).toHaveLength(0)
+    expect(noop).not.toHaveBeenCalled()
   })
 
   it("execute_tool returns non-OK Deepline envelopes with the provider result", async () => {
@@ -175,11 +283,17 @@ describe("Deepline capabilities", () => {
       status: "failed",
       toolResponse: { raw: { error: "provider rejected payload" } },
     })
-    const repo = new SignalSurfRepository(dbWithKey() as never)
+    const payload = { email: "bad" }
+    const db = new FakeSupabase({
+      integration_accounts: dbWithKey().tables.integration_accounts,
+      mcp_action_approvals: [approvalRow(payload)],
+    })
+    const repo = new SignalSurfRepository(db as never)
     await expect(
-      repo.deeplineExecuteTool(context, {
+      repo.deeplineExecuteTool(oauthContext, {
         toolId: "hubspot_create_contact",
-        payload: { email: "bad" },
+        approvalRequestId: "00000000-0000-4000-8000-000000000777",
+        payload,
       })
     ).resolves.toMatchObject({
       toolId: "hubspot_create_contact",
@@ -187,6 +301,76 @@ describe("Deepline capabilities", () => {
       status: "failed",
       result: { error: "provider rejected payload" },
     })
+    expect(db.tables.mcp_action_approvals[0]).toMatchObject({
+      status: "failed",
+      error: "Deepline returned status failed",
+    })
+  })
+
+  it("marks unknown provider outcomes ambiguous and never makes the approval replayable", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    const fetchMock = vi.fn(async () => {
+      throw new Error("socket closed after dispatch")
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    const payload = { email: "jane@acme.com" }
+    const db = new FakeSupabase({
+      integration_accounts: dbWithKey().tables.integration_accounts,
+      mcp_action_approvals: [approvalRow(payload)],
+    })
+    const repo = new SignalSurfRepository(db as never)
+
+    await expect(
+      repo.deeplineExecuteTool(oauthContext, {
+        toolId: "hubspot_create_contact",
+        approvalRequestId: "00000000-0000-4000-8000-000000000777",
+        payload,
+      })
+    ).rejects.toMatchObject({ code: "EXTERNAL_ACTION_AMBIGUOUS" })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(db.tables.mcp_action_approvals[0]).toMatchObject({
+      status: "ambiguous",
+      error: "socket closed after dispatch",
+    })
+
+    await expect(
+      repo.deeplineExecuteTool(oauthContext, {
+        toolId: "hubspot_create_contact",
+        approvalRequestId: "00000000-0000-4000-8000-000000000777",
+        payload,
+      })
+    ).rejects.toMatchObject({ code: "APPROVAL_REQUIRED" })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("allows only one concurrent caller to claim an approved action", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    const fetchMock = stubFetch({
+      status: "completed",
+      toolResponse: { raw: { id: "contact_123" } },
+    })
+    const payload = { email: "jane@acme.com" }
+    const db = new FakeSupabase({
+      integration_accounts: dbWithKey().tables.integration_accounts,
+      mcp_action_approvals: [approvalRow(payload)],
+    })
+    const repo = new SignalSurfRepository(db as never)
+    const execute = () =>
+      repo.deeplineExecuteTool(oauthContext, {
+        toolId: "hubspot_create_contact",
+        approvalRequestId: "00000000-0000-4000-8000-000000000777",
+        payload,
+      })
+
+    const results = await Promise.allSettled([execute(), execute()])
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(
+      1
+    )
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(
+      1
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(db.tables.mcp_action_approvals[0].status).toBe("executed")
   })
 
   it("fails clearly when Deepline is not connected for the product", async () => {

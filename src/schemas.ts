@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import type { PublicMcpToolName } from "./capabilities.js"
+
 export const uuidSchema = z.string().uuid()
 export const jsonObjectSchema = z.record(z.string(), z.unknown())
 const productTargetSchema = {
@@ -40,6 +42,7 @@ export const deeplineSearchCatalogSchema = {
 export const deeplineExecuteToolSchema = {
   ...productTargetSchema,
   toolId: z.string().trim().min(1).max(200),
+  approvalRequestId: uuidSchema,
   payload: jsonObjectSchema.default({}).optional(),
 }
 
@@ -670,3 +673,66 @@ export const archiveAccountListProfileSchema = {
   ...productTargetSchema,
   profileId: uuidSchema,
 }
+
+/**
+ * Canonical public input-schema registry. Keeping this exhaustive makes a new
+ * public operation fail typecheck until its schema policy is explicit, while
+ * server registration verifies it is using this exact schema at runtime.
+ */
+export const PUBLIC_MCP_TOOL_SCHEMAS = {
+  get_context: undefined,
+  get_brand_context: getBrandContextSchema,
+  get_enrichment_context: getEnrichmentContextSchema,
+  find_capabilities: findCapabilitiesSchema,
+  create_product: createProductSchema,
+  list_surf_points: listSurfPointsSchema,
+  get_surf_point: getSurfPointSchema,
+  create_surf_point: createSurfPointSchema,
+  update_surf_point: updateSurfPointSchema,
+  run_surf_point: runSurfPointSchema,
+  get_surf_job: getSurfJobSchema,
+  wait_for_surf_job: waitForSurfJobSchema,
+  list_surf_jobs: listSurfJobsSchema,
+  cancel_surf_job: cancelSurfJobSchema,
+  delete_surf_point: deleteSurfPointSchema,
+  describe_node_types: undefined,
+  update_surf_point_flow: updateSurfPointFlowSchema,
+  apply_flow_edits: applyFlowEditsSchema,
+  get_node_upstream_context: getNodeUpstreamContextSchema,
+  create_campaign: createCampaignSchema,
+  test_surf_point_node: testSurfPointNodeSchema,
+  list_tables: listDatabasesSchema,
+  create_table: createTableSchema,
+  update_table: updateTableSchema,
+  delete_table: deleteTableSchema,
+  list_table_views: listDatabaseViewsSchema,
+  read_table: readTableSchema,
+  read_table_view: readTableViewSchema,
+  get_table_row: getTableRowSchema,
+  create_table_row: createTableRowSchema,
+  update_table_rows: updateTableRowsSchema,
+  delete_table_rows: deleteTableRowsSchema,
+  list_table_fields: listDatabaseFieldsSchema,
+  add_table_field: addDatabaseFieldSchema,
+  update_table_field: updateDatabaseFieldSchema,
+  remove_table_field: removeDatabaseFieldSchema,
+  create_relation_field: createRelationFieldSchema,
+  list_signals: listSurfPointSourcesSchema,
+  create_signal: createSurfPointSourceSchema,
+  update_signal: updateSurfPointSourceSchema,
+  delete_signal: deleteSurfPointSourceSchema,
+  enable_quick_surf: enableQuickSurfSchema,
+  disable_quick_surf: disableQuickSurfSchema,
+  list_quick_surf: listQuickSurfSchema,
+  run_quick_surf: runQuickSurfSchema,
+  list_product_tools: listProductToolsSchema,
+  list_surf_point_tools: listSurfPointToolsSchema,
+  deepline_search_people: deeplineSearchPeopleSchema,
+  deepline_search_companies: deeplineSearchCompaniesSchema,
+  deepline_enrich_contact: deeplineEnrichContactSchema,
+  deepline_search_catalog: deeplineSearchCatalogSchema,
+  deepline_execute_tool: deeplineExecuteToolSchema,
+} as const satisfies Record<
+  PublicMcpToolName,
+  Record<string, z.ZodTypeAny> | undefined
+>
