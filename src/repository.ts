@@ -67,7 +67,35 @@ const APPROVAL_PREVIEW_MAX_FIELDS = 50
 const APPROVAL_PREVIEW_MAX_ARRAY_ITEMS = 20
 const APPROVAL_PREVIEW_MAX_STRING_LENGTH = 500
 const APPROVAL_PREVIEW_SENSITIVE_KEY =
-  /(authorization|cookie|credential|password|secret|token|apikey)/i
+  /(authorization|bearer|cookie|credential|password|secret|session|signature|token|privatekey|sshkey|accesskey|apikey)$/i
+const APPROVAL_PREVIEW_SAFE_KEY = new Set([
+  "bcc",
+  "body",
+  "cc",
+  "company",
+  "companyname",
+  "currency",
+  "domain",
+  "email",
+  "emails",
+  "endpoint",
+  "firstname",
+  "from",
+  "fullname",
+  "lastname",
+  "message",
+  "name",
+  "phone",
+  "phonenumber",
+  "recipient",
+  "recipients",
+  "subject",
+  "text",
+  "title",
+  "to",
+  "url",
+  "urls",
+])
 
 type DeeplineSearchInput = {
   productId?: string
@@ -798,19 +826,44 @@ function requireNoDbError(
   }
 }
 
-function redactApprovalPreviewValue(value: unknown, depth = 0): unknown {
+function safeApprovalPreviewString(value: string): string {
+  if (/^(?:basic|bearer)\s+/i.test(value) || /private key/i.test(value)) {
+    return "[REDACTED]"
+  }
+  try {
+    const url = new URL(value)
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      for (const key of [...url.searchParams.keys()]) {
+        url.searchParams.set(key, "[REDACTED]")
+      }
+      url.hash = ""
+      value = url.toString()
+    }
+  } catch {
+    // Most approval values are not URLs.
+  }
+  if (value.length <= APPROVAL_PREVIEW_MAX_STRING_LENGTH) return value
+  return `${value.slice(0, APPROVAL_PREVIEW_MAX_STRING_LENGTH)}…[truncated]`
+}
+
+function redactApprovalPreviewValue(
+  value: unknown,
+  depth = 0,
+  allowPrimitive = false
+): unknown {
   if (value === null || typeof value === "boolean" || typeof value === "number") {
-    return value
+    return allowPrimitive ? value : "[HIDDEN]"
   }
   if (typeof value === "string") {
-    if (value.length <= APPROVAL_PREVIEW_MAX_STRING_LENGTH) return value
-    return `${value.slice(0, APPROVAL_PREVIEW_MAX_STRING_LENGTH)}…[truncated]`
+    return allowPrimitive ? safeApprovalPreviewString(value) : "[HIDDEN]"
   }
   if (depth >= APPROVAL_PREVIEW_MAX_DEPTH) return "[TRUNCATED]"
   if (Array.isArray(value)) {
     const preview = value
       .slice(0, APPROVAL_PREVIEW_MAX_ARRAY_ITEMS)
-      .map((item) => redactApprovalPreviewValue(item, depth + 1))
+      .map((item) =>
+        redactApprovalPreviewValue(item, depth + 1, allowPrimitive)
+      )
     if (value.length > APPROVAL_PREVIEW_MAX_ARRAY_ITEMS) {
       preview.push(`[${value.length - APPROVAL_PREVIEW_MAX_ARRAY_ITEMS} more items]`)
     }
@@ -826,7 +879,11 @@ function redactApprovalPreviewValue(value: unknown, depth = 0): unknown {
     const normalizedKey = key.replace(/[^a-z0-9]/gi, "")
     preview[key] = APPROVAL_PREVIEW_SENSITIVE_KEY.test(normalizedKey)
       ? "[REDACTED]"
-      : redactApprovalPreviewValue(nestedValue, depth + 1)
+      : redactApprovalPreviewValue(
+          nestedValue,
+          depth + 1,
+          APPROVAL_PREVIEW_SAFE_KEY.has(normalizedKey.toLowerCase())
+        )
   }
   if (entries.length > APPROVAL_PREVIEW_MAX_FIELDS) {
     preview.__truncatedFields = entries.length - APPROVAL_PREVIEW_MAX_FIELDS
@@ -2086,10 +2143,7 @@ export class SignalSurfRepository {
     try {
       apiKey = await this.resolveDeeplineApiKey(context)
     } catch (error) {
-      await finalizeApproval(
-        "failed",
-        error instanceof Error ? error.message.slice(0, 1000) : String(error)
-      )
+      await finalizeApproval("failed", "Deepline credential lookup failed.")
       throw error
     }
 
@@ -2097,9 +2151,10 @@ export class SignalSurfRepository {
     try {
       envelope = await executeDeeplineTool(input.toolId, payload, apiKey)
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message.slice(0, 1000) : String(error)
-      await finalizeApproval("ambiguous", message)
+      await finalizeApproval(
+        "ambiguous",
+        "Provider request failed or timed out after dispatch."
+      )
       throw new UserFacingError(
         "The external action outcome is ambiguous. It will not be replayed without a new approval.",
         {

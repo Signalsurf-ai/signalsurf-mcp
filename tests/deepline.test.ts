@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import { executeDeeplineTool } from "../src/deepline.js"
 import {
   mcpActionPayloadSha256,
   SignalSurfRepository,
@@ -258,7 +259,14 @@ describe("Deepline capabilities", () => {
         payload: {
           email: "jane@acme.com",
           apiKey: "secret-api-key",
-          headers: { authorization: "Bearer secret-token" },
+          privateKey: "secret-private-key",
+          accessKey: "secret-access-key",
+          bearer: "Bearer secret-token",
+          config: {
+            authorization: "Bearer nested-token",
+            opaque: "must-not-be-visible",
+            recipient: "reviewer@acme.com",
+          },
         },
       })
     } catch (error) {
@@ -287,17 +295,31 @@ describe("Deepline capabilities", () => {
       payload_sha256: mcpActionPayloadSha256({
         email: "jane@acme.com",
         apiKey: "secret-api-key",
-        headers: { authorization: "Bearer secret-token" },
+        privateKey: "secret-private-key",
+        accessKey: "secret-access-key",
+        bearer: "Bearer secret-token",
+        config: {
+          authorization: "Bearer nested-token",
+          opaque: "must-not-be-visible",
+          recipient: "reviewer@acme.com",
+        },
       }),
       status: "pending",
       preview: {
         payload: {
           values: {
             apiKey: "[REDACTED]",
+            accessKey: "[REDACTED]",
+            bearer: "[REDACTED]",
+            config: {
+              authorization: "[REDACTED]",
+              opaque: "[HIDDEN]",
+              recipient: "reviewer@acme.com",
+            },
             email: "jane@acme.com",
-            headers: { authorization: "[REDACTED]" },
+            privateKey: "[REDACTED]",
           },
-          fieldCount: 3,
+          fieldCount: 6,
           byteLength: expect.any(Number),
         },
       },
@@ -305,7 +327,11 @@ describe("Deepline capabilities", () => {
     const preview = JSON.stringify(db.tables.mcp_action_approvals[0].preview)
     expect(preview).toContain("jane@acme.com")
     expect(preview).not.toContain("secret-api-key")
+    expect(preview).not.toContain("secret-private-key")
+    expect(preview).not.toContain("secret-access-key")
     expect(preview).not.toContain("secret-token")
+    expect(preview).not.toContain("nested-token")
+    expect(preview).not.toContain("must-not-be-visible")
 
     let secondError: unknown
     try {
@@ -314,7 +340,14 @@ describe("Deepline capabilities", () => {
         payload: {
           email: "jane@acme.com",
           apiKey: "secret-api-key",
-          headers: { authorization: "Bearer secret-token" },
+          privateKey: "secret-private-key",
+          accessKey: "secret-access-key",
+          bearer: "Bearer secret-token",
+          config: {
+            authorization: "Bearer nested-token",
+            opaque: "must-not-be-visible",
+            recipient: "reviewer@acme.com",
+          },
         },
       })
     } catch (error) {
@@ -328,6 +361,26 @@ describe("Deepline capabilities", () => {
     })
     expect(db.tables.mcp_action_approvals).toHaveLength(1)
     expect(noop).not.toHaveBeenCalled()
+  })
+
+  it("fails closed when the approval table is unavailable", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    const db = new FakeSupabase(dbWithKey().tables, {
+      tableErrors: {
+        mcp_action_approvals: { message: "relation does not exist" },
+      },
+    } as any)
+    const repo = new SignalSurfRepository(db as never)
+
+    await expect(
+      repo.deeplineExecuteTool(oauthContext, {
+        toolId: "hubspot_create_contact",
+        payload: { email: "jane@acme.com" },
+      })
+    ).rejects.toMatchObject({ code: "APPROVAL_UNAVAILABLE" })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it("returns the pending request id with a null URL when the Web base URL is not configured", async () => {
@@ -469,7 +522,7 @@ describe("Deepline capabilities", () => {
   it("marks unknown provider outcomes ambiguous and never makes the approval replayable", async () => {
     vi.stubEnv("DEEPLINE_DISABLED", "")
     const fetchMock = vi.fn(async () => {
-      throw new Error("socket closed after dispatch")
+      throw new Error("socket closed; token=secret-token privateKey=secret-key")
     })
     vi.stubGlobal("fetch", fetchMock)
     const payload = { email: "jane@acme.com" }
@@ -489,7 +542,7 @@ describe("Deepline capabilities", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(db.tables.mcp_action_approvals[0]).toMatchObject({
       status: "ambiguous",
-      error: "socket closed after dispatch",
+      error: "Provider request failed or timed out after dispatch.",
     })
 
     await expect(
@@ -500,6 +553,53 @@ describe("Deepline capabilities", () => {
       })
     ).rejects.toMatchObject({ code: "APPROVAL_REQUIRED" })
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("aborts a hung provider request within its timeout budget", async () => {
+    const fetchMock = vi.fn(
+      async (_url: string | URL | Request, init?: RequestInit) =>
+        await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError"))
+          )
+        })
+    )
+
+    await expect(
+      executeDeeplineTool(
+        "hubspot_create_contact",
+        { email: "jane@acme.com" },
+        "dl_test",
+        fetchMock as typeof fetch,
+        5
+      )
+    ).rejects.toMatchObject({ name: "AbortError" })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("never persists provider response bodies in approval errors", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    stubFetch(
+      { error: "invalid token=secret-token privateKey=secret-private-key" },
+      { ok: false, status: 400 }
+    )
+    const payload = { email: "bad" }
+    const db = new FakeSupabase({
+      integration_accounts: dbWithKey().tables.integration_accounts,
+      mcp_action_approvals: [approvalRow(payload)],
+    })
+    const repo = new SignalSurfRepository(db as never)
+
+    await expect(
+      repo.deeplineExecuteTool(oauthContext, {
+        toolId: "hubspot_create_contact",
+        approvalRequestId: "00000000-0000-4000-8000-000000000777",
+        payload,
+      })
+    ).rejects.toMatchObject({ code: "EXTERNAL_ACTION_AMBIGUOUS" })
+    expect(db.tables.mcp_action_approvals[0].error).toBe(
+      "Provider request failed or timed out after dispatch."
+    )
   })
 
   it("allows only one concurrent caller to claim an approved action", async () => {

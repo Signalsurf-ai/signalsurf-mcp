@@ -13,6 +13,7 @@
 
 const DEFAULT_BASE_URL = "https://code.deepline.com"
 const EXECUTE_RESPONSE_CONTRACT = "v2-tool-response"
+export const DEFAULT_DEEPLINE_EXECUTE_TIMEOUT_MS = 60_000
 
 /** Tool ids confirmed against the live catalog; env-overridable. */
 export const DEEPLINE_TOOL_IDS = {
@@ -109,27 +110,31 @@ export async function executeDeeplineTool(
   toolId: string,
   payload: Record<string, unknown>,
   apiKey: string,
-  fetchImpl: FetchLike = fetch
+  fetchImpl: FetchLike = fetch,
+  timeoutMs = DEFAULT_DEEPLINE_EXECUTE_TIMEOUT_MS
 ): Promise<DeeplineEnvelope> {
-  const res = await fetchImpl(
-    `${baseUrl()}/api/v2/integrations/${encodeURIComponent(toolId)}/execute`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "x-deepline-execute-response-contract": EXECUTE_RESPONSE_CONTRACT,
-      },
-      body: JSON.stringify({ payload }),
-    }
-  )
-  if (!res.ok) {
-    const text = await res.text().catch(() => "")
-    throw new Error(
-      `Deepline ${toolId} -> HTTP ${res.status}${
-        text ? `: ${text.slice(0, 300)}` : ""
-      }`
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  let res: Response
+  try {
+    res = await fetchImpl(
+      `${baseUrl()}/api/v2/integrations/${encodeURIComponent(toolId)}/execute`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "x-deepline-execute-response-contract": EXECUTE_RESPONSE_CONTRACT,
+        },
+        body: JSON.stringify({ payload }),
+        signal: controller.signal,
+      }
     )
+  } finally {
+    clearTimeout(timeout)
+  }
+  if (!res.ok) {
+    throw new Error(`Deepline ${toolId} -> HTTP ${res.status}`)
   }
   return (await res.json()) as DeeplineEnvelope
 }

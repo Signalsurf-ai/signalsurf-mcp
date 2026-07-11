@@ -32,8 +32,11 @@ Web may additionally retain `user_id`, `client_id`, `preview`, `resolved_by`,
 Service-role access must be able to perform the conditional updates below;
 authenticated users should only read approvals authorized by product membership.
 
-Hosted MCP creates or reuses requests as `pending`; it stores only a redacted
-preview containing the tool ids, payload keys/count, and serialized byte count.
+Hosted MCP creates or reuses requests as `pending`; it stores only a conservative
+preview containing the tool ids, payload keys/count, serialized byte count, and
+allowlisted human-review fields such as recipient, subject, message, and target
+URL. Credential-like fields are redacted, unknown values are hidden, and URL
+query values are redacted.
 Identical unexpired pending requests are reused. Web resolves them with
 compare-and-set to `approved` or `rejected`. A partial unique index over the
 OAuth-grant/user/client/product/tool/provider/digest binding for
