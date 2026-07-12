@@ -194,9 +194,12 @@ Row data updates call `update_entry_with_source`; note updates call
 that cannot be handled by those RPCs.
 
 Table lifecycle tools mutate `databases` after product-scope validation.
-`create_table` and `update_table` can accept a full custom schema or shallow
-`schemaPatch`; field definitions are validated and `item_ref`/relation targets
-must belong to the same authorized product. `delete_table` hard-deletes
+`create_table` can also apply the canonical `outbound_accounts` or `contacts`
+template before additive custom fields. Template-owned fields retain their
+semantic types during creation. Later explicit schema tools remain available
+for user-directed customization. `create_table` and `update_table` otherwise
+accept a full custom schema or shallow `schemaPatch`; field definitions are validated and
+`item_ref`/relation targets must belong to the same authorized product. `delete_table` hard-deletes
 user-facing tables, refuses system tables, and removes deleted table ids from
 active Surf Points' `database_ids`, matching the SignalSurf Web delete flow.
 Schema field tools do not backfill, rewrite, or delete existing row data.

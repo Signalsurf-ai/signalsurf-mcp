@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import type { PublicMcpToolName } from "./capabilities.js"
+import { PUBLIC_TABLE_TEMPLATES } from "./table-templates.js"
 
 export const uuidSchema = z.string().uuid()
 export const jsonObjectSchema = z.record(z.string(), z.unknown())
@@ -235,6 +236,7 @@ export const listDatabasesSchema = {
 export const createTableSchema = {
   ...productTargetSchema,
   name: z.string().trim().min(1).max(100),
+  template: z.enum(PUBLIC_TABLE_TEMPLATES).optional(),
   description: z.string().trim().max(1000).nullish(),
   icon: z.string().trim().max(50).nullish(),
   color: z.string().trim().max(20).nullish(),

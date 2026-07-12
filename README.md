@@ -315,6 +315,9 @@ Tables:
   are hidden unless `includeSystem=true`.
 - `create_table`: creates a product table with optional custom schema, saved
   view config, item type, display order, and existing table folder placement.
+  Pass `template="outbound_accounts"` or `template="contacts"` to start from
+  the canonical outbound account or contact baseline. Extra schema fields are
+  additive; same-key fields in that create call cannot downgrade the baseline.
 - `update_table`: updates table metadata, custom schema, saved view config,
   item type, display order, or folder placement.
 - `delete_table`: hard-deletes one or more user-facing tables after product

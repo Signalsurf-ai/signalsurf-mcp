@@ -50,7 +50,7 @@ Never pass a null or guessed id — resolve productId, databaseId, surfPointId, 
 
 export function buildBuildLeadListPrompt(args: PromptArgs): string {
   const dbLine = args.databaseId
-    ? `Write leads into databaseId: ${args.databaseId} (already resolved).`
+    ? `Existing databaseId: ${args.databaseId}. Inspect its schema first. Use it for the account phase if it is an outbound account table, or for the people phase if it is a contacts table; create only the missing companion table. If it matches neither phase, ask before creating a replacement.`
     : "No target databaseId given yet — resolve or create one first."
 
   return `You are building a lead list in SignalSurf using Deepline. Deepline search and enrichment require a Deepline integration key on the product, and enrichment spends credits only on a hit.
@@ -60,11 +60,13 @@ ${productLine(args)}
 
 Follow these steps in order:
 1. Call get_context${args.productId ? "" : " and pick the productId if multiple are returned"}. Confirm the product has a Deepline integration key (the deepline_* tools fail without one).
-2. Choose the target table for leads (list_tables, or create_table), then call get_enrichment_context(databaseId${args.databaseId ? `="${args.databaseId}"` : ""}) to learn its schema so you map fields correctly.
-3. Find prospects: for companies, call deepline_search_companies with company filters such as keywords, funding_stages, locations, and employeeCount/employeeRanges. For contacts, call deepline_search_people with people filters such as person_titles, person_seniorities, person_locations, and organization_num_employees_ranges as ["11,50"]. Managed search uses Crustdata V3 by default; Apollo is only a deployment-level BYOC override. These paid searches return APPROVAL_REQUIRED before dispatch; ask the user to approve the displayed request, then repeat the exact call with approvalRequestId. They return preview rows + match counts; emails are NOT included here.
-4. For each prospect, call create_table_row mapping the preview fields onto the schema from step 2 (follow the field conventions).
-5. Find emails: call deepline_enrich_contact({ firstName, lastName, domain|companyName }) per lead. It uses the same one-time approval flow. Credits are spent only on a hit; misses are free.
-6. Write the found emails back with update_table_rows (one edit per row, all in a single call), then report how many leads were created and enriched.
+2. Route the source before searching. If the request names a concrete URL, directory, portfolio, ecosystem, customer list, or other bounded corpus, use the client's web research capability first and preserve source URLs. If it asks for a broad TAM or provider-filterable company segment, call deepline_search_companies. If it explicitly asks for people or titles, qualify the account set first, then call deepline_search_people only for those companies.
+3. Keep accounts and people separate. Reuse the matching table from list_tables, or create the account table with create_table({ name: "Outbound Accounts", template: "outbound_accounts" }). Create a separate people table with create_table({ name: "Outbound Contacts", template: "contacts" }); then call create_relation_field({ databaseId: <contacts databaseId>, key: "account", targetDatabaseId: <account databaseId> }). Template schemas are canonical baselines: add request-specific fields such as is_yc, but do not downgrade email, URL, lifecycle, or relation field types. If a databaseId was provided, inspect it and use it only for the matching phase.
+4. Call get_enrichment_context for the active table to learn its schema before mapping rows.
+5. Dispatch the selected search with a bounded 5-10 row limit unless the user explicitly requests another size. Managed Deepline uses Crustdata V3 by default; Apollo is only a deployment-level BYOC override. Paid searches return APPROVAL_REQUIRED before dispatch; the approval request is the confirmation boundary and must show the filters and bounded limit. After approval, repeat the exact call with approvalRequestId. Search returns preview rows and match counts; emails are not included.
+6. Call create_table_row for each selected prospect, mapping fields onto the active table schema and preserving source evidence.
+7. Only after accounts are qualified, find contacts and call deepline_enrich_contact({ firstName, lastName, domain|companyName }) when email is needed. It uses the same one-time approval flow. Credits are spent only on a hit; misses are free.
+8. Write found emails back to the contacts table with one update_table_rows call, then report account and contact counts separately.
 
 Never pass a null or guessed id — resolve productId and databaseId from the calls above first.`
 }

@@ -62,6 +62,10 @@ import {
   parseRunCondition,
   type RunCondition,
 } from "./run-condition.js"
+import {
+  applyPublicTableTemplate,
+  type PublicTableTemplate,
+} from "./table-templates.js"
 
 export const POPULAR_VALUES_SCAN_LIMIT = 1000
 export const POPULAR_VALUES_TOP_N = 30
@@ -338,6 +342,7 @@ type ListDatabasesInput = {
 
 type CreateTableInput = {
   name: string
+  template?: PublicTableTemplate
   description?: string | null
   icon?: string | null
   color?: string | null
@@ -3722,7 +3727,10 @@ export class SignalSurfRepository {
     if (input.folderId) {
       await this.assertDatabaseFolderBelongsToProduct(context, input.folderId)
     }
-    const schema = input.schema ?? { fields: [] }
+    const template = input.template
+      ? applyPublicTableTemplate(input.template, input.schema, input.viewConfigs)
+      : null
+    const schema = template?.schema ?? input.schema ?? { fields: [] }
     await this.validateDatabaseSchemaReferences(context, schema)
 
     const now = new Date().toISOString()
@@ -3732,13 +3740,17 @@ export class SignalSurfRepository {
         id: randomUUID(),
         product_id: context.productId,
         name: input.name.trim(),
-        description: input.description?.trim() || null,
+        description:
+          input.description === undefined
+            ? (template?.description ?? null)
+            : input.description?.trim() || null,
         icon: input.icon ?? null,
-        color: input.color ?? null,
+        color:
+          input.color === undefined ? (template?.color ?? null) : input.color,
         schema,
-        item_type: input.itemType?.trim() || null,
+        item_type: (template?.itemType ?? input.itemType?.trim()) || null,
         system_type: null,
-        view_configs: input.viewConfigs ?? {},
+        view_configs: template?.viewConfigs ?? input.viewConfigs ?? {},
         folder_id: input.folderId ?? null,
         display_order: input.displayOrder ?? 0,
         created_at: now,

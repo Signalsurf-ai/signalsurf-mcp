@@ -41,7 +41,13 @@ describe("buildBuildLeadListPrompt", () => {
     expect(text).toMatch(/deepline_search_people/)
     expect(text).toMatch(/create_table_row/)
     expect(text).toMatch(/deepline_enrich_contact/)
-    expect(text).toMatch(/update_table_row/)
+    expect(text).toMatch(/\bupdate_table_rows\b/)
+    expect(text).toContain('template: "outbound_accounts"')
+    expect(text).toContain('template: "contacts"')
+    expect(text).toContain('key: "account"')
+    expect(text).toMatch(/concrete.*portfolio.*web research/i)
+    expect(text).toMatch(/broad TAM.*deepline_search_companies/i)
+    expect(text).toMatch(/bounded 5-10 row limit/i)
   })
 
   it("embeds the resolved databaseId when provided", () => {

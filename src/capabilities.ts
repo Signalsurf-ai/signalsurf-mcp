@@ -386,7 +386,7 @@ export const PUBLIC_MCP_TOOLS = {
   create_table: {
     title: "Create Table",
     description:
-      "Create a SignalSurf table with optional custom schema, saved-view config, and folder placement in an authorized product.",
+      "Create a SignalSurf table from the canonical outbound_accounts or contacts template, or with an optional custom schema, saved-view config, and folder placement. During creation, template schemas preserve required field types while accepting additive fields.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
