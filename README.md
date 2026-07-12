@@ -200,10 +200,11 @@ internally, so every operation explicitly validates product ownership before
 touching rows. Surf point deletion is a soft delete (`deleted_at`), matching the
 web app behavior.
 
-Generic `deepline_execute_tool` calls use a two-step approval flow. Omit
+Chargeable Deepline calls use a two-step approval flow. This includes curated
+company/people search, contact enrichment, and generic tool execution. Omit
 `approvalRequestId` to create or reuse a redacted pending request, approve it in
-SignalSurf Web, then repeat the exact tool id and payload with the returned
-request id. The MCP server never approves requests itself.
+SignalSurf Web, then repeat the exact tool call with the returned request id.
+The MCP server never approves requests itself.
 
 OAuth clients can request broad compatibility scopes (`mcp:read`, `mcp:write`)
 or granular scopes. The protected resource metadata advertises the registered

@@ -15,12 +15,14 @@ export const deeplineSearchPeopleSchema = {
   ...productTargetSchema,
   filters: jsonObjectSchema.optional(),
   limit: z.number().int().min(1).max(25).default(10).optional(),
+  approvalRequestId: uuidSchema.optional(),
 }
 
 export const deeplineSearchCompaniesSchema = {
   ...productTargetSchema,
   filters: jsonObjectSchema.optional(),
   limit: z.number().int().min(1).max(25).default(10).optional(),
+  approvalRequestId: uuidSchema.optional(),
 }
 
 export const deeplineEnrichContactSchema = {
@@ -29,6 +31,7 @@ export const deeplineEnrichContactSchema = {
   lastName: z.string().trim().min(1).max(120),
   domain: z.string().trim().max(255).optional(),
   companyName: z.string().trim().max(255).optional(),
+  approvalRequestId: uuidSchema.optional(),
 }
 
 export const deeplineSearchCatalogSchema = {

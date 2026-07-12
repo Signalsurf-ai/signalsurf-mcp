@@ -118,8 +118,9 @@ compatibility, while granular scopes support least-privilege access to Surf
 Points, execution, table data, schemas, safe source controls, and product
 creation.
 
-Generic Deepline execution has an additional per-action boundary. This server
-creates or reuses a redacted, short-lived pending `mcp_action_approvals` row;
+Every chargeable Deepline search, enrichment, or generic execution has an
+additional per-action boundary. This server creates or reuses a redacted,
+short-lived pending `mcp_action_approvals` row;
 SignalSurf Web alone resolves it. The server later atomically claims one exact
 `approved` row as `executing`, bound to the active stable OAuth grant id,
 user, client, product, MCP tool name, provider tool id, canonical payload

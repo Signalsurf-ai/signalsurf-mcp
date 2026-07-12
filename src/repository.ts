@@ -105,6 +105,7 @@ type DeeplineSearchInput = {
   productId?: string
   filters?: Record<string, unknown>
   limit?: number
+  approvalRequestId?: string
 }
 type DeeplineEnrichInput = {
   productId?: string
@@ -112,6 +113,7 @@ type DeeplineEnrichInput = {
   lastName: string
   domain?: string
   companyName?: string
+  approvalRequestId?: string
 }
 type DeeplineCatalogSearchInput = {
   productId?: string
@@ -123,6 +125,10 @@ type DeeplineExecuteToolInput = {
   toolId: string
   approvalRequestId?: string
   payload?: JsonRecord
+  approvalMcpToolName?:
+    | "deepline_search_people"
+    | "deepline_search_companies"
+    | "deepline_enrich_contact"
 }
 
 type ListSurfPointsInput = {
@@ -1830,7 +1836,9 @@ export class SignalSurfRepository {
     kind: "people" | "companies",
     input: DeeplineSearchInput
   ) {
-    const apiKey = await this.resolveDeeplineApiKey(context)
+    // Avoid creating unusable approvals, but once approved let the shared
+    // executor consume and finalize the request before credential lookup.
+    if (!input.approvalRequestId) await this.resolveDeeplineApiKey(context)
     let payload: JsonRecord
     try {
       payload = buildDeeplineSearchPayload(
@@ -1851,14 +1859,26 @@ export class SignalSurfRepository {
         { code: "INVALID_INPUT", status: 400 }
       )
     }
-    const envelope = await executeDeeplineTool(toolId, payload, apiKey)
-    if (envelope.status !== undefined && !deeplineStatusOk(envelope.status)) {
-      throw new UserFacingError(`Deepline returned status ${envelope.status}`, {
+    const execution = await this.deeplineExecuteTool(context, {
+      toolId,
+      payload,
+      approvalRequestId: input.approvalRequestId,
+      approvalMcpToolName:
+        kind === "people"
+          ? "deepline_search_people"
+          : "deepline_search_companies",
+    })
+    if (!execution.ok) {
+      throw new UserFacingError(`Deepline returned status ${execution.status}`, {
         code: "UPSTREAM_ERROR",
         status: 502,
       })
     }
-    return { toolId, result: unwrapDeepline(envelope) }
+    return {
+      toolId,
+      result: execution.result,
+      credits_consumed: execution.credits_consumed,
+    }
   }
 
   async deeplineSearchPeople(
@@ -1897,7 +1917,9 @@ export class SignalSurfRepository {
         { code: "INVALID_INPUT", status: 400 }
       )
     }
-    const apiKey = await this.resolveDeeplineApiKey(context)
+    // Avoid creating unusable approvals, but once approved let the shared
+    // executor consume and finalize the request before credential lookup.
+    if (!input.approvalRequestId) await this.resolveDeeplineApiKey(context)
     const payload = cleanDeeplinePayload({
       first_name: input.firstName,
       last_name: input.lastName,
@@ -1905,14 +1927,19 @@ export class SignalSurfRepository {
       company_name: input.companyName,
     })
     const toolId = DEEPLINE_TOOL_IDS.emailFinder()
-    const envelope = await executeDeeplineTool(toolId, payload, apiKey)
-    if (envelope.status !== undefined && !deeplineStatusOk(envelope.status)) {
-      throw new UserFacingError(`Deepline returned status ${envelope.status}`, {
+    const execution = await this.deeplineExecuteTool(context, {
+      toolId,
+      payload,
+      approvalRequestId: input.approvalRequestId,
+      approvalMcpToolName: "deepline_enrich_contact",
+    })
+    if (!execution.ok) {
+      throw new UserFacingError(`Deepline returned status ${execution.status}`, {
         code: "UPSTREAM_ERROR",
         status: 502,
       })
     }
-    const raw = unwrapDeepline(envelope)
+    const raw = execution.result
     const record =
       raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
     const email =
@@ -1921,7 +1948,13 @@ export class SignalSurfRepository {
         : typeof record.work_email === "string"
           ? (record.work_email as string)
           : null
-    return { toolId, email, status: record.status ?? null, result: raw }
+    return {
+      toolId,
+      email,
+      status: record.status ?? null,
+      result: raw,
+      credits_consumed: execution.credits_consumed,
+    }
   }
 
   async deeplineSearchCatalog(
@@ -1946,6 +1979,8 @@ export class SignalSurfRepository {
     const payload = input.payload ?? {}
     const payloadSha256 = mcpActionPayloadSha256(payload)
     const approvalRequestId = readTrimmedString(input.approvalRequestId)
+    const mcpToolName =
+      input.approvalMcpToolName ?? "deepline_execute_tool"
     const externalAction = `deepline:${input.toolId}`
 
     if (
@@ -1956,12 +1991,12 @@ export class SignalSurfRepository {
       !context.oauthClientId
     ) {
       throw new UserFacingError(
-        "deepline_execute_tool requires a hosted OAuth connection and an approved, unexpired one-time action request from SignalSurf Web.",
+        `${mcpToolName} requires a hosted OAuth connection and an approved, unexpired one-time action request from SignalSurf Web.`,
         {
           code: "APPROVAL_REQUIRED",
           status: 409,
           details: {
-            mcpToolName: "deepline_execute_tool",
+            mcpToolName,
             externalAction,
             payloadSha256,
           },
@@ -2035,7 +2070,7 @@ export class SignalSurfRepository {
             provider_tool_id: input.toolId,
             payload_sha256: payloadSha256,
             preview: {
-              toolName: "deepline_execute_tool",
+              toolName: mcpToolName,
               providerToolId: input.toolId,
               payload: {
                 values: redactApprovalPreviewValue(payload),
@@ -2069,7 +2104,7 @@ export class SignalSurfRepository {
 
       const requestId = String(pending.id)
       throw new UserFacingError(
-        "This external action is pending approval in SignalSurf Web; no external action was attempted.",
+        `${mcpToolName} requires approval in SignalSurf Web. Approve the request, then repeat the exact ${mcpToolName} call with approvalRequestId; no external action was attempted.`,
         {
           code: "APPROVAL_REQUIRED",
           status: 409,
@@ -2078,7 +2113,7 @@ export class SignalSurfRepository {
             approvalUrl: mcpActionApprovalUrl(requestId),
             status: "pending",
             expiresAt: pending.expires_at,
-            mcpToolName: "deepline_execute_tool",
+            mcpToolName,
             externalAction,
             payloadSha256,
           },
@@ -2115,13 +2150,13 @@ export class SignalSurfRepository {
     }
     if (!consumed) {
       throw new UserFacingError(
-        "The action approval is missing, pending, expired, mismatched, denied, or already consumed; no external action was attempted.",
+        `The ${mcpToolName} approval is missing, pending, expired, mismatched, denied, or already consumed; no external action was attempted.`,
         {
           code: "APPROVAL_REQUIRED",
           status: 409,
           details: {
             approvalRequestId,
-            mcpToolName: "deepline_execute_tool",
+            mcpToolName,
             externalAction,
             payloadSha256,
           },

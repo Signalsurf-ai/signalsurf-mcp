@@ -61,9 +61,9 @@ ${productLine(args)}
 Follow these steps in order:
 1. Call get_context${args.productId ? "" : " and pick the productId if multiple are returned"}. Confirm the product has a Deepline integration key (the deepline_* tools fail without one).
 2. Choose the target table for leads (list_tables, or create_table), then call get_enrichment_context(databaseId${args.databaseId ? `="${args.databaseId}"` : ""}) to learn its schema so you map fields correctly.
-3. Find prospects: for companies, call deepline_search_companies with company filters such as keywords, funding_stages, locations, and employeeCount/employeeRanges. For contacts, call deepline_search_people with people filters such as person_titles, person_seniorities, person_locations, and organization_num_employees_ranges as ["11,50"]. Managed search uses Crustdata V3 by default; Apollo is only a deployment-level BYOC override. These return preview rows + match counts; emails are NOT included here.
+3. Find prospects: for companies, call deepline_search_companies with company filters such as keywords, funding_stages, locations, and employeeCount/employeeRanges. For contacts, call deepline_search_people with people filters such as person_titles, person_seniorities, person_locations, and organization_num_employees_ranges as ["11,50"]. Managed search uses Crustdata V3 by default; Apollo is only a deployment-level BYOC override. These paid searches return APPROVAL_REQUIRED before dispatch; ask the user to approve the displayed request, then repeat the exact call with approvalRequestId. They return preview rows + match counts; emails are NOT included here.
 4. For each prospect, call create_table_row mapping the preview fields onto the schema from step 2 (follow the field conventions).
-5. Find emails: call deepline_enrich_contact({ firstName, lastName, domain|companyName }) per lead. Credits are spent only on a hit; misses are free.
+5. Find emails: call deepline_enrich_contact({ firstName, lastName, domain|companyName }) per lead. It uses the same one-time approval flow. Credits are spent only on a hit; misses are free.
 6. Write the found emails back with update_table_rows (one edit per row, all in a single call), then report how many leads were created and enriched.
 
 Never pass a null or guessed id — resolve productId and databaseId from the calls above first.`

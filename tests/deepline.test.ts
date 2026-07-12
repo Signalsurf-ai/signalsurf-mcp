@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { executeDeeplineTool } from "../src/deepline.js"
+import { buildDeeplineSearchPayload } from "../src/deepline-search.js"
 import {
   mcpActionPayloadSha256,
   SignalSurfRepository,
@@ -78,11 +79,25 @@ describe("Deepline capabilities", () => {
       status: "completed",
       toolResponse: { raw: { email: "jane@acme.com", status: "valid" } },
     })
-    const repo = new SignalSurfRepository(dbWithKey() as never)
-    const res = await repo.deeplineEnrichContact(context, {
+    const payload = {
+      first_name: "Jane",
+      last_name: "Doe",
+      domain: "acme.com",
+    }
+    const db = new FakeSupabase({
+      integration_accounts: dbWithKey().tables.integration_accounts,
+      mcp_action_approvals: [
+        approvalRow(payload, {
+          provider_tool_id: "leadmagic_email_finder",
+        }),
+      ],
+    })
+    const repo = new SignalSurfRepository(db as never)
+    const res = await repo.deeplineEnrichContact(oauthContext, {
       firstName: "Jane",
       lastName: "Doe",
       domain: "acme.com",
+      approvalRequestId: "00000000-0000-4000-8000-000000000777",
     })
     expect(res.email).toBe("jane@acme.com")
     const call = (fetchMock as unknown as { mock: { calls: unknown[][] } }).mock
@@ -103,10 +118,26 @@ describe("Deepline capabilities", () => {
       status: "completed",
       toolResponse: { raw: { total_entries: 5, people: [] } },
     })
-    const repo = new SignalSurfRepository(dbWithKey() as never)
-    const res = await repo.deeplineSearchPeople(context, {
-      filters: { person_titles: ["VP of Sales"] },
+    const filters = { person_titles: ["VP of Sales"] }
+    const payload = buildDeeplineSearchPayload(
+      "crustdata_v3_person_search",
+      "people",
+      filters,
+      3
+    )
+    const db = new FakeSupabase({
+      integration_accounts: dbWithKey().tables.integration_accounts,
+      mcp_action_approvals: [
+        approvalRow(payload, {
+          provider_tool_id: "crustdata_v3_person_search",
+        }),
+      ],
+    })
+    const repo = new SignalSurfRepository(db as never)
+    const res = await repo.deeplineSearchPeople(oauthContext, {
+      filters,
       limit: 3,
+      approvalRequestId: "00000000-0000-4000-8000-000000000777",
     })
     expect((res.result as { total_entries: number }).total_entries).toBe(5)
     const call = (fetchMock as unknown as { mock: { calls: unknown[][] } }).mock
@@ -130,6 +161,76 @@ describe("Deepline capabilities", () => {
           },
         ],
       },
+    })
+  })
+
+  it("requires one-time approval before a curated company search dispatches", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    vi.stubEnv(
+      "SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL",
+      "https://www.signalsurf.ai"
+    )
+    const providerCall = vi.fn()
+    vi.stubGlobal("fetch", providerCall)
+    const db = dbWithKey()
+    const repo = new SignalSurfRepository(db as never)
+
+    await expect(
+      repo.deeplineSearchCompanies(oauthContext, {
+        filters: { funding_stages: ["Seed"] },
+        limit: 5,
+      })
+    ).rejects.toMatchObject({
+      code: "APPROVAL_REQUIRED",
+      message: expect.stringContaining("deepline_search_companies requires"),
+      details: {
+        requestId: expect.any(String),
+        approvalUrl: expect.stringContaining("/approvals?mcpAction="),
+        mcpToolName: "deepline_search_companies",
+      },
+    })
+    expect(providerCall).not.toHaveBeenCalled()
+    expect(db.tables.mcp_action_approvals).toHaveLength(1)
+    expect(db.tables.mcp_action_approvals[0]).toMatchObject({
+      tool_name: "deepline_execute_tool",
+      provider_tool_id: "crustdata_v3_company_search",
+      status: "pending",
+    })
+  })
+
+  it("consumes an approved curated search before credential lookup fails", async () => {
+    vi.stubEnv("DEEPLINE_DISABLED", "")
+    vi.stubEnv("DEEPLINE_API_KEY", "")
+    const providerCall = vi.fn()
+    vi.stubGlobal("fetch", providerCall)
+    const filters = { funding_stages: ["Seed"] }
+    const payload = buildDeeplineSearchPayload(
+      "crustdata_v3_company_search",
+      "companies",
+      filters,
+      5
+    )
+    const db = new FakeSupabase({
+      integration_accounts: [],
+      mcp_action_approvals: [
+        approvalRow(payload, {
+          provider_tool_id: "crustdata_v3_company_search",
+        }),
+      ],
+    })
+    const repo = new SignalSurfRepository(db as never)
+
+    await expect(
+      repo.deeplineSearchCompanies(oauthContext, {
+        filters,
+        limit: 5,
+        approvalRequestId: "00000000-0000-4000-8000-000000000777",
+      })
+    ).rejects.toThrow(/not connected/i)
+    expect(providerCall).not.toHaveBeenCalled()
+    expect(db.tables.mcp_action_approvals[0]).toMatchObject({
+      status: "failed",
+      error: "Deepline credential lookup failed.",
     })
   })
 
