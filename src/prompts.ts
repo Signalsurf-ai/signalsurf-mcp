@@ -1,19 +1,19 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
-import { DEEPLINE_TOOL_IDS } from "./deepline.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import { z } from "zod"
+import { DEEPLINE_TOOL_IDS } from "./deepline.js"
 
-type PromptArgs = { databaseId?: string; productId?: string };
+type PromptArgs = { databaseId?: string; productId?: string }
 
 function productLine(args: PromptArgs): string {
   return args.productId
     ? `Use productId ${args.productId} on every product-scoped call.`
-    : "If get_context reports multiple products, pass the chosen productId on every call.";
+    : "If get_context reports multiple products, pass the chosen productId on every call."
 }
 
 export function buildEnrichTablePrompt(args: PromptArgs): string {
   const dbLine = args.databaseId
     ? `Target databaseId: ${args.databaseId} (already resolved — skip discovery).`
-    : "No databaseId given yet — resolve it first.";
+    : "No databaseId given yet — resolve it first."
 
   return `You are operating SignalSurf to enrich a whole table. The SignalSurf brain fills each cell server-side; your job is to set up, trigger, and poll — not to fill cells by hand.
 
@@ -35,7 +35,7 @@ Follow these steps in order:
 4. Call run_quick_surf(databaseId, fieldKey, scope="all") for each enabled column to backfill missing cells among the newest 1000 rows. Populated cells and already-running jobs are skipped by default. Pass overwriteExisting=true only when the user explicitly asks to refresh existing values; for tables over 1000 rows, page read_table and run explicit entryIds for older rows.
 5. Poll with wait_for_surf_job / list_surf_jobs until jobs finish, then report which columns were filled and any skipped rows.
 
-Never pass a null or guessed id — always resolve real ids in steps 1–2 first.`;
+Never pass a null or guessed id — always resolve real ids in steps 1–2 first.`
 }
 
 export function buildSetUpSurfPointPrompt(args: PromptArgs): string {
@@ -56,13 +56,13 @@ Follow these steps in order:
 6. Multi-step / branching surf point: call describe_node_types to learn the node types and legal edge conditions, then build the graph with update_surf_point_flow (whole graph) or apply_flow_edits (incremental, atomic). Before mapping a create_row/object_sink node's fields, call get_node_upstream_context so the keys are real columns. For a contact-list email drip, use create_campaign instead of hand-wiring a sequence.
 7. Trigger a first run with run_surf_point({ surfPointId }), then poll with wait_for_surf_job / list_surf_jobs and report the result.
 
-Never pass a null or guessed id — resolve productId, databaseId, surfPointId, and node ids from the calls above before using them.`;
+Never pass a null or guessed id — resolve productId, databaseId, surfPointId, and node ids from the calls above before using them.`
 }
 
 export function buildBuildLeadListPrompt(args: PromptArgs): string {
   const dbLine = args.databaseId
     ? `Existing databaseId: ${args.databaseId}. Inspect its schema first. Use it for the account phase if it is an outbound account table, or for the people phase if it is a contacts table; create only the missing companion table. If it matches neither phase, ask before creating a replacement.`
-    : "No target databaseId given yet — resolve or create one first.";
+    : "No target databaseId given yet — resolve or create one first."
 
   return `You are building a lead list in SignalSurf using Deepline. Deepline search and enrichment require a Deepline integration key on the product, and enrichment spends credits only on a hit.
 
@@ -82,15 +82,15 @@ Follow these steps in order:
 8. Only after accounts are qualified, find contacts and call deepline_enrich_contact({ firstName, lastName, domain|companyName }) when email is needed. It uses the same one-time approval flow. Credits are spent only on a hit; misses are free.
 9. Write found emails back to the contacts table with one update_table_rows call, then report account and contact counts separately.
 
-Never pass a null or guessed id — resolve productId and databaseId from the calls above first.`;
+Never pass a null or guessed id — resolve productId and databaseId from the calls above first.`
 }
 
 type PromptDefinition = {
-  name: string;
-  title: string;
-  description: string;
-  build: (args: PromptArgs) => string;
-};
+  name: string
+  title: string
+  description: string
+  build: (args: PromptArgs) => string
+}
 
 const PROMPTS: PromptDefinition[] = [
   {
@@ -114,13 +114,13 @@ const PROMPTS: PromptDefinition[] = [
       "Guided workflow to find prospects with Deepline, write them into a table, and enrich verified emails.",
     build: buildBuildLeadListPrompt,
   },
-];
+]
 
 export const PROMPT_CATALOG = PROMPTS.map(({ name, title, description }) => ({
   name,
   title,
   description,
-}));
+}))
 
 export function registerPrompts(server: McpServer): void {
   for (const prompt of PROMPTS) {
@@ -142,6 +142,6 @@ export function registerPrompts(server: McpServer): void {
           },
         ],
       })
-    );
+    )
   }
 }

@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from "node:crypto";
-import { setTimeout as sleep } from "node:timers/promises";
+import { createHash, randomUUID } from "node:crypto"
+import { setTimeout as sleep } from "node:timers/promises"
 
 import type {
   AccessRole,
@@ -10,7 +10,7 @@ import type {
   SignalSurfProductContext,
   SupabaseLike,
   SurfPointRow,
-} from "./types.js";
+} from "./types.js"
 import {
   buildImportMappingPreview,
   importMappingSummary,
@@ -18,14 +18,14 @@ import {
   readImportMappingValue,
   type ImportMappingPreviewRow,
   type ImportMappingV1,
-} from "./import-mapping.js";
+} from "./import-mapping.js"
 import {
   grantedCapabilitiesForScopes,
   isSupportedMcpScope,
   parseStoredScopes,
   scopesImplyWriteAccess,
-} from "./capabilities.js";
-import { sha256Hex } from "./auth.js";
+} from "./capabilities.js"
+import { sha256Hex } from "./auth.js"
 import {
   DEEPLINE_TOOL_IDS,
   cleanDeeplinePayload,
@@ -35,15 +35,15 @@ import {
   listDeeplineTools,
   type DeeplineEnvelope,
   unwrapDeepline,
-} from "./deepline.js";
+} from "./deepline.js"
 import {
   buildDeeplineSearchPayload,
   deeplineSearchPayloadHasConstraint,
-} from "./deepline-search.js";
-import { UserFacingError } from "./errors.js";
-import { canonicalJson, canonicalSha256 } from "./canonical-json.js";
-import { FIELD_CONVENTIONS } from "./conventions.js";
-import { aggregatePopularValues } from "./popular-values.js";
+} from "./deepline-search.js"
+import { UserFacingError } from "./errors.js"
+import { canonicalJson, canonicalSha256 } from "./canonical-json.js"
+import { FIELD_CONVENTIONS } from "./conventions.js"
+import { aggregatePopularValues } from "./popular-values.js"
 import {
   FLOW_VERSION,
   applyFlowEdits as applyFlowEditsToGraph,
@@ -56,26 +56,26 @@ import {
   validateFlow,
   type FlowEditOp,
   type SurfPointFlowV2,
-} from "./surf-flow/index.js";
+} from "./surf-flow/index.js"
 import {
   evaluateRunCondition,
   parseRunCondition,
   type RunCondition,
-} from "./run-condition.js";
+} from "./run-condition.js"
 import {
   applyPublicTableTemplate,
   type PublicTableTemplate,
-} from "./table-templates.js";
+} from "./table-templates.js"
 
-export const POPULAR_VALUES_SCAN_LIMIT = 1000;
-export const POPULAR_VALUES_TOP_N = 30;
-export const MCP_ACTION_APPROVAL_TTL_MS = 10 * 60 * 1000;
-const APPROVAL_PREVIEW_MAX_DEPTH = 4;
-const APPROVAL_PREVIEW_MAX_FIELDS = 50;
-const APPROVAL_PREVIEW_MAX_ARRAY_ITEMS = 20;
-const APPROVAL_PREVIEW_MAX_STRING_LENGTH = 500;
+export const POPULAR_VALUES_SCAN_LIMIT = 1000
+export const POPULAR_VALUES_TOP_N = 30
+export const MCP_ACTION_APPROVAL_TTL_MS = 10 * 60 * 1000
+const APPROVAL_PREVIEW_MAX_DEPTH = 4
+const APPROVAL_PREVIEW_MAX_FIELDS = 50
+const APPROVAL_PREVIEW_MAX_ARRAY_ITEMS = 20
+const APPROVAL_PREVIEW_MAX_STRING_LENGTH = 500
 const APPROVAL_PREVIEW_SENSITIVE_KEY =
-  /(authorization|bearer|cookie|credential|password|secret|session|signature|token|privatekey|sshkey|accesskey|apikey)$/i;
+  /(authorization|bearer|cookie|credential|password|secret|session|signature|token|privatekey|sshkey|accesskey|apikey)$/i
 const APPROVAL_PREVIEW_SAFE_KEY = new Set([
   "bcc",
   "body",
@@ -104,144 +104,144 @@ const APPROVAL_PREVIEW_SAFE_KEY = new Set([
   "to",
   "url",
   "urls",
-]);
+])
 
 type DeeplineSearchInput = {
-  productId?: string;
-  filters?: Record<string, unknown>;
-  limit?: number;
-  approvalRequestId?: string;
-};
+  productId?: string
+  filters?: Record<string, unknown>
+  limit?: number
+  approvalRequestId?: string
+}
 type DeeplineEnrichInput = {
-  productId?: string;
-  firstName: string;
-  lastName: string;
-  domain?: string;
-  companyName?: string;
-  approvalRequestId?: string;
-};
+  productId?: string
+  firstName: string
+  lastName: string
+  domain?: string
+  companyName?: string
+  approvalRequestId?: string
+}
 type DeeplineCatalogSearchInput = {
-  productId?: string;
-  query?: string;
-  limit?: number;
-};
+  productId?: string
+  query?: string
+  limit?: number
+}
 type DeeplineExecuteToolInput = {
-  productId?: string;
-  toolId: string;
-  approvalRequestId?: string;
-  payload?: JsonRecord;
+  productId?: string
+  toolId: string
+  approvalRequestId?: string
+  payload?: JsonRecord
   approvalMcpToolName?:
     | "deepline_search_people"
     | "deepline_search_companies"
-    | "deepline_enrich_contact";
-};
+    | "deepline_enrich_contact"
+}
 
 type ListSurfPointsInput = {
-  includeInactive?: boolean;
-  limit?: number;
-};
+  includeInactive?: boolean
+  limit?: number
+}
 
 type CreateProductInput = {
-  name: string;
-  organizationId?: string;
-  displayOrder?: number;
-};
+  name: string
+  organizationId?: string
+  displayOrder?: number
+}
 
 type CreateSurfPointInput = {
-  name: string;
-  description?: string;
-  color?: string;
-  icon?: string;
-  folderId?: string | null;
-  databaseIds?: string[];
-  promptTemplate?: string;
-  scoringRubric?: string;
-  surfPrompt?: string;
-  relevanceThreshold?: number | null;
-  isActive?: boolean;
-  showAiDashboard?: boolean;
-  variables?: JsonRecord;
-  toolConfig?: JsonRecord;
-  viewConfigs?: JsonRecord;
-  config?: JsonRecord;
-};
+  name: string
+  description?: string
+  color?: string
+  icon?: string
+  folderId?: string | null
+  databaseIds?: string[]
+  promptTemplate?: string
+  scoringRubric?: string
+  surfPrompt?: string
+  relevanceThreshold?: number | null
+  isActive?: boolean
+  showAiDashboard?: boolean
+  variables?: JsonRecord
+  toolConfig?: JsonRecord
+  viewConfigs?: JsonRecord
+  config?: JsonRecord
+}
 
 type UpdateSurfPointInput = {
-  surfPointId: string;
-  name?: string;
-  description?: string | null;
-  color?: string;
-  icon?: string;
-  folderId?: string | null;
-  databaseIds?: string[];
-  promptTemplate?: string | null;
-  scoringRubric?: string | null;
-  surfPrompt?: string | null;
-  relevanceThreshold?: number | null;
-  isActive?: boolean;
-  showAiDashboard?: boolean;
-  variables?: JsonRecord | null;
-  variablesPatch?: JsonRecord;
-  toolConfig?: JsonRecord | null;
-  toolConfigPatch?: JsonRecord;
-  viewConfigs?: JsonRecord | null;
-  config?: JsonRecord | null;
-  configPatch?: JsonRecord;
-};
+  surfPointId: string
+  name?: string
+  description?: string | null
+  color?: string
+  icon?: string
+  folderId?: string | null
+  databaseIds?: string[]
+  promptTemplate?: string | null
+  scoringRubric?: string | null
+  surfPrompt?: string | null
+  relevanceThreshold?: number | null
+  isActive?: boolean
+  showAiDashboard?: boolean
+  variables?: JsonRecord | null
+  variablesPatch?: JsonRecord
+  toolConfig?: JsonRecord | null
+  toolConfigPatch?: JsonRecord
+  viewConfigs?: JsonRecord | null
+  config?: JsonRecord | null
+  configPatch?: JsonRecord
+}
 
 type RunSurfPointInput = {
-  surfPointId: string;
-  idempotencyKey?: string;
-  allowInactive?: boolean;
-  dedupePending?: boolean;
-};
+  surfPointId: string
+  idempotencyKey?: string
+  allowInactive?: boolean
+  dedupePending?: boolean
+}
 
 type EnableQuickSurfInput = {
-  databaseId: string;
-  fieldKey: string;
-  whatToDo: string;
-  auto?: "off" | "on_created";
-  runCondition?: RunCondition;
-};
+  databaseId: string
+  fieldKey: string
+  whatToDo: string
+  auto?: "off" | "on_created"
+  runCondition?: RunCondition
+}
 
 type DisableQuickSurfInput = {
-  databaseId: string;
-  fieldKey: string;
-};
+  databaseId: string
+  fieldKey: string
+}
 
 type ListQuickSurfInput = {
-  databaseId: string;
-};
+  databaseId: string
+}
 
 type RunQuickSurfInput = {
-  databaseId: string;
-  fieldKey: string;
-  scope?: "first10" | "first100" | "all";
-  entryId?: string;
-  entryIds?: string[];
-  overwriteExisting?: boolean;
-};
+  databaseId: string
+  fieldKey: string
+  scope?: "first10" | "first100" | "all"
+  entryId?: string
+  entryIds?: string[]
+  overwriteExisting?: boolean
+}
 
 const QUICK_SURF_SCOPE_LIMITS: Record<string, number> = {
   first10: 10,
   first100: 100,
   all: 1000,
-};
+}
 
 function hasQuickSurfCellValue(data: unknown, fieldKey: string): boolean {
-  const value = asRecord((data ?? {}) as JsonRecord)[fieldKey];
-  if (value == null) return false;
-  if (typeof value === "string") return value.trim().length > 0;
-  if (Array.isArray(value)) return value.length > 0;
-  return true;
+  const value = asRecord((data ?? {}) as JsonRecord)[fieldKey]
+  if (value == null) return false
+  if (typeof value === "string") return value.trim().length > 0
+  if (Array.isArray(value)) return value.length > 0
+  return true
 }
 
 function buildQuickSurfMetadata(
   input: {
-    databaseId: string;
-    fieldKey: string;
-    auto?: "off" | "on_created";
-    runCondition?: RunCondition;
+    databaseId: string
+    fieldKey: string
+    auto?: "off" | "on_created"
+    runCondition?: RunCondition
   },
   existing?: JsonRecord
 ): JsonRecord {
@@ -251,70 +251,70 @@ function buildQuickSurfMetadata(
     database_id: input.databaseId,
     target_field: input.fieldKey,
     disabled: false,
-  };
+  }
   if (input.auto === "on_created") {
-    metadata.auto = "on_created";
+    metadata.auto = "on_created"
   } else if (input.auto === "off") {
-    delete metadata.auto;
+    delete metadata.auto
   }
   if (input.runCondition !== undefined) {
-    const runCondition = parseRunCondition(input.runCondition);
+    const runCondition = parseRunCondition(input.runCondition)
     if (runCondition) {
-      metadata.run_condition = runCondition;
+      metadata.run_condition = runCondition
     } else {
-      delete metadata.run_condition;
+      delete metadata.run_condition
     }
   }
-  return metadata;
+  return metadata
 }
 
 type ListProductToolsInput = {
-  includeDisabled?: boolean;
-  limit?: number;
-};
+  includeDisabled?: boolean
+  limit?: number
+}
 
-type AccountListProvider = "apollo" | "crunchbase" | "pdl" | "bycrawl";
+type AccountListProvider = "apollo" | "crunchbase" | "pdl" | "bycrawl"
 
 type AccountListConfigInput = JsonRecord & {
-  enabled?: boolean;
-  providers?: AccountListProvider[];
-  previewLimit?: number;
-  company?: JsonRecord;
-  people?: JsonRecord;
-  liveSignals?: JsonRecord;
-};
+  enabled?: boolean
+  providers?: AccountListProvider[]
+  previewLimit?: number
+  company?: JsonRecord
+  people?: JsonRecord
+  liveSignals?: JsonRecord
+}
 
 type ListAccountListProfilesInput = {
-  includeArchived?: boolean;
-  limit?: number;
-};
+  includeArchived?: boolean
+  limit?: number
+}
 
-type AccountListProfileSource = "manual" | "ai_draft" | "onboarding";
+type AccountListProfileSource = "manual" | "ai_draft" | "onboarding"
 
 type SaveAccountListProfileInput = {
-  id?: string;
-  name: string;
-  description?: string | null;
-  source?: AccountListProfileSource;
-  accountList: AccountListConfigInput;
-  aiPrompt?: string | null;
-  aiSummary?: string | null;
-  sampleAccounts?: string[];
-  rejectAccounts?: string[];
-};
+  id?: string
+  name: string
+  description?: string | null
+  source?: AccountListProfileSource
+  accountList: AccountListConfigInput
+  aiPrompt?: string | null
+  aiSummary?: string | null
+  sampleAccounts?: string[]
+  rejectAccounts?: string[]
+}
 
 type ListSurfJobsInput = {
-  surfPointId?: string;
-  status?: string;
-  limit?: number;
-  offset?: number;
-};
+  surfPointId?: string
+  status?: string
+  limit?: number
+  offset?: number
+}
 
 type WaitForSurfJobInput = {
-  jobId: string;
-  timeoutMs?: number;
-  pollIntervalMs?: number;
-};
+  jobId: string
+  timeoutMs?: number
+  pollIntervalMs?: number
+}
 
 type TableFilterOperator =
   | "eq"
@@ -332,124 +332,124 @@ type TableFilterOperator =
   | "between"
   | "array_contains"
   | "relation_is"
-  | "relation_in";
+  | "relation_in"
 
 type TableFilterInput = {
-  field: string;
-  op: TableFilterOperator;
-  value?: unknown;
-};
+  field: string
+  op: TableFilterOperator
+  value?: unknown
+}
 
 type TableSortInput = {
-  field: string;
-  direction?: "asc" | "desc";
-};
+  field: string
+  direction?: "asc" | "desc"
+}
 
 type ListDatabasesInput = {
-  includeSystem?: boolean;
-  limit?: number;
-};
+  includeSystem?: boolean
+  limit?: number
+}
 
 type CreateTableInput = {
-  name: string;
-  template?: PublicTableTemplate;
-  description?: string | null;
-  icon?: string | null;
-  color?: string | null;
-  schema?: JsonRecord;
-  itemType?: string | null;
-  viewConfigs?: JsonRecord;
-  folderId?: string | null;
-  displayOrder?: number;
-};
+  name: string
+  template?: PublicTableTemplate
+  description?: string | null
+  icon?: string | null
+  color?: string | null
+  schema?: JsonRecord
+  itemType?: string | null
+  viewConfigs?: JsonRecord
+  folderId?: string | null
+  displayOrder?: number
+}
 
 type UpdateTableInput = {
-  databaseId: string;
-  template?: PublicTableTemplate;
-  name?: string;
-  description?: string | null;
-  icon?: string | null;
-  color?: string | null;
-  schema?: JsonRecord | null;
-  schemaPatch?: JsonRecord;
-  itemType?: string | null;
-  viewConfigs?: JsonRecord | null;
-  folderId?: string | null;
-  displayOrder?: number;
-};
+  databaseId: string
+  template?: PublicTableTemplate
+  name?: string
+  description?: string | null
+  icon?: string | null
+  color?: string | null
+  schema?: JsonRecord | null
+  schemaPatch?: JsonRecord
+  itemType?: string | null
+  viewConfigs?: JsonRecord | null
+  folderId?: string | null
+  displayOrder?: number
+}
 
 type ReadTableInput = {
-  databaseId: string;
-  limit?: number;
-  offset?: number;
-  orderBy?: "created_at" | "updated_at";
-  ascending?: boolean;
-  dataContains?: JsonRecord;
-  filters?: TableFilterInput[];
-  filterLogic?: "and" | "or";
-  sorts?: TableSortInput[];
-  scanLimit?: number;
-};
+  databaseId: string
+  limit?: number
+  offset?: number
+  orderBy?: "created_at" | "updated_at"
+  ascending?: boolean
+  dataContains?: JsonRecord
+  filters?: TableFilterInput[]
+  filterLogic?: "and" | "or"
+  sorts?: TableSortInput[]
+  scanLimit?: number
+}
 
 type ReadTableViewInput = {
-  databaseId: string;
-  viewId: string;
-  limit?: number;
-  offset?: number;
-  filters?: TableFilterInput[];
-  filterLogic?: "and" | "or";
-  sorts?: TableSortInput[];
-  scanLimit?: number;
-};
+  databaseId: string
+  viewId: string
+  limit?: number
+  offset?: number
+  filters?: TableFilterInput[]
+  filterLogic?: "and" | "or"
+  sorts?: TableSortInput[]
+  scanLimit?: number
+}
 
 type AddDatabaseFieldInput = {
-  databaseId: string;
-  field: JsonRecord;
-};
+  databaseId: string
+  field: JsonRecord
+}
 
 type UpdateDatabaseFieldInput = {
-  databaseId: string;
-  fieldKey: string;
-  patch: JsonRecord;
-};
+  databaseId: string
+  fieldKey: string
+  patch: JsonRecord
+}
 
 type RemoveDatabaseFieldInput = {
-  databaseId: string;
-  fieldKey: string;
-};
+  databaseId: string
+  fieldKey: string
+}
 
 type CreateRelationFieldInput = {
-  databaseId: string;
-  key: string;
-  label?: string;
-  description?: string;
-  targetDatabaseId: string;
-  relationType?: string;
-  displayField?: string;
-};
+  databaseId: string
+  key: string
+  label?: string
+  description?: string
+  targetDatabaseId: string
+  relationType?: string
+  displayField?: string
+}
 
 type SetSurfPointSourceActiveInput = {
-  sourceId: string;
-  isActive: boolean;
-};
+  sourceId: string
+  isActive: boolean
+}
 
 type ListWebhookPayloadSamplesInput = {
-  sourceId: string;
-  limit?: number;
-};
+  sourceId: string
+  limit?: number
+}
 
 type PreviewImportMappingInput = {
-  sourceId: string;
-  importMapping?: ImportMappingV1;
-  payloadId?: string;
-  payload?: unknown;
-};
+  sourceId: string
+  importMapping?: ImportMappingV1
+  payloadId?: string
+  payload?: unknown
+}
 
 type ReplayWebhookPayloadInput = {
-  sourceId: string;
-  payloadId: string;
-  importMapping?: ImportMappingV1;
-};
+  sourceId: string
+  payloadId: string
+  importMapping?: ImportMappingV1
+}
 
 type SourceTypeInput =
   | "platform"
@@ -464,200 +464,200 @@ type SourceTypeInput =
   | "item-created"
   | "item-updated"
   | "manual-trigger"
-  | "on-schedule";
+  | "on-schedule"
 
 type CreateSurfPointSourceInput = {
-  surfPointId: string;
-  sourceType: SourceTypeInput;
-  name?: string;
-  config?: JsonRecord;
-  dataSchema?: JsonRecord;
-  isActive?: boolean;
-  replaceExisting?: boolean;
-};
+  surfPointId: string
+  sourceType: SourceTypeInput
+  name?: string
+  config?: JsonRecord
+  dataSchema?: JsonRecord
+  isActive?: boolean
+  replaceExisting?: boolean
+}
 
 type UpdateSurfPointSourceInput = {
-  sourceId: string;
-  sourceType?: SourceTypeInput;
-  name?: string | null;
-  isActive?: boolean;
-  config?: JsonRecord;
-  pullConfig?: JsonRecord | null;
-  pullConfigPatch?: JsonRecord;
-  metadata?: JsonRecord | null;
-  metadataPatch?: JsonRecord;
-  dataSchema?: JsonRecord | null;
-  replaceExisting?: boolean;
-};
+  sourceId: string
+  sourceType?: SourceTypeInput
+  name?: string | null
+  isActive?: boolean
+  config?: JsonRecord
+  pullConfig?: JsonRecord | null
+  pullConfigPatch?: JsonRecord
+  metadata?: JsonRecord | null
+  metadataPatch?: JsonRecord
+  dataSchema?: JsonRecord | null
+  replaceExisting?: boolean
+}
 
 type DeleteSurfPointSourceInput = {
-  sourceId?: string;
-  sourceIds?: string[];
-};
+  sourceId?: string
+  sourceIds?: string[]
+}
 
 type SurfPointToolInput = {
-  surfPointId: string;
-  toolId: string;
-};
+  surfPointId: string
+  toolId: string
+}
 
 type McpTokenRow = {
-  id: string;
-  product_id: string;
-  created_by: string | null;
-  name: string | null;
-  role: AccessRole;
-  revoked_at: string | null;
-};
+  id: string
+  product_id: string
+  created_by: string | null
+  name: string | null
+  role: AccessRole
+  revoked_at: string | null
+}
 
 type McpOAuthTokenRow = {
-  id: string;
-  client_id: string;
-  user_id: string;
-  product_id: string;
-  product_ids?: string[] | null;
-  scope: string;
-  resource: string;
-  access_token_expires_at: string;
-  refresh_token_family_id?: string | null;
-  revoked_at: string | null;
-};
+  id: string
+  client_id: string
+  user_id: string
+  product_id: string
+  product_ids?: string[] | null
+  scope: string
+  resource: string
+  access_token_expires_at: string
+  refresh_token_family_id?: string | null
+  revoked_at: string | null
+}
 
 type McpOAuthClientRow = {
-  client_id: string;
-  client_name: string | null;
-  revoked_at: string | null;
-};
+  client_id: string
+  client_name: string | null
+  revoked_at: string | null
+}
 
 type ProductContextRow = {
-  id: string;
-  name: string | null;
-  organization_id?: string | null;
-};
+  id: string
+  name: string | null
+  organization_id?: string | null
+}
 
 type ProductRow = {
-  id: string;
-  name: string;
-  organization_id: string;
-  owner_id: string;
-  created_at?: string | null;
-  updated_at?: string | null;
-};
+  id: string
+  name: string
+  organization_id: string
+  owner_id: string
+  created_at?: string | null
+  updated_at?: string | null
+}
 
 type ProductOwnerRow = {
-  owner_id?: string | null;
-};
+  owner_id?: string | null
+}
 
 type ProductGoalsRow = {
-  product_id: string;
-  brand_name?: string | null;
-  brand_description?: string | null;
-  product_description?: string | null;
-  product_categories?: unknown;
-  selling_points?: unknown;
-  target_audience?: string | null;
-  competitors?: unknown;
-  official_website?: string | null;
-  updated_at?: string | null;
-};
+  product_id: string
+  brand_name?: string | null
+  brand_description?: string | null
+  product_description?: string | null
+  product_categories?: unknown
+  selling_points?: unknown
+  target_audience?: string | null
+  competitors?: unknown
+  official_website?: string | null
+  updated_at?: string | null
+}
 
 type OrganizationContextRow = {
-  id: string;
-  name: string | null;
-};
+  id: string
+  name: string | null
+}
 
 type SurfJobRow = {
-  id: string;
-  product_id?: string | null;
-  user_id?: string | null;
-  run_id?: string | null;
-  playbook_id: string;
-  source_id?: string | null;
-  job_type?: string | null;
-  status: string;
-  priority?: number | null;
-  attempt_count?: number | null;
-  max_attempts?: number | null;
-  payload?: JsonRecord | null;
-  result?: JsonRecord | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-  started_at?: string | null;
-  completed_at?: string | null;
-  worker_id?: string | null;
-  locked_until?: string | null;
-  last_error?: string | null;
-};
+  id: string
+  product_id?: string | null
+  user_id?: string | null
+  run_id?: string | null
+  playbook_id: string
+  source_id?: string | null
+  job_type?: string | null
+  status: string
+  priority?: number | null
+  attempt_count?: number | null
+  max_attempts?: number | null
+  payload?: JsonRecord | null
+  result?: JsonRecord | null
+  created_at?: string | null
+  updated_at?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  worker_id?: string | null
+  locked_until?: string | null
+  last_error?: string | null
+}
 
 type SourceRow = {
-  id: string;
-  playbook_id: string;
-  user_id?: string | null;
-  name?: string | null;
-  type?: string | null;
-  pull_config?: JsonRecord | null;
-  metadata?: JsonRecord | null;
-  data_schema?: JsonRecord | null;
-  webhook_secret?: string | null;
-  is_active?: boolean | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-};
+  id: string
+  playbook_id: string
+  user_id?: string | null
+  name?: string | null
+  type?: string | null
+  pull_config?: JsonRecord | null
+  metadata?: JsonRecord | null
+  data_schema?: JsonRecord | null
+  webhook_secret?: string | null
+  is_active?: boolean | null
+  created_at?: string | null
+  updated_at?: string | null
+}
 
 type RawSignalRow = {
-  id: string;
-  source_id: string;
-  data: unknown;
-  status?: string | null;
-  received_at?: string | null;
-  dedup_key?: string | null;
-};
+  id: string
+  source_id: string
+  data: unknown
+  status?: string | null
+  received_at?: string | null
+  dedup_key?: string | null
+}
 
 type ProductToolRow = {
-  id: string;
-  product_id: string;
-  playbook_id?: string | null;
-  tool_type: string;
-  config?: JsonRecord | null;
-  is_enabled?: boolean | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-};
+  id: string
+  product_id: string
+  playbook_id?: string | null
+  tool_type: string
+  config?: JsonRecord | null
+  is_enabled?: boolean | null
+  created_at?: string | null
+  updated_at?: string | null
+}
 
 type AccountListProfileRow = {
-  id: string;
-  product_id: string;
-  name: string;
-  description?: string | null;
-  status: "active" | "archived" | string;
-  source: AccountListProfileSource | string;
-  profile_version: number;
-  config: JsonRecord | null;
-  sample_accounts: unknown;
-  reject_accounts: unknown;
-  ai_prompt?: string | null;
-  ai_summary?: string | null;
-  created_by?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-};
+  id: string
+  product_id: string
+  name: string
+  description?: string | null
+  status: "active" | "archived" | string
+  source: AccountListProfileSource | string
+  profile_version: number
+  config: JsonRecord | null
+  sample_accounts: unknown
+  reject_accounts: unknown
+  ai_prompt?: string | null
+  ai_summary?: string | null
+  created_by?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
 
 type CreateTableRowInput = {
-  databaseId: string;
-  data: JsonRecord;
-  playbookId?: string | null;
-  note?: string | null;
-};
+  databaseId: string
+  data: JsonRecord
+  playbookId?: string | null
+  note?: string | null
+}
 
 type UpdateTableRowsInput = {
   edits: Array<{
-    rowId: string;
-    databaseId?: string;
-    data?: JsonRecord;
-    dataPatch?: JsonRecord;
-    note?: string | null;
-    playbookId?: string | null;
-  }>;
-};
+    rowId: string
+    databaseId?: string
+    data?: JsonRecord
+    dataPatch?: JsonRecord
+    note?: string | null
+    playbookId?: string | null
+  }>
+}
 
 const SURF_POINT_COLUMNS = [
   "id",
@@ -682,7 +682,7 @@ const SURF_POINT_COLUMNS = [
   "created_at",
   "updated_at",
   "deleted_at",
-].join(", ");
+].join(", ")
 
 const DATABASE_COLUMNS = [
   "id",
@@ -699,7 +699,7 @@ const DATABASE_COLUMNS = [
   "display_order",
   "created_at",
   "updated_at",
-].join(", ");
+].join(", ")
 
 const ENTRY_COLUMNS = [
   "id",
@@ -715,7 +715,7 @@ const ENTRY_COLUMNS = [
   "triggered",
   "created_at",
   "updated_at",
-].join(", ");
+].join(", ")
 
 const SOURCE_COLUMNS = [
   "id",
@@ -730,7 +730,7 @@ const SOURCE_COLUMNS = [
   "is_active",
   "created_at",
   "updated_at",
-].join(", ");
+].join(", ")
 
 const PRODUCT_TOOL_COLUMNS = [
   "id",
@@ -741,7 +741,7 @@ const PRODUCT_TOOL_COLUMNS = [
   "is_enabled",
   "created_at",
   "updated_at",
-].join(", ");
+].join(", ")
 
 const PRODUCT_GOALS_BRAND_COLUMNS = [
   "product_id",
@@ -754,7 +754,7 @@ const PRODUCT_GOALS_BRAND_COLUMNS = [
   "competitors",
   "official_website",
   "updated_at",
-].join(", ");
+].join(", ")
 
 const ACCOUNT_LIST_PROFILE_COLUMNS = [
   "id",
@@ -772,47 +772,45 @@ const ACCOUNT_LIST_PROFILE_COLUMNS = [
   "created_by",
   "created_at",
   "updated_at",
-].join(", ");
+].join(", ")
 
 function joinPromptSections(
   rubric: string | null | undefined,
   surf: string | null | undefined
 ): string | null {
-  const rubricText = (rubric ?? "").trim();
-  const surfText = (surf ?? "").trim();
-  if (!rubricText && !surfText) return null;
-  const parts: string[] = [];
-  if (rubricText) parts.push(`## Scoring Rubric\n\n${rubricText}`);
-  if (surfText) parts.push(surfText);
-  return parts.join("\n\n");
+  const rubricText = (rubric ?? "").trim()
+  const surfText = (surf ?? "").trim()
+  if (!rubricText && !surfText) return null
+  const parts: string[] = []
+  if (rubricText) parts.push(`## Scoring Rubric\n\n${rubricText}`)
+  if (surfText) parts.push(surfText)
+  return parts.join("\n\n")
 }
 
 function uniqueIds(ids: string[]): string[] {
-  return [...new Set(ids)];
+  return [...new Set(ids)]
 }
 
 function uniqueStrings(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) return []
   return [
     ...new Set(
       value.filter(
         (item): item is string => typeof item === "string" && item.trim() !== ""
       )
     ),
-  ];
+  ]
 }
 
 function sameStrings(left: string[], right: string[]): boolean {
   return (
     left.length === right.length &&
     left.every((value, index) => value === right[index])
-  );
+  )
 }
 
 function oauthTokenProductIds(row: McpOAuthTokenRow): string[] {
-  return uniqueIds(
-    [row.product_id, ...(row.product_ids ?? [])].filter(Boolean)
-  );
+  return uniqueIds([row.product_id, ...(row.product_ids ?? [])].filter(Boolean))
 }
 
 function idempotentSurfJobId(
@@ -829,17 +827,17 @@ function idempotentSurfJobId(
       .digest("hex")
       .slice(0, 32),
     "hex"
-  );
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = bytes.toString("hex");
+  )
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = bytes.toString("hex")
   return [
     hex.slice(0, 8),
     hex.slice(8, 12),
     hex.slice(12, 16),
     hex.slice(16, 20),
     hex.slice(20, 32),
-  ].join("-");
+  ].join("-")
 }
 
 function requireNoDbError(
@@ -850,28 +848,28 @@ function requireNoDbError(
     throw new UserFacingError(`${message}: ${error.message}`, {
       code: "DATABASE_ERROR",
       status: 500,
-    });
+    })
   }
 }
 
 function safeApprovalPreviewString(value: string): string {
   if (/^(?:basic|bearer)\s+/i.test(value) || /private key/i.test(value)) {
-    return "[REDACTED]";
+    return "[REDACTED]"
   }
   try {
-    const url = new URL(value);
+    const url = new URL(value)
     if (url.protocol === "http:" || url.protocol === "https:") {
       for (const key of [...url.searchParams.keys()]) {
-        url.searchParams.set(key, "[REDACTED]");
+        url.searchParams.set(key, "[REDACTED]")
       }
-      url.hash = "";
-      value = url.toString();
+      url.hash = ""
+      value = url.toString()
     }
   } catch {
     // Most approval values are not URLs.
   }
-  if (value.length <= APPROVAL_PREVIEW_MAX_STRING_LENGTH) return value;
-  return `${value.slice(0, APPROVAL_PREVIEW_MAX_STRING_LENGTH)}…[truncated]`;
+  if (value.length <= APPROVAL_PREVIEW_MAX_STRING_LENGTH) return value
+  return `${value.slice(0, APPROVAL_PREVIEW_MAX_STRING_LENGTH)}…[truncated]`
 }
 
 function redactApprovalPreviewValue(
@@ -884,54 +882,54 @@ function redactApprovalPreviewValue(
     typeof value === "boolean" ||
     typeof value === "number"
   ) {
-    return allowPrimitive ? value : "[HIDDEN]";
+    return allowPrimitive ? value : "[HIDDEN]"
   }
   if (typeof value === "string") {
-    return allowPrimitive ? safeApprovalPreviewString(value) : "[HIDDEN]";
+    return allowPrimitive ? safeApprovalPreviewString(value) : "[HIDDEN]"
   }
-  if (depth >= APPROVAL_PREVIEW_MAX_DEPTH) return "[TRUNCATED]";
+  if (depth >= APPROVAL_PREVIEW_MAX_DEPTH) return "[TRUNCATED]"
   if (Array.isArray(value)) {
     const preview = value
       .slice(0, APPROVAL_PREVIEW_MAX_ARRAY_ITEMS)
       .map((item) =>
         redactApprovalPreviewValue(item, depth + 1, allowPrimitive)
-      );
+      )
     if (value.length > APPROVAL_PREVIEW_MAX_ARRAY_ITEMS) {
       preview.push(
         `[${value.length - APPROVAL_PREVIEW_MAX_ARRAY_ITEMS} more items]`
-      );
+      )
     }
-    return preview;
+    return preview
   }
-  if (typeof value !== "object") return String(value);
+  if (typeof value !== "object") return String(value)
 
   const entries = Object.entries(value as Record<string, unknown>).sort(
     ([left], [right]) => left.localeCompare(right)
-  );
-  const preview: JsonRecord = {};
+  )
+  const preview: JsonRecord = {}
   for (const [key, nestedValue] of entries.slice(
     0,
     APPROVAL_PREVIEW_MAX_FIELDS
   )) {
-    const normalizedKey = key.replace(/[^a-z0-9]/gi, "");
+    const normalizedKey = key.replace(/[^a-z0-9]/gi, "")
     preview[key] = APPROVAL_PREVIEW_SENSITIVE_KEY.test(normalizedKey)
       ? "[REDACTED]"
       : redactApprovalPreviewValue(
           nestedValue,
           depth + 1,
           APPROVAL_PREVIEW_SAFE_KEY.has(normalizedKey.toLowerCase())
-        );
+        )
   }
   if (entries.length > APPROVAL_PREVIEW_MAX_FIELDS) {
-    preview.__truncatedFields = entries.length - APPROVAL_PREVIEW_MAX_FIELDS;
+    preview.__truncatedFields = entries.length - APPROVAL_PREVIEW_MAX_FIELDS
   }
-  return preview;
+  return preview
 }
 
 function asRecord(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as JsonRecord)
-    : {};
+    : {}
 }
 
 function withoutLegacyToolRouting(config: JsonRecord): JsonRecord {
@@ -939,136 +937,136 @@ function withoutLegacyToolRouting(config: JsonRecord): JsonRecord {
     tool_modes: _toolModes,
     trigger_tools: _triggerTools,
     ...rest
-  } = config;
-  return rest;
+  } = config
+  return rest
 }
 
 function readTrimmedString(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  return typeof value === "string" && value.trim() ? value.trim() : null
 }
 
 function mcpActionApprovalUrl(requestId: string): string | null {
   const authorizationServerUrl = readTrimmedString(
     process.env.SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL
-  );
-  if (!authorizationServerUrl) return null;
+  )
+  if (!authorizationServerUrl) return null
   try {
-    const url = new URL("/approvals", authorizationServerUrl);
-    url.searchParams.set("mcpAction", requestId);
-    return url.toString();
+    const url = new URL("/approvals", authorizationServerUrl)
+    url.searchParams.set("mcpAction", requestId)
+    return url.toString()
   } catch {
-    return null;
+    return null
   }
 }
 
 export function mcpActionPayloadSha256(payload: JsonRecord): string {
-  return canonicalSha256(payload);
+  return canonicalSha256(payload)
 }
 
 type DeeplineToolSummary = {
-  toolId: string;
-  provider?: string;
-  displayName?: string;
-  bestFor?: string;
-};
+  toolId: string
+  provider?: string
+  displayName?: string
+  bestFor?: string
+}
 
 function formatDeeplineToolSummary(
   tool: Record<string, unknown>
 ): DeeplineToolSummary | null {
-  const toolId = readTrimmedString(tool.toolId) ?? readTrimmedString(tool.id);
-  if (!toolId) return null;
-  const provider = readTrimmedString(tool.provider);
+  const toolId = readTrimmedString(tool.toolId) ?? readTrimmedString(tool.id)
+  if (!toolId) return null
+  const provider = readTrimmedString(tool.provider)
   const displayName =
     readTrimmedString(tool.displayName) ??
     readTrimmedString(tool.display_name) ??
-    readTrimmedString(tool.name);
+    readTrimmedString(tool.name)
   const bestFor =
     readTrimmedString(tool.bestFor) ??
     readTrimmedString(tool.best_for) ??
-    readTrimmedString(tool.description);
+    readTrimmedString(tool.description)
   return {
     toolId,
     ...(provider ? { provider } : {}),
     ...(displayName ? { displayName } : {}),
     ...(bestFor ? { bestFor } : {}),
-  };
+  }
 }
 
 function deeplineToolMatchesQuery(
   tool: DeeplineToolSummary,
   query: string
 ): boolean {
-  if (!query) return true;
+  if (!query) return true
   return [tool.toolId, tool.provider, tool.displayName, tool.bestFor].some(
     (value) => typeof value === "string" && value.toLowerCase().includes(query)
-  );
+  )
 }
 
 function normalizeWebhookDataSchema(
   dataSchema: JsonRecord | null | undefined,
   config: JsonRecord = {}
 ): JsonRecord {
-  const base = asRecord(dataSchema);
-  const fields = Array.isArray(base.fields) ? base.fields : [];
+  const base = asRecord(dataSchema)
+  const fields = Array.isArray(base.fields) ? base.fields : []
   const next: JsonRecord = {
     ...base,
     fields,
-  };
-  const rawImportMapping = config.importMapping ?? config.import_mapping;
+  }
+  const rawImportMapping = config.importMapping ?? config.import_mapping
 
   if (rawImportMapping !== undefined) {
     if (rawImportMapping === null) {
-      delete next.import_mapping;
-      return next;
+      delete next.import_mapping
+      return next
     }
-    const importMapping = readImportMappingValue(rawImportMapping);
+    const importMapping = readImportMappingValue(rawImportMapping)
     if (!importMapping) {
       throw new UserFacingError(
         "config.importMapping must match signalsurf.import_mapping.v1.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
-    next.import_mapping = importMapping;
-    return next;
+    next.import_mapping = importMapping
+    return next
   }
 
   if (next.import_mapping !== undefined && !readImportMapping(next)) {
     throw new UserFacingError(
       "dataSchema.import_mapping must match signalsurf.import_mapping.v1.",
       { code: "BAD_REQUEST", status: 400 }
-    );
+    )
   }
 
-  return next;
+  return next
 }
 
 function buildWebhookSignalUrl(sourceId: string): string | null {
   const explicitBase = readTrimmedString(
     process.env.SIGNALSURF_WEBHOOK_SIGNAL_BASE_URL
-  );
+  )
   const supabaseUrl =
     explicitBase ??
     readTrimmedString(process.env.SIGNALSURF_SUPABASE_URL) ??
     readTrimmedString(process.env.SUPABASE_URL) ??
-    readTrimmedString(process.env.NEXT_PUBLIC_SUPABASE_URL);
-  if (!supabaseUrl) return null;
+    readTrimmedString(process.env.NEXT_PUBLIC_SUPABASE_URL)
+  if (!supabaseUrl) return null
 
   const baseUrl = explicitBase
     ? explicitBase
-    : `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/webhook-signal`;
+    : `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/webhook-signal`
 
   try {
-    const url = new URL(baseUrl);
-    url.searchParams.set("source_id", sourceId);
-    return url.toString();
+    const url = new URL(baseUrl)
+    url.searchParams.set("source_id", sourceId)
+    return url.toString()
   } catch {
-    return null;
+    return null
   }
 }
 
 function buildSourceSnapshot(source: SourceRow) {
-  const pullConfig = asRecord(source.pull_config);
-  const metadata = asRecord(source.metadata);
+  const pullConfig = asRecord(source.pull_config)
+  const metadata = asRecord(source.metadata)
   return {
     name: readTrimmedString(source.name),
     type: readTrimmedString(source.type),
@@ -1076,7 +1074,7 @@ function buildSourceSnapshot(source: SourceRow) {
     url: readTrimmedString(pullConfig.url),
     format: readTrimmedString(pullConfig.format),
     provider: readTrimmedString(metadata.provider),
-  };
+  }
 }
 
 const INTERNAL_SOURCE_TYPES = new Set<SourceTypeInput>([
@@ -1084,7 +1082,7 @@ const INTERNAL_SOURCE_TYPES = new Set<SourceTypeInput>([
   "item-updated",
   "manual-trigger",
   "on-schedule",
-]);
+])
 
 const SOURCE_TYPE_LABELS: Record<SourceTypeInput, string> = {
   platform: "Platform signal",
@@ -1100,22 +1098,22 @@ const SOURCE_TYPE_LABELS: Record<SourceTypeInput, string> = {
   "item-updated": "Item updated",
   "manual-trigger": "Manual trigger",
   "on-schedule": "Scheduled trigger",
-};
+}
 
 function isInternalSourceType(sourceType: SourceTypeInput): boolean {
-  return INTERNAL_SOURCE_TYPES.has(sourceType);
+  return INTERNAL_SOURCE_TYPES.has(sourceType)
 }
 
 function isSupportedSourceType(value: string | null): value is SourceTypeInput {
-  return Boolean(value && value in SOURCE_TYPE_LABELS);
+  return Boolean(value && value in SOURCE_TYPE_LABELS)
 }
 
 function readStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) return []
   return value
     .filter((item): item is string => typeof item === "string")
     .map((item) => item.trim())
-    .filter(Boolean);
+    .filter(Boolean)
 }
 
 function requireConfigString(
@@ -1123,14 +1121,14 @@ function requireConfigString(
   key: string,
   sourceType: SourceTypeInput
 ): string {
-  const value = readTrimmedString(config[key]);
+  const value = readTrimmedString(config[key])
   if (!value) {
     throw new UserFacingError(
       `Missing config.${key}. ${sourceType} sources require this field.`,
       { code: "BAD_REQUEST", status: 400 }
-    );
+    )
   }
-  return value;
+  return value
 }
 
 function requireHttpUrl(
@@ -1138,18 +1136,18 @@ function requireHttpUrl(
   key: string,
   sourceType: SourceTypeInput
 ): string {
-  const value = requireConfigString(config, key, sourceType);
+  const value = requireConfigString(config, key, sourceType)
   try {
-    const parsed = new URL(value);
+    const parsed = new URL(value)
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      throw new Error("unsupported protocol");
+      throw new Error("unsupported protocol")
     }
-    return value;
+    return value
   } catch {
     throw new UserFacingError(
       `Invalid config.${key}. ${sourceType} sources require an absolute HTTP(S) URL.`,
       { code: "BAD_REQUEST", status: 400 }
-    );
+    )
   }
 }
 
@@ -1158,34 +1156,34 @@ function sourceName(
   name: string | null | undefined,
   config: JsonRecord
 ): string | null {
-  const explicitName = readTrimmedString(name);
-  if (explicitName) return explicitName;
+  const explicitName = readTrimmedString(name)
+  if (explicitName) return explicitName
   if (sourceType === "platform") {
     return (
       readTrimmedString(config.endpointId) ?? SOURCE_TYPE_LABELS[sourceType]
-    );
+    )
   }
   if (sourceType === "custom-pull" || sourceType === "rss") {
-    return readTrimmedString(config.url) ?? SOURCE_TYPE_LABELS[sourceType];
+    return readTrimmedString(config.url) ?? SOURCE_TYPE_LABELS[sourceType]
   }
   if (sourceType === "web-monitor") {
-    return readTrimmedString(config.url) ?? SOURCE_TYPE_LABELS[sourceType];
+    return readTrimmedString(config.url) ?? SOURCE_TYPE_LABELS[sourceType]
   }
-  return SOURCE_TYPE_LABELS[sourceType];
+  return SOURCE_TYPE_LABELS[sourceType]
 }
 
 function buildColumnUpdates(config: JsonRecord): JsonRecord[] {
-  const explicit = config.columnUpdates ?? config.column_updates;
+  const explicit = config.columnUpdates ?? config.column_updates
   if (Array.isArray(explicit)) {
     return explicit
       .filter((item): item is JsonRecord =>
         Boolean(item && typeof item === "object" && !Array.isArray(item))
       )
-      .map((item) => ({ ...item }));
+      .map((item) => ({ ...item }))
   }
 
-  const triggerColumn = readTrimmedString(config.triggerColumn) ?? "";
-  const triggerValue = readTrimmedString(config.triggerValue) ?? "";
+  const triggerColumn = readTrimmedString(config.triggerColumn) ?? ""
+  const triggerValue = readTrimmedString(config.triggerValue) ?? ""
   if (triggerColumn || triggerValue) {
     return [
       {
@@ -1193,31 +1191,31 @@ function buildColumnUpdates(config: JsonRecord): JsonRecord[] {
         valueType: "constant",
         value: triggerValue,
       },
-    ];
+    ]
   }
 
   return readStringArray(config.watchFields).map((field) => ({
     column: field,
     valueType: "constant",
     value: "",
-  }));
+  }))
 }
 
 function buildSourceFields(
   input: {
-    sourceType: SourceTypeInput;
-    name?: string | null;
-    config?: JsonRecord;
-    dataSchema?: JsonRecord | null;
-    isActive?: boolean;
+    sourceType: SourceTypeInput
+    name?: string | null
+    config?: JsonRecord
+    dataSchema?: JsonRecord | null
+    isActive?: boolean
   },
   sourceDatabaseName?: string | null
 ) {
-  const config = asRecord(input.config);
-  const pullConfig: JsonRecord = {};
-  const metadata: JsonRecord = {};
-  let dataSchema = input.dataSchema ?? { fields: [] };
-  let dbType = "pull";
+  const config = asRecord(input.config)
+  const pullConfig: JsonRecord = {}
+  const metadata: JsonRecord = {}
+  let dataSchema = input.dataSchema ?? { fields: [] }
+  let dbType = "pull"
 
   switch (input.sourceType) {
     case "platform": {
@@ -1225,122 +1223,122 @@ function buildSourceFields(
         config,
         "endpointId",
         input.sourceType
-      );
-      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *";
+      )
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *"
       for (const key of [
         "marketplace_location",
         "marketplace_category",
         "luma_place_id",
         "place_id",
       ]) {
-        const value = readTrimmedString(config[key]);
-        if (value) pullConfig[key] = value;
+        const value = readTrimmedString(config[key])
+        if (value) pullConfig[key] = value
       }
-      break;
+      break
     }
     case "custom-pull": {
-      pullConfig.url = requireHttpUrl(config, "url", input.sourceType);
-      const method = (readTrimmedString(config.method) ?? "GET").toUpperCase();
+      pullConfig.url = requireHttpUrl(config, "url", input.sourceType)
+      const method = (readTrimmedString(config.method) ?? "GET").toUpperCase()
       if (!["GET", "POST"].includes(method)) {
         throw new UserFacingError(
           "custom-pull config.method must be GET or POST.",
           { code: "BAD_REQUEST", status: 400 }
-        );
+        )
       }
-      pullConfig.method = method;
-      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *";
-      if (config.headers) pullConfig.headers = config.headers;
-      if (config.body) pullConfig.body = config.body;
-      if (config.auth) pullConfig.auth = config.auth;
-      if (config.responsePath) pullConfig.response_path = config.responsePath;
-      if (config.response_path) pullConfig.response_path = config.response_path;
-      break;
+      pullConfig.method = method
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      if (config.headers) pullConfig.headers = config.headers
+      if (config.body) pullConfig.body = config.body
+      if (config.auth) pullConfig.auth = config.auth
+      if (config.responsePath) pullConfig.response_path = config.responsePath
+      if (config.response_path) pullConfig.response_path = config.response_path
+      break
     }
     case "rss":
-      pullConfig.url = requireHttpUrl(config, "url", input.sourceType);
-      pullConfig.format = "rss";
-      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *";
-      break;
+      pullConfig.url = requireHttpUrl(config, "url", input.sourceType)
+      pullConfig.format = "rss"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      break
     case "webhook":
-      dbType = "webhook";
-      if (config.iconUrl) pullConfig.icon_url = config.iconUrl;
-      if (config.icon_url) pullConfig.icon_url = config.icon_url;
-      dataSchema = normalizeWebhookDataSchema(input.dataSchema, config);
-      break;
+      dbType = "webhook"
+      if (config.iconUrl) pullConfig.icon_url = config.iconUrl
+      if (config.icon_url) pullConfig.icon_url = config.icon_url
+      dataSchema = normalizeWebhookDataSchema(input.dataSchema, config)
+      break
     case "web-monitor":
-      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 0 * * *";
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 0 * * *"
       pullConfig.firecrawl_config = {
         url: requireHttpUrl(config, "url", input.sourceType),
         prompt: requireConfigString(config, "prompt", input.sourceType),
         ...(config.includeTags ? { includeTags: config.includeTags } : {}),
         ...(config.excludeTags ? { excludeTags: config.excludeTags } : {}),
         ...(config.schema ? { schema: config.schema } : {}),
-      };
-      if (config.watchFields) pullConfig.watch_fields = config.watchFields;
-      metadata.provider = "web-monitor";
-      break;
+      }
+      if (config.watchFields) pullConfig.watch_fields = config.watchFields
+      metadata.provider = "web-monitor"
+      break
     case "github":
       pullConfig.events = Array.isArray(config.events)
         ? config.events
-        : ["push", "issues", "pull_request"];
-      if (config.repository) pullConfig.repository = config.repository;
-      metadata.provider = "github";
-      break;
+        : ["push", "issues", "pull_request"]
+      if (config.repository) pullConfig.repository = config.repository
+      metadata.provider = "github"
+      break
     case "coingecko":
-      pullConfig.coin_id = readTrimmedString(config.coinId) ?? "bitcoin";
-      pullConfig.currency = readTrimmedString(config.currency) ?? "usd";
-      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */1 * * *";
+      pullConfig.coin_id = readTrimmedString(config.coinId) ?? "bitcoin"
+      pullConfig.currency = readTrimmedString(config.currency) ?? "usd"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */1 * * *"
       if (typeof config.thresholdPct === "number") {
-        pullConfig.threshold_pct = config.thresholdPct;
+        pullConfig.threshold_pct = config.thresholdPct
       }
-      metadata.provider = "coingecko";
-      break;
+      metadata.provider = "coingecko"
+      break
     case "hackernews":
       pullConfig.endpoint_id = readTrimmedString(config.keyword)
         ? "hackernews-keyword-search"
-        : "hackernews-stories";
-      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */2 * * *";
-      if (config.keyword) pullConfig.keyword = config.keyword;
-      metadata.provider = "hackernews";
-      break;
+        : "hackernews-stories"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */2 * * *"
+      if (config.keyword) pullConfig.keyword = config.keyword
+      metadata.provider = "hackernews"
+      break
     case "producthunt":
       pullConfig.endpoint_id = readTrimmedString(config.topic)
         ? "producthunt-search"
-        : "producthunt-leaderboard";
-      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *";
-      if (config.topic) pullConfig.topic = config.topic;
-      metadata.provider = "producthunt";
-      break;
+        : "producthunt-leaderboard"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      if (config.topic) pullConfig.topic = config.topic
+      metadata.provider = "producthunt"
+      break
     case "item-created":
     case "item-updated": {
-      dbType = "internal";
+      dbType = "internal"
       metadata.event_type =
-        input.sourceType === "item-created" ? "item_created" : "item_updated";
+        input.sourceType === "item-created" ? "item_created" : "item_updated"
       metadata.database_id = requireConfigString(
         config,
         "databaseId",
         input.sourceType
-      );
-      metadata.source_database_name = sourceDatabaseName ?? "";
-      const columnUpdates = buildColumnUpdates(config);
-      if (columnUpdates.length > 0) metadata.column_updates = columnUpdates;
-      break;
+      )
+      metadata.source_database_name = sourceDatabaseName ?? ""
+      const columnUpdates = buildColumnUpdates(config)
+      if (columnUpdates.length > 0) metadata.column_updates = columnUpdates
+      break
     }
     case "manual-trigger": {
-      dbType = "internal";
-      metadata.event_type = "manual_trigger";
-      const databaseId = readTrimmedString(config.databaseId);
+      dbType = "internal"
+      metadata.event_type = "manual_trigger"
+      const databaseId = readTrimmedString(config.databaseId)
       if (databaseId) {
-        metadata.database_id = databaseId;
-        metadata.source_database_name = sourceDatabaseName ?? "";
+        metadata.database_id = databaseId
+        metadata.source_database_name = sourceDatabaseName ?? ""
       }
-      break;
+      break
     }
     case "on-schedule":
-      dbType = "internal";
-      metadata.event_type = "scheduled";
-      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *";
-      break;
+      dbType = "internal"
+      metadata.event_type = "scheduled"
+      pullConfig.schedule = readTrimmedString(config.schedule) ?? "0 */6 * * *"
+      break
   }
 
   return {
@@ -1350,31 +1348,31 @@ function buildSourceFields(
     metadata: Object.keys(metadata).length > 0 ? metadata : null,
     dataSchema,
     isActive: input.isActive ?? true,
-  };
+  }
 }
 
 function inferSourceType(row: SourceRow): string | null {
-  const pullConfig = asRecord(row.pull_config);
-  const metadata = asRecord(row.metadata);
-  const eventType = readTrimmedString(metadata.event_type);
+  const pullConfig = asRecord(row.pull_config)
+  const metadata = asRecord(row.metadata)
+  const eventType = readTrimmedString(metadata.event_type)
   if (row.type === "internal") {
-    if (eventType === "item_created") return "item-created";
-    if (eventType === "item_updated") return "item-updated";
-    if (eventType === "manual_trigger") return "manual-trigger";
-    if (eventType === "scheduled") return "on-schedule";
-    return "internal";
+    if (eventType === "item_created") return "item-created"
+    if (eventType === "item_updated") return "item-updated"
+    if (eventType === "manual_trigger") return "manual-trigger"
+    if (eventType === "scheduled") return "on-schedule"
+    return "internal"
   }
-  const provider = readTrimmedString(metadata.provider);
-  if (provider === "web-monitor") return "web-monitor";
-  if (provider === "github") return "github";
-  if (provider === "coingecko") return "coingecko";
-  if (provider === "hackernews") return "hackernews";
-  if (provider === "producthunt") return "producthunt";
-  if (row.type === "webhook") return "webhook";
-  if (readTrimmedString(pullConfig.format) === "rss") return "rss";
-  if (readTrimmedString(pullConfig.endpoint_id)) return "platform";
-  if (readTrimmedString(pullConfig.url)) return "custom-pull";
-  return row.type ?? null;
+  const provider = readTrimmedString(metadata.provider)
+  if (provider === "web-monitor") return "web-monitor"
+  if (provider === "github") return "github"
+  if (provider === "coingecko") return "coingecko"
+  if (provider === "hackernews") return "hackernews"
+  if (provider === "producthunt") return "producthunt"
+  if (row.type === "webhook") return "webhook"
+  if (readTrimmedString(pullConfig.format) === "rss") return "rss"
+  if (readTrimmedString(pullConfig.endpoint_id)) return "platform"
+  if (readTrimmedString(pullConfig.url)) return "custom-pull"
+  return row.type ?? null
 }
 
 const ACTIVE_SURF_JOB_STATUSES = [
@@ -1383,18 +1381,18 @@ const ACTIVE_SURF_JOB_STATUSES = [
   "running",
   "processing",
   "in_progress",
-];
+]
 
 function isActiveSurfJobStatus(status: string): boolean {
-  return ACTIVE_SURF_JOB_STATUSES.includes(status.trim().toLowerCase());
+  return ACTIVE_SURF_JOB_STATUSES.includes(status.trim().toLowerCase())
 }
 
 function isTerminalSurfJobStatus(status: string): boolean {
-  return !isActiveSurfJobStatus(status);
+  return !isActiveSurfJobStatus(status)
 }
 
 function readSourceEndpointId(source: SourceRow): string | null {
-  return readTrimmedString(asRecord(source.pull_config).endpoint_id);
+  return readTrimmedString(asRecord(source.pull_config).endpoint_id)
 }
 
 export class SignalSurfRepository {
@@ -1409,35 +1407,35 @@ export class SignalSurfRepository {
       .select("id, product_id, created_by, name, role, revoked_at")
       .eq("token_sha256", sha256Hex(token))
       .is("revoked_at", null)
-      .maybeSingle();
+      .maybeSingle()
 
-    requireNoDbError(error, "Failed to resolve MCP token");
+    requireNoDbError(error, "Failed to resolve MCP token")
     if (!data) {
-      return this.resolveMcpOAuthToken(token, metadata);
+      return this.resolveMcpOAuthToken(token, metadata)
     }
 
-    const row = data as McpTokenRow;
+    const row = data as McpTokenRow
     if (!["viewer", "editor", "owner"].includes(row.role)) {
       throw new UserFacingError("MCP token has an invalid role", {
         code: "CONFIG_ERROR",
         status: 500,
-      });
+      })
     }
 
     const update: Record<string, unknown> = {
       last_used_at: new Date().toISOString(),
-    };
-    if (metadata.ip) update.last_used_ip = metadata.ip;
+    }
+    if (metadata.ip) update.last_used_ip = metadata.ip
 
     const { error: updateError } = await this.db
       .from("mcp_tokens")
       .update(update)
-      .eq("id", row.id);
+      .eq("id", row.id)
 
     if (updateError) {
       console.error(
         `Failed to update MCP token usage metadata: ${updateError.message}`
-      );
+      )
     }
 
     return {
@@ -1446,7 +1444,7 @@ export class SignalSurfRepository {
       role: row.role,
       tokenName: row.name ?? undefined,
       authKind: "manual",
-    };
+    }
   }
 
   private async resolveMcpOAuthToken(
@@ -1458,17 +1456,17 @@ export class SignalSurfRepository {
       .select("*")
       .eq("access_token_sha256", sha256Hex(token))
       .is("revoked_at", null)
-      .maybeSingle();
+      .maybeSingle()
 
-    requireNoDbError(error, "Failed to resolve MCP OAuth token");
-    if (!data) return null;
+    requireNoDbError(error, "Failed to resolve MCP OAuth token")
+    if (!data) return null
 
-    const row = data as McpOAuthTokenRow;
+    const row = data as McpOAuthTokenRow
     if (metadata.resource && row.resource !== metadata.resource) {
-      return null;
+      return null
     }
     if (new Date(row.access_token_expires_at).getTime() <= Date.now()) {
-      return null;
+      return null
     }
 
     const { data: clientData, error: clientError } = await this.db
@@ -1476,33 +1474,33 @@ export class SignalSurfRepository {
       .select("client_id, client_name, revoked_at")
       .eq("client_id", row.client_id)
       .is("revoked_at", null)
-      .maybeSingle();
+      .maybeSingle()
 
-    requireNoDbError(clientError, "Failed to resolve MCP OAuth client");
-    const client = clientData as McpOAuthClientRow | null;
-    if (!client) return null;
+    requireNoDbError(clientError, "Failed to resolve MCP OAuth client")
+    const client = clientData as McpOAuthClientRow | null
+    if (!client) return null
 
     const update: Record<string, unknown> = {
       last_used_at: new Date().toISOString(),
-    };
-    if (metadata.ip) update.last_used_ip = metadata.ip;
+    }
+    if (metadata.ip) update.last_used_ip = metadata.ip
 
     const { error: updateError } = await this.db
       .from("mcp_oauth_tokens")
       .update(update)
-      .eq("id", row.id);
+      .eq("id", row.id)
 
     if (updateError) {
       console.error(
         `Failed to update MCP OAuth token usage metadata: ${updateError.message}`
-      );
+      )
     }
 
-    const scopes = parseStoredScopes(row.scope).filter(isSupportedMcpScope);
+    const scopes = parseStoredScopes(row.scope).filter(isSupportedMcpScope)
     if (grantedCapabilitiesForScopes(scopes).length === 0) {
-      return null;
+      return null
     }
-    const productIds = oauthTokenProductIds(row);
+    const productIds = oauthTokenProductIds(row)
 
     return {
       productId: row.product_id,
@@ -1518,69 +1516,69 @@ export class SignalSurfRepository {
       oauthTokenId: row.id,
       oauthGrantId: row.refresh_token_family_id ?? row.id,
       oauthClientId: row.client_id,
-    };
+    }
   }
 
   async resolveProductContexts(
     productIds: string[]
   ): Promise<SignalSurfProductContext[]> {
-    const uniqueProductIds = uniqueIds(productIds.filter(Boolean));
-    if (uniqueProductIds.length === 0) return [];
+    const uniqueProductIds = uniqueIds(productIds.filter(Boolean))
+    if (uniqueProductIds.length === 0) return []
 
     const { data, error } = await this.db
       .from("products")
       .select("id, name, organization_id")
-      .in("id", uniqueProductIds);
+      .in("id", uniqueProductIds)
 
-    requireNoDbError(error, "Failed to resolve SignalSurf product names");
+    requireNoDbError(error, "Failed to resolve SignalSurf product names")
 
-    const products = (data ?? []) as ProductContextRow[];
+    const products = (data ?? []) as ProductContextRow[]
     const productsById = new Map(
       products.map((product) => [product.id, product])
-    );
+    )
     const organizationIds = uniqueIds(
       products
         .map((product) => product.organization_id)
         .filter((id): id is string => Boolean(id))
-    );
+    )
     const organizationsById = await this.resolveOrganizationsById(
       organizationIds
-    );
+    )
 
     return uniqueProductIds.map((productId) => {
-      const product = productsById.get(productId);
-      const organizationId = product?.organization_id ?? null;
+      const product = productsById.get(productId)
+      const organizationId = product?.organization_id ?? null
       const organization = organizationId
         ? organizationsById.get(organizationId)
-        : null;
+        : null
 
       return {
         productId,
         name: product?.name?.trim() || productId,
         organizationId,
         organizationName: organization?.name ?? null,
-      };
-    });
+      }
+    })
   }
 
   private async resolveOrganizationsById(
     organizationIds: string[]
   ): Promise<Map<string, OrganizationContextRow>> {
-    if (organizationIds.length === 0) return new Map();
+    if (organizationIds.length === 0) return new Map()
 
     const { data, error } = await this.db
       .from("organizations")
       .select("id, name")
-      .in("id", organizationIds);
+      .in("id", organizationIds)
 
-    requireNoDbError(error, "Failed to resolve SignalSurf workspace names");
+    requireNoDbError(error, "Failed to resolve SignalSurf workspace names")
 
     return new Map(
       ((data ?? []) as OrganizationContextRow[]).map((organization) => [
         organization.id,
         organization,
       ])
-    );
+    )
   }
 
   private async resolveProductOwnerId(
@@ -1590,11 +1588,9 @@ export class SignalSurfRepository {
       .from("products")
       .select("owner_id")
       .eq("id", context.productId)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to resolve product owner");
-    return (
-      ((data as ProductOwnerRow | null)?.owner_id as string | null) ?? null
-    );
+      .maybeSingle()
+    requireNoDbError(error, "Failed to resolve product owner")
+    return ((data as ProductOwnerRow | null)?.owner_id as string | null) ?? null
   }
 
   async createProduct(context: SignalSurfContext, input: CreateProductInput) {
@@ -1602,54 +1598,54 @@ export class SignalSurfRepository {
       throw new UserFacingError(
         "create_product requires a hosted OAuth MCP connection so the active grant can be expanded to the new product.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
     if (!context.userId) {
       throw new UserFacingError(
         "create_product requires an authenticated SignalSurf user.",
         { code: "FORBIDDEN", status: 403 }
-      );
+      )
     }
 
     const currentProduct = (context.products ?? []).find(
       (product) => product.productId === context.productId
-    );
+    )
     const organizationId =
-      input.organizationId ?? currentProduct?.organizationId ?? null;
+      input.organizationId ?? currentProduct?.organizationId ?? null
 
     const { data, error } = await this.db.rpc("create_product_for_mcp", {
       p_user_id: context.userId,
       p_name: input.name.trim(),
       p_organization_id: organizationId,
       p_display_order: input.displayOrder ?? 0,
-    });
+    })
 
-    requireNoDbError(error, "Failed to create product");
+    requireNoDbError(error, "Failed to create product")
     if (!data) {
       throw new UserFacingError("Failed to create product.", {
         code: "DATABASE_ERROR",
         status: 500,
-      });
+      })
     }
 
-    const product = data as ProductRow;
-    const productContexts = await this.resolveProductContexts([product.id]);
+    const product = data as ProductRow
+    const productContexts = await this.resolveProductContexts([product.id])
     const productContext = productContexts[0] ?? {
       productId: product.id,
       name: product.name,
       organizationId: product.organization_id,
       organizationName: null,
-    };
+    }
 
-    const productIds = await this.expandOAuthGrantProducts(context, product.id);
-    upsertContextProduct(context, productContext, productIds);
+    const productIds = await this.expandOAuthGrantProducts(context, product.id)
+    upsertContextProduct(context, productContext, productIds)
 
     return {
       product: formatProduct(product, productContext),
       productId: product.id,
       productIds,
       products: context.products ?? [productContext],
-    };
+    }
   }
 
   private async expandOAuthGrantProducts(
@@ -1660,16 +1656,16 @@ export class SignalSurfRepository {
       context.productId,
       ...(context.productIds ?? []),
       productId,
-    ]);
+    ])
     const { error } = await this.db
       .from("mcp_oauth_tokens")
       .update({
         product_ids: productIds,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", context.oauthTokenId);
-    requireNoDbError(error, "Failed to expand OAuth product grant");
-    return productIds;
+      .eq("id", context.oauthTokenId)
+    requireNoDbError(error, "Failed to expand OAuth product grant")
+    return productIds
   }
 
   async getBrandContext(context: SignalSurfContext) {
@@ -1677,14 +1673,14 @@ export class SignalSurfRepository {
       .from("product_goals")
       .select(PRODUCT_GOALS_BRAND_COLUMNS)
       .eq("product_id", context.productId)
-      .maybeSingle();
+      .maybeSingle()
 
-    requireNoDbError(error, "Failed to read brand context");
+    requireNoDbError(error, "Failed to read brand context")
     return {
       brandContext: data
         ? formatBrandContext(data as ProductGoalsRow)
         : formatBrandContext({ product_id: context.productId }),
-    };
+    }
   }
 
   async listSurfPoints(
@@ -1695,27 +1691,27 @@ export class SignalSurfRepository {
       .from("playbooks")
       .select(SURF_POINT_COLUMNS)
       .eq("product_id", context.productId)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
 
     if (input.includeInactive === false) {
-      query = query.eq("is_active", true);
+      query = query.eq("is_active", true)
     }
 
     const { data, error } = await query
       .order("display_order", { ascending: true })
       .order("created_at", { ascending: true })
-      .limit(input.limit ?? 100);
+      .limit(input.limit ?? 100)
 
-    requireNoDbError(error, "Failed to list surf points");
+    requireNoDbError(error, "Failed to list surf points")
     return {
       surfPoints: (data ?? []).map(formatSurfPoint),
       totalCount: data?.length ?? 0,
-    };
+    }
   }
 
   async getSurfPoint(context: SignalSurfContext, surfPointId: string) {
-    const surfPoint = await this.getSurfPointForUpdate(context, surfPointId);
-    return { surfPoint: formatSurfPoint(surfPoint) };
+    const surfPoint = await this.getSurfPointForUpdate(context, surfPointId)
+    return { surfPoint: formatSurfPoint(surfPoint) }
   }
 
   async listProductTools(
@@ -1725,20 +1721,20 @@ export class SignalSurfRepository {
     let query = this.db
       .from("product_tools")
       .select(PRODUCT_TOOL_COLUMNS)
-      .eq("product_id", context.productId);
+      .eq("product_id", context.productId)
 
-    if (input.includeDisabled !== true) query = query.eq("is_enabled", true);
+    if (input.includeDisabled !== true) query = query.eq("is_enabled", true)
 
     const { data, error } = await query
       .order("created_at", { ascending: true })
-      .limit(input.limit ?? 100);
+      .limit(input.limit ?? 100)
 
-    requireNoDbError(error, "Failed to list product tools");
-    const tools = (data ?? []) as ProductToolRow[];
+    requireNoDbError(error, "Failed to list product tools")
+    const tools = (data ?? []) as ProductToolRow[]
     return {
       tools: tools.map(formatProductTool),
       totalCount: tools.length,
-    };
+    }
   }
 
   async listAccountListProfiles(
@@ -1748,27 +1744,27 @@ export class SignalSurfRepository {
     let query = this.db
       .from("account_list_profiles")
       .select(ACCOUNT_LIST_PROFILE_COLUMNS)
-      .eq("product_id", context.productId);
+      .eq("product_id", context.productId)
 
-    if (input.includeArchived !== true) query = query.eq("status", "active");
+    if (input.includeArchived !== true) query = query.eq("status", "active")
 
     const { data, error } = await query
       .order("updated_at", { ascending: false })
-      .limit(input.limit ?? 50);
+      .limit(input.limit ?? 50)
 
-    requireNoDbError(error, "Failed to list account list profiles");
-    const profiles = (data ?? []) as AccountListProfileRow[];
+    requireNoDbError(error, "Failed to list account list profiles")
+    const profiles = (data ?? []) as AccountListProfileRow[]
     return {
       profiles: profiles.map(formatAccountListProfile),
       totalCount: profiles.length,
-    };
+    }
   }
 
   async saveAccountListProfile(
     context: SignalSurfContext,
     input: SaveAccountListProfileInput
   ) {
-    const now = new Date().toISOString();
+    const now = new Date().toISOString()
     const basePayload = {
       name: input.name.trim(),
       description: readTrimmedString(input.description),
@@ -1780,13 +1776,13 @@ export class SignalSurfRepository {
       ai_prompt: readTrimmedString(input.aiPrompt),
       ai_summary: readTrimmedString(input.aiSummary),
       updated_at: now,
-    };
+    }
 
     if (input.id) {
       const existing = await this.getAccountListProfileForUpdate(
         context,
         input.id
-      );
+      )
       const { data, error } = await this.db
         .from("account_list_profiles")
         .update({
@@ -1796,14 +1792,14 @@ export class SignalSurfRepository {
         .eq("id", input.id)
         .eq("product_id", context.productId)
         .select(ACCOUNT_LIST_PROFILE_COLUMNS)
-        .single();
+        .single()
 
-      requireNoDbError(error, "Failed to update account list profile");
+      requireNoDbError(error, "Failed to update account list profile")
       return {
         profile: formatAccountListProfile(data as AccountListProfileRow),
         profileId: (data as AccountListProfileRow).id,
         created: false,
-      };
+      }
     }
 
     const { data, error } = await this.db
@@ -1817,14 +1813,14 @@ export class SignalSurfRepository {
         created_at: now,
       })
       .select(ACCOUNT_LIST_PROFILE_COLUMNS)
-      .single();
+      .single()
 
-    requireNoDbError(error, "Failed to create account list profile");
+    requireNoDbError(error, "Failed to create account list profile")
     return {
       profile: formatAccountListProfile(data as AccountListProfileRow),
       profileId: (data as AccountListProfileRow).id,
       created: true,
-    };
+    }
   }
 
   // ── Deepline curated capabilities ──────────────────────────────────────────
@@ -1838,26 +1834,26 @@ export class SignalSurfRepository {
       throw new UserFacingError(
         "Deepline is disabled (DEEPLINE_DISABLED is set)",
         { code: "DEEPLINE_DISABLED", status: 503 }
-      );
+      )
     }
     const { data, error } = await this.db
       .from("integration_accounts")
       .select("credentials")
       .eq("product_id", context.productId)
       .eq("integration_type", "deepline")
-      .maybeSingle();
-    requireNoDbError(error, "Failed to read Deepline integration");
+      .maybeSingle()
+    requireNoDbError(error, "Failed to read Deepline integration")
     const fromRow = readTrimmedString(
       (data?.credentials as { api_key?: unknown } | null)?.api_key
-    );
-    const apiKey = fromRow ?? readTrimmedString(process.env.DEEPLINE_API_KEY);
+    )
+    const apiKey = fromRow ?? readTrimmedString(process.env.DEEPLINE_API_KEY)
     if (!apiKey) {
       throw new UserFacingError(
         "Deepline is not connected for this product. Connect it in SignalSurf Settings -> Integrations.",
         { code: "NOT_FOUND", status: 404 }
-      );
+      )
     }
-    return apiKey;
+    return apiKey
   }
 
   private async runDeeplineSearch(
@@ -1868,26 +1864,26 @@ export class SignalSurfRepository {
   ) {
     // Avoid creating unusable approvals, but once approved let the shared
     // executor consume and finalize the request before credential lookup.
-    if (!input.approvalRequestId) await this.resolveDeeplineApiKey(context);
-    let payload: JsonRecord;
+    if (!input.approvalRequestId) await this.resolveDeeplineApiKey(context)
+    let payload: JsonRecord
     try {
       payload = buildDeeplineSearchPayload(
         toolId,
         kind,
         input.filters,
         input.limit
-      );
+      )
     } catch (error) {
       throw new UserFacingError(
         error instanceof Error ? error.message : "Invalid Deepline filters.",
         { code: "INVALID_INPUT", status: 400 }
-      );
+      )
     }
     if (!deeplineSearchPayloadHasConstraint(payload)) {
       throw new UserFacingError(
         "Provide at least one supported search filter before running Deepline.",
         { code: "INVALID_INPUT", status: 400 }
-      );
+      )
     }
     const execution = await this.deeplineExecuteTool(context, {
       toolId,
@@ -1897,7 +1893,7 @@ export class SignalSurfRepository {
         kind === "people"
           ? "deepline_search_people"
           : "deepline_search_companies",
-    });
+    })
     if (!execution.ok) {
       throw new UserFacingError(
         `Deepline returned status ${execution.status}`,
@@ -1905,13 +1901,13 @@ export class SignalSurfRepository {
           code: "UPSTREAM_ERROR",
           status: 502,
         }
-      );
+      )
     }
     return {
       toolId,
       result: execution.result,
       credits_consumed: execution.credits_consumed,
-    };
+    }
   }
 
   async deeplineSearchPeople(
@@ -1923,7 +1919,7 @@ export class SignalSurfRepository {
       DEEPLINE_TOOL_IDS.searchPeople(),
       "people",
       input
-    );
+    )
   }
 
   async deeplineSearchCompanies(
@@ -1935,7 +1931,7 @@ export class SignalSurfRepository {
       DEEPLINE_TOOL_IDS.searchCompanies(),
       "companies",
       input
-    );
+    )
   }
 
   async deeplineEnrichContact(
@@ -1951,24 +1947,24 @@ export class SignalSurfRepository {
       throw new UserFacingError(
         "Provide a domain or companyName to find an email.",
         { code: "INVALID_INPUT", status: 400 }
-      );
+      )
     }
     // Avoid creating unusable approvals, but once approved let the shared
     // executor consume and finalize the request before credential lookup.
-    if (!input.approvalRequestId) await this.resolveDeeplineApiKey(context);
+    if (!input.approvalRequestId) await this.resolveDeeplineApiKey(context)
     const payload = cleanDeeplinePayload({
       first_name: input.firstName,
       last_name: input.lastName,
       domain: input.domain,
       company_name: input.companyName,
-    });
-    const toolId = DEEPLINE_TOOL_IDS.emailFinder();
+    })
+    const toolId = DEEPLINE_TOOL_IDS.emailFinder()
     const execution = await this.deeplineExecuteTool(context, {
       toolId,
       payload,
       approvalRequestId: input.approvalRequestId,
       approvalMcpToolName: "deepline_enrich_contact",
-    });
+    })
     if (!execution.ok) {
       throw new UserFacingError(
         `Deepline returned status ${execution.status}`,
@@ -1976,50 +1972,50 @@ export class SignalSurfRepository {
           code: "UPSTREAM_ERROR",
           status: 502,
         }
-      );
+      )
     }
-    const raw = execution.result;
+    const raw = execution.result
     const record =
-      raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+      raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
     const email =
       typeof record.email === "string"
         ? record.email
         : typeof record.work_email === "string"
         ? (record.work_email as string)
-        : null;
+        : null
     return {
       toolId,
       email,
       status: record.status ?? null,
       result: raw,
       credits_consumed: execution.credits_consumed,
-    };
+    }
   }
 
   async deeplineSearchCatalog(
     context: SignalSurfContext,
     input: DeeplineCatalogSearchInput
   ) {
-    const apiKey = await this.resolveDeeplineApiKey(context);
-    const query = (input.query ?? "").trim().toLowerCase();
-    const limit = Math.max(1, Math.min(input.limit ?? 25, 50));
+    const apiKey = await this.resolveDeeplineApiKey(context)
+    const query = (input.query ?? "").trim().toLowerCase()
+    const limit = Math.max(1, Math.min(input.limit ?? 25, 50))
     const tools = (await listDeeplineTools(apiKey))
       .map(formatDeeplineToolSummary)
       .filter((tool): tool is DeeplineToolSummary => Boolean(tool))
       .filter((tool) => deeplineToolMatchesQuery(tool, query))
-      .slice(0, limit);
-    return { tools, count: tools.length };
+      .slice(0, limit)
+    return { tools, count: tools.length }
   }
 
   async deeplineExecuteTool(
     context: SignalSurfContext,
     input: DeeplineExecuteToolInput
   ) {
-    const payload = input.payload ?? {};
-    const payloadSha256 = mcpActionPayloadSha256(payload);
-    const approvalRequestId = readTrimmedString(input.approvalRequestId);
-    const mcpToolName = input.approvalMcpToolName ?? "deepline_execute_tool";
-    const externalAction = `deepline:${input.toolId}`;
+    const payload = input.payload ?? {}
+    const payloadSha256 = mcpActionPayloadSha256(payload)
+    const approvalRequestId = readTrimmedString(input.approvalRequestId)
+    const mcpToolName = input.approvalMcpToolName ?? "deepline_execute_tool"
+    const externalAction = `deepline:${input.toolId}`
 
     if (
       context.authKind !== "oauth" ||
@@ -2039,15 +2035,15 @@ export class SignalSurfRepository {
             payloadSha256,
           },
         }
-      );
+      )
     }
 
     if (!approvalRequestId) {
-      const now = new Date();
-      const nowIso = now.toISOString();
+      const now = new Date()
+      const nowIso = now.toISOString()
       const expiresAt = new Date(
         now.getTime() + MCP_ACTION_APPROVAL_TTL_MS
-      ).toISOString();
+      ).toISOString()
       const findActivePending = async () =>
         this.db
           .from("mcp_action_approvals")
@@ -2063,14 +2059,14 @@ export class SignalSurfRepository {
           .gt("expires_at", nowIso)
           .order("created_at", { ascending: true })
           .limit(1)
-          .maybeSingle();
+          .maybeSingle()
 
-      let { data: pending, error: pendingError } = await findActivePending();
+      let { data: pending, error: pendingError } = await findActivePending()
       if (pendingError) {
         throw new UserFacingError(
           "The action approval service is unavailable; no external action was attempted.",
           { code: "APPROVAL_UNAVAILABLE", status: 503 }
-        );
+        )
       }
 
       if (!pending) {
@@ -2085,16 +2081,16 @@ export class SignalSurfRepository {
           .eq("provider_tool_id", input.toolId)
           .eq("payload_sha256", payloadSha256)
           .eq("status", "pending")
-          .lte("expires_at", nowIso);
+          .lte("expires_at", nowIso)
         if (expireError) {
           throw new UserFacingError(
             "The action approval service is unavailable; no external action was attempted.",
             { code: "APPROVAL_UNAVAILABLE", status: 503 }
-          );
+          )
         }
 
-        const requestId = randomUUID();
-        const payloadKeys = Object.keys(payload).sort();
+        const requestId = randomUUID()
+        const payloadKeys = Object.keys(payload).sort()
         const { data: inserted, error: insertError } = await this.db
           .from("mcp_action_approvals")
           .insert({
@@ -2122,25 +2118,25 @@ export class SignalSurfRepository {
             updated_at: nowIso,
           })
           .select("id, expires_at")
-          .single();
+          .single()
 
         if (insertError || !inserted) {
           // A concurrent identical request may have won the Web-side partial
           // unique index. Re-read it instead of returning a second request.
-          const retry = await findActivePending();
+          const retry = await findActivePending()
           if (retry.error || !retry.data) {
             throw new UserFacingError(
               "The action approval request could not be created; no external action was attempted.",
               { code: "APPROVAL_UNAVAILABLE", status: 503 }
-            );
+            )
           }
-          pending = retry.data;
+          pending = retry.data
         } else {
-          pending = inserted;
+          pending = inserted
         }
       }
 
-      const requestId = String(pending.id);
+      const requestId = String(pending.id)
       throw new UserFacingError(
         `${mcpToolName} requires approval in SignalSurf Web. Approve the request, then repeat the exact ${mcpToolName} call with approvalRequestId; no external action was attempted.`,
         {
@@ -2156,10 +2152,10 @@ export class SignalSurfRepository {
             payloadSha256,
           },
         }
-      );
+      )
     }
 
-    const executionStartedAt = new Date().toISOString();
+    const executionStartedAt = new Date().toISOString()
     const { data: consumed, error: approvalError } = await this.db
       .from("mcp_action_approvals")
       .update({
@@ -2179,12 +2175,12 @@ export class SignalSurfRepository {
       .eq("status", "approved")
       .gt("expires_at", executionStartedAt)
       .select("id")
-      .maybeSingle();
+      .maybeSingle()
     if (approvalError) {
       throw new UserFacingError(
         "The action approval service is unavailable; no external action was attempted.",
         { code: "APPROVAL_UNAVAILABLE", status: 503 }
-      );
+      )
     }
     if (!consumed) {
       throw new UserFacingError(
@@ -2199,14 +2195,14 @@ export class SignalSurfRepository {
             payloadSha256,
           },
         }
-      );
+      )
     }
 
     const finalizeApproval = async (
       status: "executed" | "failed" | "ambiguous",
       error: string | null = null
     ) => {
-      const finalizedAt = new Date().toISOString();
+      const finalizedAt = new Date().toISOString()
       const { data, error: finalizationError } = await this.db
         .from("mcp_action_approvals")
         .update({
@@ -2222,7 +2218,7 @@ export class SignalSurfRepository {
         .eq("product_id", context.productId)
         .eq("status", "executing")
         .select("id")
-        .maybeSingle();
+        .maybeSingle()
       if (finalizationError || !data) {
         throw new UserFacingError(
           "The external action outcome could not be recorded. Treat it as ambiguous and do not retry without a new approval.",
@@ -2231,26 +2227,26 @@ export class SignalSurfRepository {
             status: 502,
             details: { approvalRequestId, externalAction },
           }
-        );
+        )
       }
-    };
-
-    let apiKey: string;
-    try {
-      apiKey = await this.resolveDeeplineApiKey(context);
-    } catch (error) {
-      await finalizeApproval("failed", "Deepline credential lookup failed.");
-      throw error;
     }
 
-    let envelope: DeeplineEnvelope;
+    let apiKey: string
     try {
-      envelope = await executeDeeplineTool(input.toolId, payload, apiKey);
+      apiKey = await this.resolveDeeplineApiKey(context)
+    } catch (error) {
+      await finalizeApproval("failed", "Deepline credential lookup failed.")
+      throw error
+    }
+
+    let envelope: DeeplineEnvelope
+    try {
+      envelope = await executeDeeplineTool(input.toolId, payload, apiKey)
     } catch (error) {
       await finalizeApproval(
         "ambiguous",
         "Provider request failed or timed out after dispatch."
-      );
+      )
       throw new UserFacingError(
         "The external action outcome is ambiguous. It will not be replayed without a new approval.",
         {
@@ -2258,20 +2254,20 @@ export class SignalSurfRepository {
           status: 502,
           details: { approvalRequestId, externalAction },
         }
-      );
+      )
     }
     const ok =
-      envelope.status === undefined || deeplineStatusOk(envelope.status);
-    const result = unwrapDeepline(envelope);
+      envelope.status === undefined || deeplineStatusOk(envelope.status)
+    const result = unwrapDeepline(envelope)
     const resultRecord =
       result && typeof result === "object"
         ? (result as Record<string, unknown>)
-        : {};
-    const creditsConsumed = resultRecord.credits_consumed;
+        : {}
+    const creditsConsumed = resultRecord.credits_consumed
     await finalizeApproval(
       ok ? "executed" : "failed",
       ok ? null : `Deepline returned status ${String(envelope.status)}`
-    );
+    )
     return {
       toolId: input.toolId,
       ok,
@@ -2279,14 +2275,14 @@ export class SignalSurfRepository {
       result,
       credits_consumed:
         typeof creditsConsumed === "number" ? creditsConsumed : null,
-    };
+    }
   }
 
   async archiveAccountListProfile(
     context: SignalSurfContext,
     profileId: string
   ) {
-    await this.getAccountListProfileForUpdate(context, profileId);
+    await this.getAccountListProfileForUpdate(context, profileId)
 
     const { data, error } = await this.db
       .from("account_list_profiles")
@@ -2297,13 +2293,13 @@ export class SignalSurfRepository {
       .eq("id", profileId)
       .eq("product_id", context.productId)
       .select(ACCOUNT_LIST_PROFILE_COLUMNS)
-      .single();
+      .single()
 
-    requireNoDbError(error, "Failed to archive account list profile");
+    requireNoDbError(error, "Failed to archive account list profile")
     return {
       profile: formatAccountListProfile(data as AccountListProfileRow),
       archived: true,
-    };
+    }
   }
 
   async createSurfPoint(
@@ -2313,11 +2309,11 @@ export class SignalSurfRepository {
     const databaseIds = await this.resolveDatabaseIds(
       context,
       input.databaseIds
-    );
+    )
     const promptTemplate =
       input.promptTemplate ??
       joinPromptSections(input.scoringRubric, input.surfPrompt) ??
-      undefined;
+      undefined
 
     const insertData: Record<string, unknown> = {
       product_id: context.productId,
@@ -2333,47 +2329,47 @@ export class SignalSurfRepository {
       tool_config: input.toolConfig ?? {},
       view_configs: input.viewConfigs ?? {},
       config: input.config ?? {},
-    };
+    }
 
-    if (input.folderId !== undefined) insertData.folder_id = input.folderId;
+    if (input.folderId !== undefined) insertData.folder_id = input.folderId
     if (input.folderId) {
-      await this.assertFolderBelongsToProduct(context, input.folderId);
+      await this.assertFolderBelongsToProduct(context, input.folderId)
     }
     if (promptTemplate !== undefined)
-      insertData.prompt_template = promptTemplate;
+      insertData.prompt_template = promptTemplate
     if (input.scoringRubric !== undefined)
-      insertData.scoring_rubric = input.scoringRubric;
+      insertData.scoring_rubric = input.scoringRubric
     if (input.surfPrompt !== undefined)
-      insertData.surf_prompt = input.surfPrompt;
+      insertData.surf_prompt = input.surfPrompt
     if (input.relevanceThreshold !== undefined)
-      insertData.relevance_threshold = input.relevanceThreshold;
+      insertData.relevance_threshold = input.relevanceThreshold
 
     const { data, error } = await this.db
       .from("playbooks")
       .insert(insertData)
       .select(SURF_POINT_COLUMNS)
-      .single();
+      .single()
 
     if (error?.code === "23505") {
-      const existing = await this.findSurfPointByName(context, input.name);
+      const existing = await this.findSurfPointByName(context, input.name)
       throw new UserFacingError(
         `Surf point "${input.name}" already exists for this product${
           existing ? ` (id: ${existing.id})` : ""
         }. Use update_surf_point or choose a different name.`,
         { code: "CONFLICT", status: 409 }
-      );
+      )
     }
-    requireNoDbError(error, "Failed to create surf point");
-    return { surfPoint: formatSurfPoint(data as SurfPointRow) };
+    requireNoDbError(error, "Failed to create surf point")
+    return { surfPoint: formatSurfPoint(data as SurfPointRow) }
   }
 
   async updateSurfPoint(
     context: SignalSurfContext,
     input: UpdateSurfPointInput
   ) {
-    await this.assertSurfPointBelongsToProduct(context, input.surfPointId);
+    await this.assertSurfPointBelongsToProduct(context, input.surfPointId)
     if (input.folderId) {
-      await this.assertFolderBelongsToProduct(context, input.folderId);
+      await this.assertFolderBelongsToProduct(context, input.folderId)
     }
     if (input.variables !== undefined && input.variablesPatch !== undefined) {
       throw new UserFacingError(
@@ -2382,7 +2378,7 @@ export class SignalSurfRepository {
           code: "BAD_REQUEST",
           status: 400,
         }
-      );
+      )
     }
     if (input.toolConfig !== undefined && input.toolConfigPatch !== undefined) {
       throw new UserFacingError(
@@ -2391,7 +2387,7 @@ export class SignalSurfRepository {
           code: "BAD_REQUEST",
           status: 400,
         }
-      );
+      )
     }
     if (input.config !== undefined && input.configPatch !== undefined) {
       throw new UserFacingError(
@@ -2400,64 +2396,64 @@ export class SignalSurfRepository {
           code: "BAD_REQUEST",
           status: 400,
         }
-      );
+      )
     }
 
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
-    };
+    }
 
-    if (input.name !== undefined) updateData.name = input.name.trim();
+    if (input.name !== undefined) updateData.name = input.name.trim()
     if (input.description !== undefined)
-      updateData.description = input.description?.trim() || null;
-    if (input.color !== undefined) updateData.color = input.color;
-    if (input.icon !== undefined) updateData.icon = input.icon;
-    if (input.folderId !== undefined) updateData.folder_id = input.folderId;
+      updateData.description = input.description?.trim() || null
+    if (input.color !== undefined) updateData.color = input.color
+    if (input.icon !== undefined) updateData.icon = input.icon
+    if (input.folderId !== undefined) updateData.folder_id = input.folderId
     if (input.databaseIds !== undefined) {
       updateData.database_ids = await this.resolveDatabaseIds(
         context,
         input.databaseIds
-      );
+      )
     }
-    if (input.isActive !== undefined) updateData.is_active = input.isActive;
+    if (input.isActive !== undefined) updateData.is_active = input.isActive
     if (input.showAiDashboard !== undefined)
-      updateData.show_ai_dashboard = input.showAiDashboard;
+      updateData.show_ai_dashboard = input.showAiDashboard
     if (input.relevanceThreshold !== undefined)
-      updateData.relevance_threshold = input.relevanceThreshold;
+      updateData.relevance_threshold = input.relevanceThreshold
     if (input.promptTemplate !== undefined)
-      updateData.prompt_template = input.promptTemplate;
+      updateData.prompt_template = input.promptTemplate
     if (input.scoringRubric !== undefined)
-      updateData.scoring_rubric = input.scoringRubric;
+      updateData.scoring_rubric = input.scoringRubric
     if (input.surfPrompt !== undefined)
-      updateData.surf_prompt = input.surfPrompt;
+      updateData.surf_prompt = input.surfPrompt
     if (input.viewConfigs !== undefined)
-      updateData.view_configs = input.viewConfigs;
+      updateData.view_configs = input.viewConfigs
 
     const needsExisting =
       input.variablesPatch !== undefined ||
       input.toolConfigPatch !== undefined ||
       input.configPatch !== undefined ||
       ((input.scoringRubric !== undefined || input.surfPrompt !== undefined) &&
-        input.promptTemplate === undefined);
+        input.promptTemplate === undefined)
 
     const existing = needsExisting
       ? await this.getSurfPointForUpdate(context, input.surfPointId)
-      : null;
+      : null
 
-    if (input.variables !== undefined) updateData.variables = input.variables;
+    if (input.variables !== undefined) updateData.variables = input.variables
     if (input.variablesPatch !== undefined) {
       updateData.variables = {
         ...asRecord(existing?.variables),
         ...input.variablesPatch,
-      };
+      }
     }
     if (input.toolConfig !== undefined)
-      updateData.tool_config = input.toolConfig;
+      updateData.tool_config = input.toolConfig
     if (input.toolConfigPatch !== undefined) {
       updateData.tool_config = {
         ...asRecord(existing?.tool_config),
         ...input.toolConfigPatch,
-      };
+      }
     }
     if (updateData.tool_config !== undefined) {
       // Tool attachment is set here (no dedicated attach/detach tool), so the
@@ -2467,14 +2463,14 @@ export class SignalSurfRepository {
       await this.assertProductToolsBelongToProduct(
         context,
         uniqueStrings(asRecord(updateData.tool_config).auto_tool_ids)
-      );
+      )
     }
-    if (input.config !== undefined) updateData.config = input.config;
+    if (input.config !== undefined) updateData.config = input.config
     if (input.configPatch !== undefined) {
       updateData.config = {
         ...asRecord(existing?.config),
         ...input.configPatch,
-      };
+      }
     }
 
     if (
@@ -2484,22 +2480,22 @@ export class SignalSurfRepository {
       const finalRubric =
         input.scoringRubric !== undefined
           ? input.scoringRubric
-          : existing?.scoring_rubric ?? null;
+          : existing?.scoring_rubric ?? null
       const finalSurf =
         input.surfPrompt !== undefined
           ? input.surfPrompt
-          : existing?.surf_prompt ?? null;
-      updateData.prompt_template = joinPromptSections(finalRubric, finalSurf);
+          : existing?.surf_prompt ?? null
+      updateData.prompt_template = joinPromptSections(finalRubric, finalSurf)
     }
 
     const changedKeys = Object.keys(updateData).filter(
       (key) => key !== "updated_at"
-    );
+    )
     if (changedKeys.length === 0) {
       throw new UserFacingError("No fields to update.", {
         code: "BAD_REQUEST",
         status: 400,
-      });
+      })
     }
 
     const { data, error } = await this.db
@@ -2509,15 +2505,15 @@ export class SignalSurfRepository {
       .eq("product_id", context.productId)
       .is("deleted_at", null)
       .select(SURF_POINT_COLUMNS)
-      .single();
+      .single()
 
     if (error?.code === "23505") {
       throw new UserFacingError("A surf point with this name already exists.", {
         code: "CONFLICT",
         status: 409,
-      });
+      })
     }
-    requireNoDbError(error, "Failed to update surf point");
+    requireNoDbError(error, "Failed to update surf point")
 
     if (input.isActive !== undefined) {
       const { error: sourceError } = await this.db
@@ -2526,32 +2522,32 @@ export class SignalSurfRepository {
           is_active: input.isActive,
           updated_at: new Date().toISOString(),
         })
-        .eq("playbook_id", input.surfPointId);
+        .eq("playbook_id", input.surfPointId)
       requireNoDbError(
         errorOrNull(sourceError),
         "Failed to cascade source state"
-      );
+      )
     }
 
     return {
       surfPoint: formatSurfPoint(data as SurfPointRow),
       changedFields: changedKeys,
-    };
+    }
   }
 
   // ── Flow V2 node-graph tools (SIG-977) + Campaigns (SIG-1023) ──────────────
 
   describeNodeTypes() {
-    return describeFlowNodeTypes();
+    return describeFlowNodeTypes()
   }
 
   private async loadPlaybookFlow(
     context: SignalSurfContext,
     playbookId: string
   ): Promise<{
-    name: string | null;
-    config: JsonRecord;
-    flow: SurfPointFlowV2;
+    name: string | null
+    config: JsonRecord
+    flow: SurfPointFlowV2
   }> {
     const { data, error } = await this.db
       .from("playbooks")
@@ -2559,26 +2555,26 @@ export class SignalSurfRepository {
       .eq("id", playbookId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to load surf point");
+      .maybeSingle()
+    requireNoDbError(error, "Failed to load surf point")
     if (!data) {
       throw new UserFacingError("Surf point not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
-    const row = data as { name?: string | null; config?: unknown };
-    const config = asRecord(row.config);
-    let flow: SurfPointFlowV2 = { version: FLOW_VERSION, nodes: [], edges: [] };
+    const row = data as { name?: string | null; config?: unknown }
+    const config = asRecord(row.config)
+    let flow: SurfPointFlowV2 = { version: FLOW_VERSION, nodes: [], edges: [] }
     if (config.flow != null) {
-      const parsed = surfPointFlowV2Schema.safeParse(config.flow);
-      if (parsed.success) flow = parsed.data;
+      const parsed = surfPointFlowV2Schema.safeParse(config.flow)
+      if (parsed.success) flow = parsed.data
     }
     return {
       name: typeof row.name === "string" ? row.name : null,
       config,
       flow,
-    };
+    }
   }
 
   private async loadDatabaseColumns(
@@ -2588,35 +2584,35 @@ export class SignalSurfRepository {
     const database = await this.getDatabaseAndValidateProduct(
       context,
       databaseId
-    );
+    )
     return schemaFields(asRecord(database.schema))
       .map((field) =>
         field && typeof field === "object"
           ? (field as Record<string, unknown>).key
           : undefined
       )
-      .filter((key): key is string => typeof key === "string");
+      .filter((key): key is string => typeof key === "string")
   }
 
   private async columnsForActionTargets(
     context: SignalSurfContext,
     flow: SurfPointFlowV2
   ): Promise<Record<string, string[]>> {
-    const dbIds = new Set<string>();
+    const dbIds = new Set<string>()
     for (const node of flow.nodes) {
-      if (node.type !== "action") continue;
+      if (node.type !== "action") continue
       if (node.actionKind !== "create_row" && node.actionKind !== "object_sink")
-        continue;
-      const cfg = asRecord(node.actionConfig);
+        continue
+      const cfg = asRecord(node.actionConfig)
       if (typeof cfg.database_id === "string" && cfg.database_id) {
-        dbIds.add(cfg.database_id);
+        dbIds.add(cfg.database_id)
       }
     }
-    const columnsByDatabaseId: Record<string, string[]> = {};
+    const columnsByDatabaseId: Record<string, string[]> = {}
     for (const dbId of dbIds) {
-      columnsByDatabaseId[dbId] = await this.loadDatabaseColumns(context, dbId);
+      columnsByDatabaseId[dbId] = await this.loadDatabaseColumns(context, dbId)
     }
-    return columnsByDatabaseId;
+    return columnsByDatabaseId
   }
 
   private async persistPlaybookFlow(
@@ -2625,21 +2621,21 @@ export class SignalSurfRepository {
     config: JsonRecord,
     flow: SurfPointFlowV2
   ) {
-    const problems = validateFlow(flow);
+    const problems = validateFlow(flow)
     const blocking = problems.filter(
       (problem) => problem.code === "cycle" || problem.code === "dangling_edge"
-    );
+    )
     if (blocking.length > 0) {
       throw new UserFacingError(
         `Flow graph has blocking structural problems: ${blocking
           .map((problem) => problem.message)
           .join("; ")}`,
         { code: "BAD_REQUEST", status: 400, details: { blocking } }
-      );
+      )
     }
 
-    const tables = await this.columnsForActionTargets(context, flow);
-    const fieldProblems = validateFieldReferences(flow, tables);
+    const tables = await this.columnsForActionTargets(context, flow)
+    const fieldProblems = validateFieldReferences(flow, tables)
     if (fieldProblems.length > 0) {
       throw new UserFacingError(
         `Some create_row/object_sink fields map to columns that don't exist: ${fieldProblems
@@ -2650,27 +2646,27 @@ export class SignalSurfRepository {
           status: 400,
           details: { fieldProblems, tables },
         }
-      );
+      )
     }
 
-    const firstRule = flow.nodes.find((node) => node.type === "rule");
-    const firstAgent = flow.nodes.find((node) => node.type === "agent");
+    const firstRule = flow.nodes.find((node) => node.type === "rule")
+    const firstAgent = flow.nodes.find((node) => node.type === "agent")
     const updateData: Record<string, unknown> = {
       config: { ...config, flow },
       updated_at: new Date().toISOString(),
-    };
+    }
     if (firstRule && "prompt" in firstRule && firstRule.prompt != null) {
-      updateData.scoring_rubric = firstRule.prompt;
+      updateData.scoring_rubric = firstRule.prompt
     }
     if (
       firstRule &&
       "relevanceThreshold" in firstRule &&
       firstRule.relevanceThreshold != null
     ) {
-      updateData.relevance_threshold = firstRule.relevanceThreshold;
+      updateData.relevance_threshold = firstRule.relevanceThreshold
     }
     if (firstAgent && "prompt" in firstAgent && firstAgent.prompt != null) {
-      updateData.surf_prompt = firstAgent.prompt;
+      updateData.surf_prompt = firstAgent.prompt
     }
     if (
       updateData.scoring_rubric !== undefined ||
@@ -2679,7 +2675,7 @@ export class SignalSurfRepository {
       updateData.prompt_template = joinPromptSections(
         (updateData.scoring_rubric as string | null | undefined) ?? null,
         (updateData.surf_prompt as string | null | undefined) ?? null
-      );
+      )
     }
 
     const { error } = await this.db
@@ -2687,81 +2683,81 @@ export class SignalSurfRepository {
       .update(updateData)
       .eq("id", playbookId)
       .eq("product_id", context.productId)
-      .is("deleted_at", null);
-    requireNoDbError(error, "Failed to save surf point flow");
+      .is("deleted_at", null)
+    requireNoDbError(error, "Failed to save surf point flow")
 
     const warnings = problems.filter(
       (problem) => problem.code !== "cycle" && problem.code !== "dangling_edge"
-    );
+    )
     return {
       nodeCount: flow.nodes.length,
       edgeCount: flow.edges.length,
       entryNodeIds: flowEntryNodeIds(flow),
       warnings,
       ...(Object.keys(tables).length > 0 ? { tables } : {}),
-    };
+    }
   }
 
   async updateSurfPointFlow(
     context: SignalSurfContext,
     input: { playbookId: string; flow: unknown }
   ) {
-    const parsed = surfPointFlowV2Schema.safeParse(input.flow);
+    const parsed = surfPointFlowV2Schema.safeParse(input.flow)
     if (!parsed.success) {
       throw new UserFacingError(
         `Invalid flow graph: ${parsed.error.issues
           .map((issue) => issue.message)
           .join("; ")}`,
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
-    const loaded = await this.loadPlaybookFlow(context, input.playbookId);
+    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
     const summary = await this.persistPlaybookFlow(
       context,
       input.playbookId,
       loaded.config,
       parsed.data
-    );
-    return { playbookId: input.playbookId, name: loaded.name, ...summary };
+    )
+    return { playbookId: input.playbookId, name: loaded.name, ...summary }
   }
 
   async applyFlowEdits(
     context: SignalSurfContext,
     input: { playbookId: string; edits: FlowEditOp[] }
   ) {
-    const loaded = await this.loadPlaybookFlow(context, input.playbookId);
+    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
     const result = applyFlowEditsToGraph(
       loaded.flow,
       input.edits,
       (kind) => `${kind}-${randomUUID().slice(0, 8)}`
-    );
+    )
     if (!result.ok) {
       return {
         playbookId: input.playbookId,
         applied: false,
         results: result.results,
-      };
+      }
     }
     const summary = await this.persistPlaybookFlow(
       context,
       input.playbookId,
       loaded.config,
       result.flow
-    );
+    )
     return {
       playbookId: input.playbookId,
       applied: true,
       refs: result.refs,
       results: result.results,
       ...summary,
-    };
+    }
   }
 
   async getNodeUpstreamContext(
     context: SignalSurfContext,
     input: { playbookId: string; nodeId: string }
   ) {
-    const loaded = await this.loadPlaybookFlow(context, input.playbookId);
+    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
     if (!loaded.flow.nodes.some((node) => node.id === input.nodeId)) {
       throw new UserFacingError(
         `No node "${
@@ -2770,31 +2766,31 @@ export class SignalSurfRepository {
           .map((node) => node.id)
           .join(", ")}`,
         { code: "NOT_FOUND", status: 404 }
-      );
+      )
     }
     return buildUpstreamContext(loaded.flow, input.nodeId, {
       tableColumns: (databaseId: string) =>
         this.loadDatabaseColumns(context, databaseId),
-    });
+    })
   }
 
   async createCampaign(
     context: SignalSurfContext,
     input: {
-      playbookId: string;
-      contactTableId: string;
-      recipientField?: string;
-      mailbox?: string;
-      steps: Array<{ copy: string; delayDays?: number; gate?: string }>;
+      playbookId: string
+      contactTableId: string
+      recipientField?: string
+      mailbox?: string
+      steps: Array<{ copy: string; delayDays?: number; gate?: string }>
     }
   ) {
-    const recipientField = input.recipientField?.trim() || "email";
-    const mailbox = input.mailbox?.trim();
+    const recipientField = input.recipientField?.trim() || "email"
+    const mailbox = input.mailbox?.trim()
     if (!mailbox) {
       throw new UserFacingError(
         "mailbox is required. Pass a connected Unipile email account id. The SignalSurf MCP does not list Unipile accounts directly — connect a mailbox in the app, then pass its account id here.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
 
     const steps = input.steps
@@ -2805,15 +2801,15 @@ export class SignalSurfRepository {
           : "none") as "none" | "replied" | "not_replied",
         delaySeconds: Math.round(Math.max(0, step.delayDays ?? 0) * 86400),
       }))
-      .filter((step) => step.copy.length > 0);
+      .filter((step) => step.copy.length > 0)
     if (steps.length === 0) {
       throw new UserFacingError(
         "steps must be a non-empty array; each step needs copy (what that email says).",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
 
-    const loaded = await this.loadPlaybookFlow(context, input.playbookId);
+    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
 
     const { data: table, error: tableError } = await this.db
       .from("databases")
@@ -2821,15 +2817,15 @@ export class SignalSurfRepository {
       .eq("id", input.contactTableId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
-      .maybeSingle();
-    requireNoDbError(tableError, "Failed to load contact table");
+      .maybeSingle()
+    requireNoDbError(tableError, "Failed to load contact table")
     if (!table) {
       throw new UserFacingError(
         `Contact table "${input.contactTableId}" not found in this product.`,
         { code: "NOT_FOUND", status: 404 }
-      );
+      )
     }
-    const contactTable = table as { item_type?: string; name?: string };
+    const contactTable = table as { item_type?: string; name?: string }
     if (contactTable.item_type !== "contact") {
       throw new UserFacingError(
         `"${
@@ -2838,16 +2834,16 @@ export class SignalSurfRepository {
           contactTable.item_type
         }). A campaign enrols from a Contacts table.`,
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
 
     const { data: product, error: productError } = await this.db
       .from("products")
       .select("owner_id")
       .eq("id", context.productId)
-      .single();
-    requireNoDbError(productError, "Failed to resolve product owner");
-    const ownerId = (product as { owner_id?: string } | null)?.owner_id;
+      .single()
+    requireNoDbError(productError, "Failed to resolve product owner")
+    const ownerId = (product as { owner_id?: string } | null)?.owner_id
     if (!ownerId) {
       throw new UserFacingError(
         `Product not found (id: ${context.productId}).`,
@@ -2855,7 +2851,7 @@ export class SignalSurfRepository {
           code: "NOT_FOUND",
           status: 404,
         }
-      );
+      )
     }
 
     const { data: toolRow, error: toolError } = await this.db
@@ -2874,23 +2870,20 @@ export class SignalSurfRepository {
         is_enabled: true,
       })
       .select("id")
-      .single();
-    requireNoDbError(toolError, "Failed to create the sending mailbox tool");
-    const toolId = (toolRow as { id: string }).id;
+      .single()
+    requireNoDbError(toolError, "Failed to create the sending mailbox tool")
+    const toolId = (toolRow as { id: string }).id
 
     // Authorize the mailbox tool on the surf point pool before persisting the
     // flow so the step agents' allowedToolIds resolve against it.
-    const existing = await this.getSurfPointForUpdate(
-      context,
-      input.playbookId
-    );
-    const toolConfig = asRecord(existing?.tool_config);
+    const existing = await this.getSurfPointForUpdate(context, input.playbookId)
+    const toolConfig = asRecord(existing?.tool_config)
     const autoToolIds = uniqueStrings([
       ...(Array.isArray(toolConfig.auto_tool_ids)
         ? toolConfig.auto_tool_ids
         : []),
       toolId,
-    ]);
+    ])
     const { error: linkError } = await this.db
       .from("playbooks")
       .update({
@@ -2899,19 +2892,19 @@ export class SignalSurfRepository {
       })
       .eq("id", input.playbookId)
       .eq("product_id", context.productId)
-      .is("deleted_at", null);
-    requireNoDbError(linkError, "Failed to attach the mailbox tool");
+      .is("deleted_at", null)
+    requireNoDbError(linkError, "Failed to attach the mailbox tool")
 
     const built = buildCampaignFlow(
       { contactTableId: input.contactTableId, recipientField, toolId, steps },
       (kind) => `${kind}-${randomUUID().slice(0, 8)}`
-    );
+    )
     await this.persistPlaybookFlow(
       context,
       input.playbookId,
       loaded.config,
       built.flow
-    );
+    )
 
     return {
       playbookId: input.playbookId,
@@ -2922,15 +2915,15 @@ export class SignalSurfRepository {
       stepCount: steps.length,
       message:
         "Campaign built. It does NOT enrol contacts automatically — open the surf point in SignalSurf and click Enroll to start the drip.",
-    };
+    }
   }
 
   async testSurfPointNode(
     context: SignalSurfContext,
     input: { playbookId: string; nodeId: string; sampleText?: string }
   ) {
-    await this.assertSurfPointBelongsToProduct(context, input.playbookId);
-    const loaded = await this.loadPlaybookFlow(context, input.playbookId);
+    await this.assertSurfPointBelongsToProduct(context, input.playbookId)
+    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
     if (!loaded.flow.nodes.some((node) => node.id === input.nodeId)) {
       throw new UserFacingError(
         `No node "${
@@ -2939,17 +2932,17 @@ export class SignalSurfRepository {
           .map((node) => node.id)
           .join(", ")}`,
         { code: "NOT_FOUND", status: 404 }
-      );
+      )
     }
     if (!this.db.functions) {
       throw new UserFacingError(
         "Node dry-run is unavailable: the surf-flow-debug edge function is not reachable from this MCP deployment.",
         { code: "UNSUPPORTED", status: 501 }
-      );
+      )
     }
     const secret =
       process.env.SIGNALSURF_MCP_INTERNAL_API_SECRET ??
-      process.env.INTERNAL_API_SECRET;
+      process.env.INTERNAL_API_SECRET
     const { data, error } = await this.db.functions.invoke("surf-flow-debug", {
       body: {
         playbookId: input.playbookId,
@@ -2957,26 +2950,26 @@ export class SignalSurfRepository {
         ...(input.sampleText ? { sampleText: input.sampleText } : {}),
       },
       ...(secret ? { headers: { "x-internal-secret": secret } } : {}),
-    });
+    })
     if (error) {
       throw new UserFacingError(
         `Node dry-run failed: ${error.message ?? "surf-flow-debug error"}`,
         { code: "UPSTREAM_ERROR", status: 502 }
-      );
+      )
     }
-    return { playbookId: input.playbookId, nodeId: input.nodeId, result: data };
+    return { playbookId: input.playbookId, nodeId: input.nodeId, result: data }
   }
 
   async runSurfPoint(context: SignalSurfContext, input: RunSurfPointInput) {
     const surfPoint = await this.getSurfPointRunTarget(
       context,
       input.surfPointId
-    );
+    )
     if (!surfPoint.is_active && !input.allowInactive) {
       throw new UserFacingError(
         "Surf point is inactive. Pass allowInactive=true to queue it intentionally.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
 
     const { data: sourceData, error: sourceError } = await this.db
@@ -2984,42 +2977,42 @@ export class SignalSurfRepository {
       .select(SOURCE_COLUMNS)
       .eq("playbook_id", input.surfPointId)
       .eq("type", "pull")
-      .eq("is_active", true);
+      .eq("is_active", true)
 
-    requireNoDbError(sourceError, "Failed to list active surf point sources");
-    const sources = (sourceData ?? []) as SourceRow[];
+    requireNoDbError(sourceError, "Failed to list active surf point sources")
+    const sources = (sourceData ?? []) as SourceRow[]
     if (sources.length === 0) {
       throw new UserFacingError(
         "No active pull sources found for this surf point.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
 
-    const sourceIds = sources.map((source) => source.id);
+    const sourceIds = sources.map((source) => source.id)
     const userId =
       context.userId ??
       (await this.resolveProductOwnerId(context)) ??
-      sources.find((source) => source.user_id)?.user_id;
+      sources.find((source) => source.user_id)?.user_id
     if (!userId) {
       throw new UserFacingError(
         "Cannot queue surf point run because no job user could be resolved.",
         { code: "CONFIG_ERROR", status: 500 }
-      );
+      )
     }
 
-    const existingJobsBySourceId = new Map<string, SurfJobRow>();
+    const existingJobsBySourceId = new Map<string, SurfJobRow>()
     if (input.dedupePending !== false) {
       const { data: existingJobs, error: existingError } = await this.db
         .from("surf_jobs")
         .select("*")
         .eq("job_type", "extract")
         .in("source_id", sourceIds)
-        .in("status", ["pending", "processing"]);
+        .in("status", ["pending", "processing"])
 
-      requireNoDbError(existingError, "Failed to check active surf jobs");
+      requireNoDbError(existingError, "Failed to check active surf jobs")
       for (const job of (existingJobs ?? []) as SurfJobRow[]) {
         if (job.source_id && !existingJobsBySourceId.has(job.source_id)) {
-          existingJobsBySourceId.set(job.source_id, job);
+          existingJobsBySourceId.set(job.source_id, job)
         }
       }
     }
@@ -3032,24 +3025,24 @@ export class SignalSurfRepository {
           source.id,
           input.idempotencyKey!
         )
-      );
+      )
       const { data: idempotentJobs, error: idempotentError } = await this.db
         .from("surf_jobs")
         .select("*")
-        .in("id", deterministicIds);
-      requireNoDbError(idempotentError, "Failed to check idempotent surf jobs");
+        .in("id", deterministicIds)
+      requireNoDbError(idempotentError, "Failed to check idempotent surf jobs")
       for (const job of (idempotentJobs ?? []) as SurfJobRow[]) {
         if (job.source_id && !existingJobsBySourceId.has(job.source_id)) {
-          existingJobsBySourceId.set(job.source_id, job);
+          existingJobsBySourceId.set(job.source_id, job)
         }
       }
     }
 
     const sourcesToQueue = sources.filter(
       (source) => !existingJobsBySourceId.has(source.id)
-    );
+    )
     if (sourcesToQueue.length === 0) {
-      const jobs = [...existingJobsBySourceId.values()].map(formatSurfJob);
+      const jobs = [...existingJobsBySourceId.values()].map(formatSurfJob)
       return {
         job: jobs[0] ?? null,
         jobs,
@@ -3059,11 +3052,11 @@ export class SignalSurfRepository {
         reason: input.idempotencyKey
           ? "idempotency_or_active_jobs_exist"
           : "active_jobs_exist",
-      };
+      }
     }
 
-    const runId = randomUUID();
-    const traceId = randomUUID();
+    const runId = randomUUID()
+    const traceId = randomUUID()
     const jobInserts = sourcesToQueue.map((source) => ({
       id: input.idempotencyKey
         ? idempotentSurfJobId(
@@ -3088,17 +3081,17 @@ export class SignalSurfRepository {
         source_snapshot: buildSourceSnapshot(source),
       },
       max_attempts: 3,
-    }));
+    }))
 
     const { data, error } = await this.db
       .from("surf_jobs")
       .insert(jobInserts)
-      .select("*");
+      .select("*")
 
-    requireNoDbError(error, "Failed to queue surf point run");
-    const queuedJobs = ((data ?? []) as SurfJobRow[]).map(formatSurfJob);
-    const skippedJobs = [...existingJobsBySourceId.values()].map(formatSurfJob);
-    const jobs = [...queuedJobs, ...skippedJobs];
+    requireNoDbError(error, "Failed to queue surf point run")
+    const queuedJobs = ((data ?? []) as SurfJobRow[]).map(formatSurfJob)
+    const skippedJobs = [...existingJobsBySourceId.values()].map(formatSurfJob)
+    const jobs = [...queuedJobs, ...skippedJobs]
     return {
       job: jobs[0] ?? null,
       jobs,
@@ -3108,7 +3101,7 @@ export class SignalSurfRepository {
       runId,
       traceId,
       sourceIdsQueued: sourcesToQueue.map((source) => source.id),
-    };
+    }
   }
 
   // ─── Quick Surf (per-column enrichment) ────────────────────────────────────
@@ -3126,9 +3119,9 @@ export class SignalSurfRepository {
     databaseId: string,
     fieldKey: string
   ): Promise<{
-    id: string;
-    playbook_id: string | null;
-    metadata: JsonRecord;
+    id: string
+    playbook_id: string | null
+    metadata: JsonRecord
   } | null> {
     const { data, error } = await this.db
       .from("sources")
@@ -3137,31 +3130,31 @@ export class SignalSurfRepository {
         event_type: "manual_trigger",
         database_id: databaseId,
         target_field: fieldKey,
-      });
-    requireNoDbError(error, "Failed to look up Quick Surf source");
+      })
+    requireNoDbError(error, "Failed to look up Quick Surf source")
     const candidates = (data ?? []) as Array<{
-      id: string;
-      playbook_id: string | null;
-      metadata: unknown;
-    }>;
+      id: string
+      playbook_id: string | null
+      metadata: unknown
+    }>
     for (const candidate of candidates) {
-      if (!candidate.playbook_id) continue;
+      if (!candidate.playbook_id) continue
       const { data: playbook } = await this.db
         .from("playbooks")
         .select("id")
         .eq("id", candidate.playbook_id)
         .eq("product_id", context.productId)
         .is("deleted_at", null)
-        .maybeSingle();
+        .maybeSingle()
       if (playbook) {
         return {
           id: candidate.id,
           playbook_id: candidate.playbook_id,
           metadata: asRecord(candidate.metadata),
-        };
+        }
       }
     }
-    return null;
+    return null
   }
 
   async enableQuickSurf(
@@ -3171,41 +3164,41 @@ export class SignalSurfRepository {
     const database = await this.getDatabaseAndValidateProduct(
       context,
       input.databaseId
-    );
-    const fields = schemaFields(asRecord(database.schema));
-    const field = fields.find((entry) => entry.key === input.fieldKey);
+    )
+    const fields = schemaFields(asRecord(database.schema))
+    const field = fields.find((entry) => entry.key === input.fieldKey)
     if (!field) {
       throw new UserFacingError(
         `Column "${input.fieldKey}" not found in this database. Add it with add_database_field first.`,
         { code: "NOT_FOUND", status: 404 }
-      );
+      )
     }
     if (field.is_primary === true) {
       throw new UserFacingError(
         "The primary column cannot be enriched with Quick Surf.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
-    const whatToDo = input.whatToDo.trim();
+    const whatToDo = input.whatToDo.trim()
     const fieldLabel =
       typeof field.label === "string" && field.label
         ? field.label
-        : input.fieldKey;
+        : input.fieldKey
 
     const existing = await this.findQuickSurfSource(
       context,
       input.databaseId,
       input.fieldKey
-    );
+    )
     if (existing) {
-      const wasDisabled = existing.metadata.disabled === true;
+      const wasDisabled = existing.metadata.disabled === true
       const { error: srcError } = await this.db
         .from("sources")
         .update({
           metadata: buildQuickSurfMetadata(input, existing.metadata),
         })
-        .eq("id", existing.id);
-      requireNoDbError(srcError, "Failed to re-enable Quick Surf");
+        .eq("id", existing.id)
+      requireNoDbError(srcError, "Failed to re-enable Quick Surf")
       if (existing.playbook_id) {
         const { error: pbError } = await this.db
           .from("playbooks")
@@ -3215,8 +3208,8 @@ export class SignalSurfRepository {
             updated_at: new Date().toISOString(),
           })
           .eq("id", existing.playbook_id)
-          .eq("product_id", context.productId);
-        requireNoDbError(pbError, "Failed to update Quick Surf instruction");
+          .eq("product_id", context.productId)
+        requireNoDbError(pbError, "Failed to update Quick Surf instruction")
       }
       return {
         success: true,
@@ -3226,20 +3219,20 @@ export class SignalSurfRepository {
         fieldKey: input.fieldKey,
         surfPointId: existing.playbook_id,
         sourceId: existing.id,
-      };
+      }
     }
 
     const ownerId =
-      context.userId ?? (await this.resolveProductOwnerId(context));
+      context.userId ?? (await this.resolveProductOwnerId(context))
     if (!ownerId) {
       throw new UserFacingError(
         "Cannot enable Quick Surf because no owning user could be resolved.",
         { code: "CONFIG_ERROR", status: 500 }
-      );
+      )
     }
 
-    const surfPointId = randomUUID();
-    const playbookName = `${database.name || "Database"} · ${fieldLabel}`;
+    const surfPointId = randomUUID()
+    const playbookName = `${database.name || "Database"} · ${fieldLabel}`
     const { error: pbError } = await this.db.from("playbooks").insert({
       id: surfPointId,
       product_id: context.productId,
@@ -3252,10 +3245,10 @@ export class SignalSurfRepository {
       relevance_threshold: 0,
       tool_config: {},
       deleted_at: null,
-    });
-    requireNoDbError(pbError, "Failed to create the Quick Surf surf point");
+    })
+    requireNoDbError(pbError, "Failed to create the Quick Surf surf point")
 
-    const sourceId = randomUUID();
+    const sourceId = randomUUID()
     const { error: srcError } = await this.db.from("sources").insert({
       id: sourceId,
       user_id: ownerId,
@@ -3267,15 +3260,15 @@ export class SignalSurfRepository {
       data_schema: { fields: [] },
       is_active: true,
       playbook_id: surfPointId,
-    });
+    })
     if (srcError) {
       // Roll back the playbook so we never leave an orphaned hidden surf point.
       await this.db
         .from("playbooks")
         .delete()
         .eq("id", surfPointId)
-        .eq("product_id", context.productId);
-      requireNoDbError(srcError, "Failed to bind Quick Surf to the column");
+        .eq("product_id", context.productId)
+      requireNoDbError(srcError, "Failed to bind Quick Surf to the column")
     }
     return {
       success: true,
@@ -3285,7 +3278,7 @@ export class SignalSurfRepository {
       fieldKey: input.fieldKey,
       surfPointId,
       sourceId,
-    };
+    }
   }
 
   async disableQuickSurf(
@@ -3296,14 +3289,14 @@ export class SignalSurfRepository {
       context,
       input.databaseId,
       input.fieldKey
-    );
+    )
     if (!existing) {
       return {
         success: true,
         alreadyOff: true,
         databaseId: input.databaseId,
         fieldKey: input.fieldKey,
-      };
+      }
     }
     // Turn off WITHOUT deleting: keep the surf point + its "what to do" so
     // re-enabling restores the instruction.
@@ -3318,98 +3311,98 @@ export class SignalSurfRepository {
           disabled: true,
         },
       })
-      .eq("id", existing.id);
-    requireNoDbError(error, "Failed to disable Quick Surf");
+      .eq("id", existing.id)
+    requireNoDbError(error, "Failed to disable Quick Surf")
     return {
       success: true,
       databaseId: input.databaseId,
       fieldKey: input.fieldKey,
-    };
+    }
   }
 
   async listQuickSurf(context: SignalSurfContext, input: ListQuickSurfInput) {
-    await this.assertDatabaseBelongsToProduct(context, input.databaseId);
+    await this.assertDatabaseBelongsToProduct(context, input.databaseId)
     const { data, error } = await this.db
       .from("sources")
       .select("id, metadata, playbook_id")
       .contains("metadata", {
         event_type: "manual_trigger",
         database_id: input.databaseId,
-      });
-    requireNoDbError(error, "Failed to list Quick Surf columns");
+      })
+    requireNoDbError(error, "Failed to list Quick Surf columns")
     const sources = (data ?? []) as Array<{
-      id: string;
-      metadata: unknown;
-      playbook_id: string | null;
-    }>;
+      id: string
+      metadata: unknown
+      playbook_id: string | null
+    }>
     const columns: Array<{
-      fieldKey: string;
-      surfPointId: string;
-      sourceId: string;
-      whatToDo: string | null;
-    }> = [];
+      fieldKey: string
+      surfPointId: string
+      sourceId: string
+      whatToDo: string | null
+    }> = []
     for (const source of sources) {
-      const meta = asRecord(source.metadata);
-      const targetField = meta.target_field;
-      if (typeof targetField !== "string" || !targetField) continue;
+      const meta = asRecord(source.metadata)
+      const targetField = meta.target_field
+      if (typeof targetField !== "string" || !targetField) continue
       // Off-but-remembered columns are not "enabled" — skip them.
-      if (meta.disabled === true) continue;
-      if (!source.playbook_id) continue;
+      if (meta.disabled === true) continue
+      if (!source.playbook_id) continue
       const { data: playbook } = await this.db
         .from("playbooks")
         .select("id, surf_prompt")
         .eq("id", source.playbook_id)
         .eq("product_id", context.productId)
         .is("deleted_at", null)
-        .maybeSingle();
-      if (!playbook) continue;
-      const surfPrompt = asRecord(playbook).surf_prompt;
+        .maybeSingle()
+      if (!playbook) continue
+      const surfPrompt = asRecord(playbook).surf_prompt
       columns.push({
         fieldKey: targetField,
         surfPointId: source.playbook_id,
         sourceId: source.id,
         whatToDo: typeof surfPrompt === "string" ? surfPrompt : null,
-      });
+      })
     }
-    return { success: true, databaseId: input.databaseId, columns };
+    return { success: true, databaseId: input.databaseId, columns }
   }
 
   async runQuickSurf(context: SignalSurfContext, input: RunQuickSurfInput) {
-    const entryIds = uniqueIds(input.entryIds ?? []);
+    const entryIds = uniqueIds(input.entryIds ?? [])
     const modeCount =
       (input.scope ? 1 : 0) +
       (input.entryId ? 1 : 0) +
-      (entryIds.length ? 1 : 0);
+      (entryIds.length ? 1 : 0)
     if (modeCount === 0) {
       throw new UserFacingError(
         'Provide scope ("first10" | "first100" | "all"), entryId for a single cell, or entryIds for a specific row subset.',
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
     if (modeCount > 1) {
       throw new UserFacingError(
         "Provide exactly one of scope, entryId, or entryIds.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
-    await this.assertDatabaseBelongsToProduct(context, input.databaseId);
+    await this.assertDatabaseBelongsToProduct(context, input.databaseId)
 
     const source = await this.findQuickSurfSource(
       context,
       input.databaseId,
       input.fieldKey
-    );
+    )
     if (!source || !source.playbook_id) {
       throw new UserFacingError(
         `Quick Surf is not set up on column "${input.fieldKey}". Call enable_quick_surf first.`,
         { code: "NOT_FOUND", status: 404 }
-      );
+      )
     }
     if (source.metadata.disabled === true) {
       throw new UserFacingError(
         `Quick Surf is turned off on column "${input.fieldKey}". Call enable_quick_surf to turn it back on, then run.`,
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
 
     const { data: playbookData, error: pbError } = await this.db
@@ -3419,54 +3412,53 @@ export class SignalSurfRepository {
       )
       .eq("id", source.playbook_id)
       .eq("product_id", context.productId)
-      .maybeSingle();
-    requireNoDbError(pbError, "Failed to load the Quick Surf surf point");
+      .maybeSingle()
+    requireNoDbError(pbError, "Failed to load the Quick Surf surf point")
     const playbook = playbookData as {
-      id: string;
-      prompt_template?: string | null;
-      surf_prompt?: string | null;
-      scoring_rubric?: string | null;
-      is_active?: boolean | null;
-      product_id: string;
-    } | null;
+      id: string
+      prompt_template?: string | null
+      surf_prompt?: string | null
+      scoring_rubric?: string | null
+      is_active?: boolean | null
+      product_id: string
+    } | null
     const playbookValid =
       !!playbook &&
       (playbook.is_active ?? true) &&
       (!!playbook.prompt_template ||
         !!playbook.surf_prompt ||
-        !!playbook.scoring_rubric);
+        !!playbook.scoring_rubric)
     if (!playbook || !playbookValid) {
       throw new UserFacingError(
         "The Quick Surf surf point has no instruction or is inactive — re-run enable_quick_surf with a whatToDo.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
 
-    const userId =
-      context.userId ?? (await this.resolveProductOwnerId(context));
+    const userId = context.userId ?? (await this.resolveProductOwnerId(context))
     if (!userId) {
       throw new UserFacingError(
         "Cannot queue Quick Surf because no job user could be resolved.",
         { code: "CONFIG_ERROR", status: 500 }
-      );
+      )
     }
 
     const enqueue = async (entry: {
-      id: string;
-      data: unknown;
-      database_id?: string | null;
+      id: string
+      data: unknown
+      database_id?: string | null
     }): Promise<
       | {
-          queued: true;
-          rawSignalId: string;
-          job: ReturnType<typeof formatSurfJob>;
+          queued: true
+          rawSignalId: string
+          job: ReturnType<typeof formatSurfJob>
         }
       | {
-          queued: false;
+          queued: false
         }
     > => {
-      const rawSignalId = randomUUID();
-      const jobId = randomUUID();
+      const rawSignalId = randomUUID()
+      const jobId = randomUUID()
       const { data, error } = await this.db.rpc("enqueue_quick_surf_jobs", {
         p_entries: [
           {
@@ -3484,19 +3476,19 @@ export class SignalSurfRepository {
         p_target_field: input.fieldKey,
         p_preserve_existing: input.overwriteExisting !== true,
         p_triggered_by: "mcp",
-      });
-      requireNoDbError(error, "Failed to enqueue Quick Surf job");
-      const result = asRecord(data);
-      const queuedRows = Array.isArray(result.queued) ? result.queued : [];
-      const queuedRow = asRecord(queuedRows[0]);
-      if (!queuedRow.raw_signal_id) return { queued: false };
-      const job = asRecord(queuedRow.job);
+      })
+      requireNoDbError(error, "Failed to enqueue Quick Surf job")
+      const result = asRecord(data)
+      const queuedRows = Array.isArray(result.queued) ? result.queued : []
+      const queuedRow = asRecord(queuedRows[0])
+      if (!queuedRow.raw_signal_id) return { queued: false }
+      const job = asRecord(queuedRow.job)
       return {
         queued: true,
         rawSignalId: String(queuedRow.raw_signal_id),
         job: formatSurfJob(job as SurfJobRow),
-      };
-    };
+      }
+    }
 
     if (input.entryId) {
       const { data: entry, error: entryError } = await this.db
@@ -3504,13 +3496,13 @@ export class SignalSurfRepository {
         .select("id, data, database_id")
         .eq("id", input.entryId)
         .eq("database_id", input.databaseId)
-        .maybeSingle();
-      requireNoDbError(entryError, "Failed to load the target entry");
+        .maybeSingle()
+      requireNoDbError(entryError, "Failed to load the target entry")
       if (!entry) {
         throw new UserFacingError(
           "Entry not found in this column's database.",
           { code: "NOT_FOUND", status: 404 }
-        );
+        )
       }
       if (
         !input.overwriteExisting &&
@@ -3526,11 +3518,11 @@ export class SignalSurfRepository {
           queued: 0,
           skipped: 1,
           skippedExisting: 1,
-        };
+        }
       }
       const queued = await enqueue(
         entry as { id: string; data: unknown; database_id?: string | null }
-      );
+      )
       if (!queued.queued) {
         return {
           success: true,
@@ -3543,7 +3535,7 @@ export class SignalSurfRepository {
           skipped: 1,
           skippedExisting: 0,
           skippedPending: 1,
-        };
+        }
       }
       return {
         success: true,
@@ -3557,43 +3549,41 @@ export class SignalSurfRepository {
         skippedExisting: 0,
         rawSignalIds: [queued.rawSignalId],
         jobs: [queued.job],
-      };
+      }
     }
 
-    const limit = input.scope ? QUICK_SURF_SCOPE_LIMITS[input.scope] : 1000;
+    const limit = input.scope ? QUICK_SURF_SCOPE_LIMITS[input.scope] : 1000
     const rowsQuery = this.db
       .from("entries")
       .select("id, data, database_id")
-      .eq("database_id", input.databaseId);
+      .eq("database_id", input.databaseId)
     const { data: rows, error: rowsError } =
       entryIds.length > 0
         ? await rowsQuery.in("id", entryIds)
         : await rowsQuery
             .order("updated_at", { ascending: false })
-            .limit(input.scope === "all" ? limit + 1 : limit);
-    requireNoDbError(rowsError, "Failed to list rows for Quick Surf");
+            .limit(input.scope === "all" ? limit + 1 : limit)
+    requireNoDbError(rowsError, "Failed to list rows for Quick Surf")
     const loadedEntries = (rows ?? []) as Array<{
-      id: string;
-      data: unknown;
-      database_id?: string | null;
-    }>;
+      id: string
+      data: unknown
+      database_id?: string | null
+    }>
     if (entryIds.length > 0) {
-      const foundIds = new Set(loadedEntries.map((entry) => entry.id));
-      const missingIds = entryIds.filter((entryId) => !foundIds.has(entryId));
+      const foundIds = new Set(loadedEntries.map((entry) => entry.id))
+      const missingIds = entryIds.filter((entryId) => !foundIds.has(entryId))
       if (missingIds.length > 0) {
         throw new UserFacingError(
           `Some requested entries were not found in this table: ${missingIds.join(
             ", "
           )}.`,
           { code: "NOT_FOUND", status: 404 }
-        );
+        )
       }
     }
-    const truncated = input.scope === "all" && loadedEntries.length > limit;
-    const allEntries = truncated
-      ? loadedEntries.slice(0, limit)
-      : loadedEntries;
-    const runCondition = parseRunCondition(source.metadata.run_condition);
+    const truncated = input.scope === "all" && loadedEntries.length > limit
+    const allEntries = truncated ? loadedEntries.slice(0, limit) : loadedEntries
+    const runCondition = parseRunCondition(source.metadata.run_condition)
     const conditionMatchedEntries = runCondition
       ? allEntries.filter((entry) =>
           evaluateRunCondition(
@@ -3601,29 +3591,29 @@ export class SignalSurfRepository {
             asRecord((entry.data ?? {}) as JsonRecord)
           )
         )
-      : allEntries;
-    const skippedCondition = allEntries.length - conditionMatchedEntries.length;
+      : allEntries
+    const skippedCondition = allEntries.length - conditionMatchedEntries.length
     const missingEntries = input.overwriteExisting
       ? conditionMatchedEntries
       : conditionMatchedEntries.filter(
           (entry) => !hasQuickSurfCellValue(entry.data, input.fieldKey)
-        );
+        )
     const skippedExisting =
-      conditionMatchedEntries.length - missingEntries.length;
-    const entries = missingEntries;
-    let skippedPending = 0;
-    const rawSignalIds: string[] = [];
-    const jobs: ReturnType<typeof formatSurfJob>[] = [];
+      conditionMatchedEntries.length - missingEntries.length
+    const entries = missingEntries
+    let skippedPending = 0
+    const rawSignalIds: string[] = []
+    const jobs: ReturnType<typeof formatSurfJob>[] = []
     for (const entry of entries) {
-      const queued = await enqueue(entry);
+      const queued = await enqueue(entry)
       if (!queued.queued) {
-        skippedPending += 1;
-        continue;
+        skippedPending += 1
+        continue
       }
-      rawSignalIds.push(queued.rawSignalId);
-      jobs.push(queued.job);
+      rawSignalIds.push(queued.rawSignalId)
+      jobs.push(queued.job)
     }
-    const skipped = skippedCondition + skippedExisting + skippedPending;
+    const skipped = skippedCondition + skippedExisting + skippedPending
     return {
       success: true,
       mode: "column" as const,
@@ -3644,29 +3634,29 @@ export class SignalSurfRepository {
             note: `Capped at the newest ${limit} source rows. Use explicit entryIds for older rows.`,
           }
         : {}),
-    };
+    }
   }
 
   async getSurfJob(context: SignalSurfContext, jobId: string) {
-    const job = await this.getSurfJobAndValidateProduct(context, jobId);
-    return { job: formatSurfJob(job) };
+    const job = await this.getSurfJobAndValidateProduct(context, jobId)
+    return { job: formatSurfJob(job) }
   }
 
   async waitForSurfJob(context: SignalSurfContext, input: WaitForSurfJobInput) {
-    const timeoutMs = Math.min(Math.max(input.timeoutMs ?? 30000, 0), 120000);
+    const timeoutMs = Math.min(Math.max(input.timeoutMs ?? 30000, 0), 120000)
     const pollIntervalMs = Math.min(
       Math.max(input.pollIntervalMs ?? 1000, 100),
       10000
-    );
-    const startedAt = Date.now();
-    const deadline = startedAt + timeoutMs;
-    let polls = 0;
+    )
+    const startedAt = Date.now()
+    const deadline = startedAt + timeoutMs
+    let polls = 0
 
     while (true) {
-      polls += 1;
-      const job = await this.getSurfJobAndValidateProduct(context, input.jobId);
-      const formattedJob = formatSurfJob(job);
-      const terminal = isTerminalSurfJobStatus(job.status);
+      polls += 1
+      const job = await this.getSurfJobAndValidateProduct(context, input.jobId)
+      const formattedJob = formatSurfJob(job)
+      const terminal = isTerminalSurfJobStatus(job.status)
       if (terminal) {
         return {
           job: formattedJob,
@@ -3674,10 +3664,10 @@ export class SignalSurfRepository {
           timedOut: false,
           polls,
           elapsedMs: Date.now() - startedAt,
-        };
+        }
       }
 
-      const remainingMs = deadline - Date.now();
+      const remainingMs = deadline - Date.now()
       if (remainingMs <= 0) {
         return {
           job: formattedJob,
@@ -3685,10 +3675,10 @@ export class SignalSurfRepository {
           timedOut: true,
           polls,
           elapsedMs: Date.now() - startedAt,
-        };
+        }
       }
 
-      await sleep(Math.min(pollIntervalMs, remainingMs));
+      await sleep(Math.min(pollIntervalMs, remainingMs))
     }
   }
 
@@ -3696,49 +3686,49 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     input: ListSurfJobsInput = {}
   ) {
-    const limit = input.limit ?? 50;
-    const offset = input.offset ?? 0;
+    const limit = input.limit ?? 50
+    const offset = input.offset ?? 0
     const surfPointIds = input.surfPointId
       ? [input.surfPointId]
-      : await this.listProductSurfPointIds(context);
+      : await this.listProductSurfPointIds(context)
 
     if (input.surfPointId) {
-      await this.assertSurfPointInProduct(context, input.surfPointId);
+      await this.assertSurfPointInProduct(context, input.surfPointId)
     }
     if (surfPointIds.length === 0) {
-      return { jobs: [], totalCount: 0, limit, offset };
+      return { jobs: [], totalCount: 0, limit, offset }
     }
 
     let query = this.db
       .from("surf_jobs")
       .select("*", { count: "exact" })
-      .in("playbook_id", surfPointIds);
+      .in("playbook_id", surfPointIds)
 
-    if (input.status) query = query.eq("status", input.status);
+    if (input.status) query = query.eq("status", input.status)
 
     const { data, error, count } = await query
       .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
+      .range(offset, offset + limit - 1)
 
-    requireNoDbError(error, "Failed to list surf jobs");
+    requireNoDbError(error, "Failed to list surf jobs")
     return {
       jobs: ((data ?? []) as SurfJobRow[]).map(formatSurfJob),
       totalCount: count ?? data?.length ?? 0,
       limit,
       offset,
-    };
+    }
   }
 
   async cancelSurfJob(context: SignalSurfContext, jobId: string) {
-    const existing = await this.getSurfJobAndValidateProduct(context, jobId);
+    const existing = await this.getSurfJobAndValidateProduct(context, jobId)
     if (existing.status !== "pending") {
       throw new UserFacingError(
         "Only pending surf jobs can be cancelled through MCP.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
 
-    const now = new Date().toISOString();
+    const now = new Date().toISOString()
     const { data, error } = await this.db
       .from("surf_jobs")
       .update({
@@ -3749,35 +3739,35 @@ export class SignalSurfRepository {
       .eq("id", jobId)
       .eq("status", "pending")
       .select("*")
-      .single();
+      .single()
 
-    requireNoDbError(error, "Failed to cancel surf job");
+    requireNoDbError(error, "Failed to cancel surf job")
     return {
       job: formatSurfJob(data as SurfJobRow),
       cancelled: true,
-    };
+    }
   }
 
   async deleteSurfPoints(context: SignalSurfContext, surfPointIds: string[]) {
-    const ids = uniqueIds(surfPointIds);
-    const existing = await this.getSurfPointsByIds(context, ids);
+    const ids = uniqueIds(surfPointIds)
+    const existing = await this.getSurfPointsByIds(context, ids)
     if (existing.length !== ids.length) {
       throw new UserFacingError(
         "One or more surf points were not found or are already deleted.",
         { code: "NOT_FOUND", status: 404 }
-      );
+      )
     }
 
-    const now = new Date().toISOString();
+    const now = new Date().toISOString()
     const { data, error } = await this.db
       .from("playbooks")
       .update({ deleted_at: now, updated_at: now })
       .eq("product_id", context.productId)
       .is("deleted_at", null)
       .in("id", ids)
-      .select("id, name");
+      .select("id, name")
 
-    requireNoDbError(error, "Failed to delete surf points");
+    requireNoDbError(error, "Failed to delete surf points")
 
     const { error: cancelError } = await this.db
       .from("surf_jobs")
@@ -3787,38 +3777,38 @@ export class SignalSurfRepository {
         completed_at: now,
       })
       .in("playbook_id", ids)
-      .eq("status", "pending");
-    requireNoDbError(errorOrNull(cancelError), "Failed to cancel pending jobs");
+      .eq("status", "pending")
+    requireNoDbError(errorOrNull(cancelError), "Failed to cancel pending jobs")
 
     if (context.userId) {
       const { data: prefs } = await this.db
         .from("user_preferences")
         .select("current_playbook_id")
         .eq("user_id", context.userId)
-        .maybeSingle();
+        .maybeSingle()
       if (
         prefs?.current_playbook_id &&
         ids.includes(prefs.current_playbook_id)
       ) {
-        const replacement = await this.findFirstActiveSurfPoint(context, ids);
+        const replacement = await this.findFirstActiveSurfPoint(context, ids)
         const { error: prefsError } = await this.db
           .from("user_preferences")
           .update({
             current_playbook_id: replacement?.id ?? null,
             updated_at: now,
           })
-          .eq("user_id", context.userId);
+          .eq("user_id", context.userId)
         requireNoDbError(
           errorOrNull(prefsError),
           "Failed to update current surf point preference"
-        );
+        )
       }
     }
 
     return {
       deletedSurfPoints: (data ?? []) as Array<{ id: string; name: string }>,
       count: data?.length ?? 0,
-    };
+    }
   }
 
   async listDatabases(
@@ -3828,25 +3818,25 @@ export class SignalSurfRepository {
     let query = this.db
       .from("databases")
       .select(DATABASE_COLUMNS)
-      .eq("product_id", context.productId);
+      .eq("product_id", context.productId)
 
-    if (!input.includeSystem) query = query.is("system_type", null);
+    if (!input.includeSystem) query = query.is("system_type", null)
 
     const { data, error } = await query
       .order("display_order", { ascending: true })
       .order("created_at", { ascending: true })
-      .limit(input.limit ?? 100);
+      .limit(input.limit ?? 100)
 
-    requireNoDbError(error, "Failed to list databases");
+    requireNoDbError(error, "Failed to list databases")
     return {
       databases: (data ?? []).map(formatDatabase),
       totalCount: data?.length ?? 0,
-    };
+    }
   }
 
   async createTable(context: SignalSurfContext, input: CreateTableInput) {
     if (input.folderId) {
-      await this.assertDatabaseFolderBelongsToProduct(context, input.folderId);
+      await this.assertDatabaseFolderBelongsToProduct(context, input.folderId)
     }
     const template = input.template
       ? applyPublicTableTemplate(
@@ -3854,11 +3844,11 @@ export class SignalSurfRepository {
           input.schema,
           input.viewConfigs
         )
-      : null;
-    const schema = template?.schema ?? input.schema ?? { fields: [] };
-    await this.validateDatabaseSchemaReferences(context, schema);
+      : null
+    const schema = template?.schema ?? input.schema ?? { fields: [] }
+    await this.validateDatabaseSchemaReferences(context, schema)
 
-    const now = new Date().toISOString();
+    const now = new Date().toISOString()
     const { data, error } = await this.db
       .from("databases")
       .insert({
@@ -3882,23 +3872,23 @@ export class SignalSurfRepository {
         updated_at: now,
       })
       .select(DATABASE_COLUMNS)
-      .single();
+      .single()
 
     if (error?.code === "23505") {
       throw new UserFacingError("A table with this name already exists.", {
         code: "CONFLICT",
         status: 409,
-      });
+      })
     }
-    requireNoDbError(error, "Failed to create table");
-    return { database: formatDatabase(data as DatabaseRow) };
+    requireNoDbError(error, "Failed to create table")
+    return { database: formatDatabase(data as DatabaseRow) }
   }
 
   async updateTable(context: SignalSurfContext, input: UpdateTableInput) {
     const existing = await this.getDatabaseAndValidateProduct(
       context,
       input.databaseId
-    );
+    )
     if (
       [input.template, input.schema, input.schemaPatch].filter(
         (value) => value !== undefined
@@ -3910,37 +3900,37 @@ export class SignalSurfRepository {
           code: "BAD_REQUEST",
           status: 400,
         }
-      );
+      )
     }
     if (input.folderId) {
-      await this.assertDatabaseFolderBelongsToProduct(context, input.folderId);
+      await this.assertDatabaseFolderBelongsToProduct(context, input.folderId)
     }
 
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
-    };
+    }
 
-    if (input.name !== undefined) updateData.name = input.name.trim();
+    if (input.name !== undefined) updateData.name = input.name.trim()
     if (input.description !== undefined)
-      updateData.description = input.description?.trim() || null;
-    if (input.icon !== undefined) updateData.icon = input.icon;
-    if (input.color !== undefined) updateData.color = input.color;
+      updateData.description = input.description?.trim() || null
+    if (input.icon !== undefined) updateData.icon = input.icon
+    if (input.color !== undefined) updateData.color = input.color
     if (input.itemType !== undefined)
-      updateData.item_type = input.itemType?.trim() || null;
+      updateData.item_type = input.itemType?.trim() || null
     if (input.viewConfigs !== undefined)
-      updateData.view_configs = input.viewConfigs;
-    if (input.folderId !== undefined) updateData.folder_id = input.folderId;
+      updateData.view_configs = input.viewConfigs
+    if (input.folderId !== undefined) updateData.folder_id = input.folderId
     if (input.displayOrder !== undefined)
-      updateData.display_order = input.displayOrder;
+      updateData.display_order = input.displayOrder
 
     if (input.template !== undefined) {
-      const existingSchema = asRecord(existing.schema);
+      const existingSchema = asRecord(existing.schema)
       const expectedKind =
         input.template === "outbound_accounts"
           ? "outbound.account_list"
-          : "outbound.contact_list";
-      const currentTemplate = existingSchema.template_key;
-      const currentKind = existingSchema.database_kind;
+          : "outbound.contact_list"
+      const currentTemplate = existingSchema.template_key
+      const currentKind = existingSchema.database_kind
       if (
         (typeof currentTemplate === "string" &&
           currentTemplate !== input.template) ||
@@ -3950,38 +3940,38 @@ export class SignalSurfRepository {
         throw new UserFacingError(
           `Template "${input.template}" can only upgrade a table already classified as ${expectedKind}.`,
           { code: "BAD_REQUEST", status: 400 }
-        );
+        )
       }
       const template = applyPublicTableTemplate(
         input.template,
         existingSchema,
         asRecord(existing.view_configs)
-      );
-      await this.validateDatabaseSchemaReferences(context, template.schema);
-      updateData.schema = template.schema;
-      updateData.item_type = template.itemType;
-      updateData.view_configs = template.viewConfigs;
+      )
+      await this.validateDatabaseSchemaReferences(context, template.schema)
+      updateData.schema = template.schema
+      updateData.item_type = template.itemType
+      updateData.view_configs = template.viewConfigs
     }
 
     if (input.schema !== undefined) {
-      const nextSchema = input.schema ?? {};
-      await this.validateDatabaseSchemaReferences(context, nextSchema);
-      updateData.schema = nextSchema;
+      const nextSchema = input.schema ?? {}
+      await this.validateDatabaseSchemaReferences(context, nextSchema)
+      updateData.schema = nextSchema
     }
     if (input.schemaPatch !== undefined) {
-      const nextSchema = { ...asRecord(existing.schema), ...input.schemaPatch };
-      await this.validateDatabaseSchemaReferences(context, nextSchema);
-      updateData.schema = nextSchema;
+      const nextSchema = { ...asRecord(existing.schema), ...input.schemaPatch }
+      await this.validateDatabaseSchemaReferences(context, nextSchema)
+      updateData.schema = nextSchema
     }
 
     const changedKeys = Object.keys(updateData).filter(
       (key) => key !== "updated_at"
-    );
+    )
     if (changedKeys.length === 0) {
       throw new UserFacingError("No fields to update.", {
         code: "BAD_REQUEST",
         status: 400,
-      });
+      })
     }
 
     const { data, error } = await this.db
@@ -3990,89 +3980,86 @@ export class SignalSurfRepository {
       .eq("id", input.databaseId)
       .eq("product_id", context.productId)
       .select(DATABASE_COLUMNS)
-      .single();
+      .single()
 
     if (error?.code === "23505") {
       throw new UserFacingError("A table with this name already exists.", {
         code: "CONFLICT",
         status: 409,
-      });
+      })
     }
-    requireNoDbError(error, "Failed to update table");
+    requireNoDbError(error, "Failed to update table")
     return {
       database: formatDatabase(data as DatabaseRow),
       changedFields: changedKeys,
-    };
+    }
   }
 
   async deleteTables(context: SignalSurfContext, databaseIds: string[]) {
-    const ids = uniqueIds(databaseIds);
+    const ids = uniqueIds(databaseIds)
     if (ids.length === 0) {
       throw new UserFacingError("At least one database id is required.", {
         code: "BAD_REQUEST",
         status: 400,
-      });
+      })
     }
 
     const { data: databases, error: readError } = await this.db
       .from("databases")
       .select(DATABASE_COLUMNS)
       .eq("product_id", context.productId)
-      .in("id", ids);
+      .in("id", ids)
 
-    requireNoDbError(readError, "Failed to validate database access");
-    const found = (databases ?? []) as DatabaseRow[];
-    const foundIds = new Set(found.map((database) => database.id));
-    const missing = ids.filter((id) => !foundIds.has(id));
+    requireNoDbError(readError, "Failed to validate database access")
+    const found = (databases ?? []) as DatabaseRow[]
+    const foundIds = new Set(found.map((database) => database.id))
+    const missing = ids.filter((id) => !foundIds.has(id))
     if (missing.length > 0) {
       throw new UserFacingError(
         `Database not found or access denied: ${missing.join(", ")}`,
         { code: "NOT_FOUND", status: 404 }
-      );
+      )
     }
 
-    const systemTables = found.filter((database) => database.system_type);
+    const systemTables = found.filter((database) => database.system_type)
     if (systemTables.length > 0) {
       throw new UserFacingError(
         `System tables cannot be deleted through MCP: ${systemTables
           .map((database) => database.name)
           .join(", ")}`,
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
 
     const { error, count } = await this.db
       .from("databases")
       .delete({ count: "exact" })
       .eq("product_id", context.productId)
-      .in("id", ids);
+      .in("id", ids)
 
-    requireNoDbError(error, "Failed to delete tables");
+    requireNoDbError(error, "Failed to delete tables")
 
     const { data: linkedSurfPoints, error: linkedError } = await this.db
       .from("playbooks")
       .select("id, database_ids")
       .eq("product_id", context.productId)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
 
-    requireNoDbError(
-      linkedError,
-      "Failed to list surf points linked to tables"
-    );
-    const deletedIdSet = new Set(ids);
-    const now = new Date().toISOString();
-    const unlinkedSurfPoints: Array<{ id: string; databaseIds: string[] }> = [];
+    requireNoDbError(linkedError, "Failed to list surf points linked to tables")
+    const deletedIdSet = new Set(ids)
+    const now = new Date().toISOString()
+    const unlinkedSurfPoints: Array<{ id: string; databaseIds: string[] }> = []
     for (const surfPoint of (linkedSurfPoints ?? []) as Array<{
-      id: string;
-      database_ids: string[] | null;
+      id: string
+      database_ids: string[] | null
     }>) {
       const currentIds = Array.isArray(surfPoint.database_ids)
         ? surfPoint.database_ids
-        : [];
+        : []
       const nextIds = currentIds.filter(
         (databaseId) => !deletedIdSet.has(databaseId)
-      );
-      if (nextIds.length === currentIds.length) continue;
+      )
+      if (nextIds.length === currentIds.length) continue
 
       const { error: updateError } = await this.db
         .from("playbooks")
@@ -4082,15 +4069,15 @@ export class SignalSurfRepository {
         })
         .eq("id", surfPoint.id)
         .eq("product_id", context.productId)
-        .is("deleted_at", null);
+        .is("deleted_at", null)
       requireNoDbError(
         updateError,
         "Failed to unlink deleted table from surf point"
-      );
+      )
       unlinkedSurfPoints.push({
         id: surfPoint.id,
         databaseIds: nextIds,
-      });
+      })
     }
 
     return {
@@ -4102,74 +4089,74 @@ export class SignalSurfRepository {
       deletedDatabaseIds: ids,
       count: count ?? ids.length,
       unlinkedSurfPoints,
-    };
+    }
   }
 
   async readTable(context: SignalSurfContext, input: ReadTableInput) {
-    await this.assertDatabaseBelongsToProduct(context, input.databaseId);
+    await this.assertDatabaseBelongsToProduct(context, input.databaseId)
 
-    const limit = input.limit ?? 50;
-    const offset = input.offset ?? 0;
+    const limit = input.limit ?? 50
+    const offset = input.offset ?? 0
     const hasAdvancedQuery =
-      (input.filters?.length ?? 0) > 0 || (input.sorts?.length ?? 0) > 0;
+      (input.filters?.length ?? 0) > 0 || (input.sorts?.length ?? 0) > 0
 
     if (hasAdvancedQuery) {
-      return this.readTableWithAdvancedQuery(input);
+      return this.readTableWithAdvancedQuery(input)
     }
 
     let query = this.db
       .from("entries")
       .select(ENTRY_COLUMNS, { count: "exact" })
-      .eq("database_id", input.databaseId);
+      .eq("database_id", input.databaseId)
 
     if (input.dataContains && Object.keys(input.dataContains).length > 0) {
-      query = query.contains("data", input.dataContains);
+      query = query.contains("data", input.dataContains)
     }
 
     const { data, error, count } = await query
       .order(input.orderBy ?? "created_at", {
         ascending: input.ascending ?? false,
       })
-      .range(offset, offset + limit - 1);
+      .range(offset, offset + limit - 1)
 
-    requireNoDbError(error, "Failed to read table");
+    requireNoDbError(error, "Failed to read table")
     return {
       rows: (data ?? []).map(formatEntry),
       totalCount: count ?? data?.length ?? 0,
       limit,
       offset,
-    };
+    }
   }
 
   async listDatabaseViews(context: SignalSurfContext, databaseId: string) {
     const database = await this.getDatabaseAndValidateProduct(
       context,
       databaseId
-    );
+    )
     return {
       databaseId,
       views: extractSavedViews(database.view_configs),
-    };
+    }
   }
 
   async readTableView(context: SignalSurfContext, input: ReadTableViewInput) {
     const database = await this.getDatabaseAndValidateProduct(
       context,
       input.databaseId
-    );
-    const views = extractSavedViews(database.view_configs);
-    const view = views.find((candidate) => candidate.id === input.viewId);
+    )
+    const views = extractSavedViews(database.view_configs)
+    const view = views.find((candidate) => candidate.id === input.viewId)
     if (!view) {
       throw new UserFacingError("Database view not found.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
 
-    const viewFilters = normalizeSavedViewFilters(view.raw);
-    const viewSorts = normalizeSavedViewSorts(database.view_configs, view.raw);
+    const viewFilters = normalizeSavedViewFilters(view.raw)
+    const viewSorts = normalizeSavedViewSorts(database.view_configs, view.raw)
     const filterLogic: "and" | "or" =
-      input.filterLogic ?? (view.filterLogic === "or" ? "or" : "and");
+      input.filterLogic ?? (view.filterLogic === "or" ? "or" : "and")
 
     return {
       view,
@@ -4182,42 +4169,42 @@ export class SignalSurfRepository {
         sorts: input.sorts ?? viewSorts,
         scanLimit: input.scanLimit,
       })),
-    };
+    }
   }
 
   private async readTableWithAdvancedQuery(input: ReadTableInput) {
-    const limit = input.limit ?? 50;
-    const offset = input.offset ?? 0;
-    const scanLimit = input.scanLimit ?? 1000;
+    const limit = input.limit ?? 50
+    const offset = input.offset ?? 0
+    const scanLimit = input.scanLimit ?? 1000
     let query = this.db
       .from("entries")
       .select(ENTRY_COLUMNS, { count: "exact" })
-      .eq("database_id", input.databaseId);
+      .eq("database_id", input.databaseId)
 
     if (input.dataContains && Object.keys(input.dataContains).length > 0) {
-      query = query.contains("data", input.dataContains);
+      query = query.contains("data", input.dataContains)
     }
 
     const { data, error, count } = await query
       .order(input.orderBy ?? "created_at", {
         ascending: input.ascending ?? false,
       })
-      .range(0, scanLimit - 1);
+      .range(0, scanLimit - 1)
 
-    requireNoDbError(error, "Failed to read table");
+    requireNoDbError(error, "Failed to read table")
 
-    const rows = (data ?? []) as EntryRow[];
-    const filters = input.filters ?? [];
-    const filterLogic = input.filterLogic ?? "and";
+    const rows = (data ?? []) as EntryRow[]
+    const filters = input.filters ?? []
+    const filterLogic = input.filterLogic ?? "and"
     const filtered = filters.length
       ? rows.filter((row) => rowMatchesTableFilters(row, filters, filterLogic))
-      : rows;
+      : rows
     const sorted = input.sorts?.length
       ? sortTableRows(filtered, input.sorts)
-      : filtered;
-    const paged = sorted.slice(offset, offset + limit);
-    const scannedCount = rows.length;
-    const sourceTotalCount = count ?? rows.length;
+      : filtered
+    const paged = sorted.slice(offset, offset + limit)
+    const scannedCount = rows.length
+    const sourceTotalCount = count ?? rows.length
 
     return {
       rows: paged.map(formatEntry),
@@ -4231,28 +4218,28 @@ export class SignalSurfRepository {
       filterLogic,
       filters,
       sorts: input.sorts ?? [],
-    };
+    }
   }
 
   async getTableRow(context: SignalSurfContext, rowId: string) {
-    const entry = await this.getEntryAndValidateProduct(context, rowId);
-    return { row: formatEntry(entry) };
+    const entry = await this.getEntryAndValidateProduct(context, rowId)
+    return { row: formatEntry(entry) }
   }
 
   async createTableRow(context: SignalSurfContext, input: CreateTableRowInput) {
-    await this.assertDatabaseBelongsToProduct(context, input.databaseId);
+    await this.assertDatabaseBelongsToProduct(context, input.databaseId)
     if (input.playbookId) {
       await this.assertSurfPointCanWriteDatabase(
         context,
         input.playbookId,
         input.databaseId
-      );
+      )
     }
     await this.validateEntryDataReferences(
       context,
       input.databaseId,
       input.data
-    );
+    )
 
     const { data, error } = await this.db
       .from("entries")
@@ -4266,10 +4253,10 @@ export class SignalSurfRepository {
         triggered: false,
       })
       .select(ENTRY_COLUMNS)
-      .single();
+      .single()
 
-    requireNoDbError(error, "Failed to create table row");
-    return { row: formatEntry(data as EntryRow) };
+    requireNoDbError(error, "Failed to create table row")
+    return { row: formatEntry(data as EntryRow) }
   }
 
   // Handles both single-row (edits: [one]) and batch (edits: [many]) calls —
@@ -4284,38 +4271,38 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     input: UpdateTableRowsInput
   ) {
-    const rowIds = input.edits.map((edit) => edit.rowId);
-    const ids = uniqueIds(rowIds);
+    const rowIds = input.edits.map((edit) => edit.rowId)
+    const ids = uniqueIds(rowIds)
     if (ids.length !== rowIds.length) {
       throw new UserFacingError("Each edit must reference a unique rowId.", {
         code: "BAD_REQUEST",
         status: 400,
-      });
+      })
     }
 
-    const entries = await this.getEntriesAndValidateProduct(context, ids);
-    const byId = new Map(entries.map((entry) => [entry.id, entry]));
-    const missing = ids.filter((id) => !byId.has(id));
+    const entries = await this.getEntriesAndValidateProduct(context, ids)
+    const byId = new Map(entries.map((entry) => [entry.id, entry]))
+    const missing = ids.filter((id) => !byId.has(id))
     if (missing.length > 0) {
       throw new UserFacingError(
         `Rows not found or access denied: ${missing.join(", ")}`,
         { code: "NOT_FOUND", status: 404 }
-      );
+      )
     }
 
     for (const edit of input.edits) {
-      const existing = byId.get(edit.rowId)!;
+      const existing = byId.get(edit.rowId)!
       if (edit.databaseId && existing.database_id !== edit.databaseId) {
         throw new UserFacingError(
           `Row ${edit.rowId} belongs to database ${existing.database_id}, not ${edit.databaseId}`,
           { code: "BAD_REQUEST", status: 400 }
-        );
+        )
       }
       if (edit.data !== undefined && edit.dataPatch !== undefined) {
         throw new UserFacingError(
           `Edit for row ${edit.rowId}: pass either data or dataPatch, not both.`,
           { code: "BAD_REQUEST", status: 400 }
-        );
+        )
       }
       if (
         edit.data === undefined &&
@@ -4326,32 +4313,32 @@ export class SignalSurfRepository {
         throw new UserFacingError(
           `Edit for row ${edit.rowId} must include at least one of data, dataPatch, note, or playbookId.`,
           { code: "BAD_REQUEST", status: 400 }
-        );
+        )
       }
       if (edit.playbookId) {
         await this.assertSurfPointCanWriteDatabase(
           context,
           edit.playbookId,
           existing.database_id as string
-        );
+        )
       }
     }
 
-    const patches: Array<{ entry_id: string; data: JsonRecord }> = [];
+    const patches: Array<{ entry_id: string; data: JsonRecord }> = []
     for (const edit of input.edits) {
-      if (edit.data === undefined && edit.dataPatch === undefined) continue;
-      const existing = byId.get(edit.rowId)!;
+      if (edit.data === undefined && edit.dataPatch === undefined) continue
+      const existing = byId.get(edit.rowId)!
       const nextData =
         edit.data !== undefined
           ? edit.data
-          : { ...asRecord(existing.data), ...edit.dataPatch };
+          : { ...asRecord(existing.data), ...edit.dataPatch }
 
       await this.validateEntryDataReferences(
         context,
         existing.database_id as string,
         nextData
-      );
-      patches.push({ entry_id: edit.rowId, data: nextData });
+      )
+      patches.push({ entry_id: edit.rowId, data: nextData })
     }
 
     if (patches.length > 0) {
@@ -4359,67 +4346,67 @@ export class SignalSurfRepository {
         p_entries: patches,
         p_source: "mcp",
         p_source_ref: context.tokenName ?? null,
-      });
-      requireNoDbError(error, "Failed to update rows");
+      })
+      requireNoDbError(error, "Failed to update rows")
     }
 
     for (const edit of input.edits) {
-      if (edit.note === undefined) continue;
+      if (edit.note === undefined) continue
       const { error } = await this.db.rpc("update_entry_note_with_source", {
         p_entry_id: edit.rowId,
         p_note: edit.note,
         p_source: "mcp",
         p_source_ref: context.tokenName ?? null,
-      });
-      requireNoDbError(error, "Failed to update row note");
+      })
+      requireNoDbError(error, "Failed to update row note")
     }
 
     for (const edit of input.edits) {
-      if (edit.playbookId === undefined) continue;
+      if (edit.playbookId === undefined) continue
       const { error } = await this.db
         .from("entries")
         .update({
           playbook_id: edit.playbookId,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", edit.rowId);
-      requireNoDbError(error, "Failed to update row metadata");
+        .eq("id", edit.rowId)
+      requireNoDbError(error, "Failed to update row metadata")
     }
 
-    const updated = await this.getEntriesAndValidateProduct(context, ids);
-    return { rows: updated.map((row) => formatEntry(row)) };
+    const updated = await this.getEntriesAndValidateProduct(context, ids)
+    return { rows: updated.map((row) => formatEntry(row)) }
   }
 
   async deleteTableRows(context: SignalSurfContext, rowIds: string[]) {
-    const ids = uniqueIds(rowIds);
-    const entries = await this.getEntriesAndValidateProduct(context, ids);
+    const ids = uniqueIds(rowIds)
+    const entries = await this.getEntriesAndValidateProduct(context, ids)
     if (entries.length !== ids.length) {
       throw new UserFacingError("One or more rows were not found.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
 
     const { error, count } = await this.db
       .from("entries")
       .delete({ count: "exact" })
-      .in("id", ids);
+      .in("id", ids)
 
-    requireNoDbError(error, "Failed to delete rows");
-    return { deletedRowIds: ids, count: count ?? ids.length };
+    requireNoDbError(error, "Failed to delete rows")
+    return { deletedRowIds: ids, count: count ?? ids.length }
   }
 
   async listDatabaseFields(context: SignalSurfContext, databaseId: string) {
     const database = await this.getDatabaseAndValidateProduct(
       context,
       databaseId
-    );
-    const schema = asRecord(database.schema);
+    )
+    const schema = asRecord(database.schema)
     return {
       databaseId,
       fields: schemaFields(schema),
       relations: Array.isArray(schema.relations) ? schema.relations : [],
-    };
+    }
   }
 
   async getEnrichmentContext(
@@ -4429,10 +4416,10 @@ export class SignalSurfRepository {
     const database = await this.getDatabaseAndValidateProduct(
       context,
       input.databaseId
-    );
-    const schema = asRecord(database.schema);
-    const fields = schemaFields(schema);
-    const relations = Array.isArray(schema.relations) ? schema.relations : [];
+    )
+    const schema = asRecord(database.schema)
+    const fields = schemaFields(schema)
+    const relations = Array.isArray(schema.relations) ? schema.relations : []
 
     const fieldKeys = fields
       .map((field) =>
@@ -4440,7 +4427,7 @@ export class SignalSurfRepository {
           ? (field as Record<string, unknown>).key
           : undefined
       )
-      .filter((key): key is string => typeof key === "string");
+      .filter((key): key is string => typeof key === "string")
 
     if (input.fieldKey && !fieldKeys.includes(input.fieldKey)) {
       throw new UserFacingError(
@@ -4448,25 +4435,25 @@ export class SignalSurfRepository {
           input.fieldKey
         }". Valid field keys: ${fieldKeys.join(", ")}`,
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
 
-    const scanKeys = input.fieldKey ? [input.fieldKey] : fieldKeys;
+    const scanKeys = input.fieldKey ? [input.fieldKey] : fieldKeys
     const { data: rows, error } = await this.db
       .from("entries")
       .select("data")
       .eq("database_id", input.databaseId)
       .order("updated_at", { ascending: false })
-      .limit(POPULAR_VALUES_SCAN_LIMIT);
-    requireNoDbError(error, "Failed to scan rows for popular values");
+      .limit(POPULAR_VALUES_SCAN_LIMIT)
+    requireNoDbError(error, "Failed to scan rows for popular values")
 
     const popularValues = aggregatePopularValues(
       (rows ?? []) as Array<{ data: unknown }>,
       scanKeys,
       POPULAR_VALUES_TOP_N
-    );
+    )
 
-    const { brandContext } = await this.getBrandContext(context);
+    const { brandContext } = await this.getBrandContext(context)
 
     return {
       databaseId: input.databaseId,
@@ -4475,22 +4462,22 @@ export class SignalSurfRepository {
       relations,
       conventions: FIELD_CONVENTIONS,
       popularValues,
-    };
+    }
   }
 
   async addDatabaseField(
     context: SignalSurfContext,
     input: AddDatabaseFieldInput
   ) {
-    validateDatabaseField(input.field);
+    validateDatabaseField(input.field)
     return this.updateDatabaseSchema(context, input.databaseId, (schema) => {
-      const fields = schemaFields(schema);
-      assertFieldKeyAvailable(fields, String(input.field.key));
+      const fields = schemaFields(schema)
+      assertFieldKeyAvailable(fields, String(input.field.key))
       return {
         ...schema,
         fields: [...fields, input.field],
-      };
-    });
+      }
+    })
   }
 
   async updateDatabaseField(
@@ -4498,26 +4485,26 @@ export class SignalSurfRepository {
     input: UpdateDatabaseFieldInput
   ) {
     return this.updateDatabaseSchema(context, input.databaseId, (schema) => {
-      const fields = schemaFields(schema);
-      const index = fields.findIndex((field) => field.key === input.fieldKey);
+      const fields = schemaFields(schema)
+      const index = fields.findIndex((field) => field.key === input.fieldKey)
       if (index < 0) {
         throw new UserFacingError("Database field not found.", {
           code: "NOT_FOUND",
           status: 404,
-        });
+        })
       }
-      const nextField = { ...fields[index], ...input.patch };
-      validateDatabaseField(nextField);
+      const nextField = { ...fields[index], ...input.patch }
+      validateDatabaseField(nextField)
       if (nextField.key !== input.fieldKey) {
-        assertFieldKeyAvailable(fields, String(nextField.key), input.fieldKey);
+        assertFieldKeyAvailable(fields, String(nextField.key), input.fieldKey)
       }
-      const nextFields = [...fields];
-      nextFields[index] = nextField;
+      const nextFields = [...fields]
+      nextFields[index] = nextField
       return {
         ...schema,
         fields: nextFields,
-      };
-    });
+      }
+    })
   }
 
   async removeDatabaseField(
@@ -4530,43 +4517,43 @@ export class SignalSurfRepository {
         context,
         input.databaseId,
         (schema) => {
-          const fields = schemaFields(schema);
+          const fields = schemaFields(schema)
           const nextFields = fields.filter(
             (field) => field.key !== input.fieldKey
-          );
+          )
           if (nextFields.length === fields.length) {
             throw new UserFacingError("Database field not found.", {
               code: "NOT_FOUND",
               status: 404,
-            });
+            })
           }
           return {
             ...schema,
             fields: nextFields,
-          };
+          }
         }
       )),
-    };
+    }
   }
 
   async createRelationField(
     context: SignalSurfContext,
     input: CreateRelationFieldInput
   ) {
-    await this.assertDatabaseBelongsToProduct(context, input.targetDatabaseId);
+    await this.assertDatabaseBelongsToProduct(context, input.targetDatabaseId)
     const field: JsonRecord = {
       key: input.key,
       type: "item_ref",
       label: input.label ?? input.key,
       target_database_id: input.targetDatabaseId,
       relation_type: input.relationType ?? "item_ref",
-    };
-    if (input.description) field.description = input.description;
-    if (input.displayField) field.display_field = input.displayField;
+    }
+    if (input.description) field.description = input.description
+    if (input.displayField) field.display_field = input.displayField
     return this.addDatabaseField(context, {
       databaseId: input.databaseId,
       field,
-    });
+    })
   }
 
   private async getSourceForUpdate(
@@ -4577,33 +4564,33 @@ export class SignalSurfRepository {
       .from("sources")
       .select(SOURCE_COLUMNS)
       .eq("id", sourceId)
-      .maybeSingle();
+      .maybeSingle()
 
-    requireNoDbError(error, "Failed to read surf point source");
+    requireNoDbError(error, "Failed to read surf point source")
     if (!data) {
       throw new UserFacingError("Source not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
 
-    const source = data as SourceRow;
-    await this.assertSurfPointBelongsToProduct(context, source.playbook_id);
-    return source;
+    const source = data as SourceRow
+    await this.assertSurfPointBelongsToProduct(context, source.playbook_id)
+    return source
   }
 
   private async getWebhookSourceForImport(
     context: SignalSurfContext,
     sourceId: string
   ): Promise<SourceRow> {
-    const source = await this.getSourceForUpdate(context, sourceId);
+    const source = await this.getSourceForUpdate(context, sourceId)
     if (inferSourceType(source) !== "webhook") {
       throw new UserFacingError("Source is not a webhook source.", {
         code: "BAD_REQUEST",
         status: 400,
-      });
+      })
     }
-    return source;
+    return source
   }
 
   private resolveWebhookImportMapping(
@@ -4612,14 +4599,14 @@ export class SignalSurfRepository {
   ): ImportMappingV1 {
     const mapping = inputMapping
       ? readImportMappingValue(inputMapping)
-      : readImportMapping(source.data_schema);
+      : readImportMapping(source.data_schema)
     if (!mapping) {
       throw new UserFacingError("No valid import mapping configured.", {
         code: "BAD_REQUEST",
         status: 400,
-      });
+      })
     }
-    return mapping;
+    return mapping
   }
 
   private async getWebhookPayloadSample(
@@ -4629,22 +4616,22 @@ export class SignalSurfRepository {
     let query = this.db
       .from("raw_signals")
       .select("id, source_id, data, status, received_at, dedup_key")
-      .eq("source_id", sourceId);
+      .eq("source_id", sourceId)
 
-    if (payloadId) query = query.eq("id", payloadId);
+    if (payloadId) query = query.eq("id", payloadId)
 
     const { data, error } = await query
       .order("received_at", { ascending: false })
       .limit(1)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to read webhook payload sample");
+      .maybeSingle()
+    requireNoDbError(error, "Failed to read webhook payload sample")
     if (!data) {
       throw new UserFacingError("Webhook payload sample not found.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
-    return data as RawSignalRow;
+    return data as RawSignalRow
   }
 
   private async upsertImportMappingPreviewRows(
@@ -4654,31 +4641,31 @@ export class SignalSurfRepository {
     rawSignalId: string,
     receivedAt: string
   ): Promise<{
-    importedRows: number;
-    rows: Array<ReturnType<typeof formatEntry>>;
-    warnings: string[];
+    importedRows: number
+    rows: Array<ReturnType<typeof formatEntry>>
+    warnings: string[]
   }> {
     const surfPoint = await this.getSurfPointForUpdate(
       context,
       source.playbook_id
-    );
-    const allowedDatabaseIds = new Set(surfPoint.database_ids ?? []);
-    const imported: Array<ReturnType<typeof formatEntry>> = [];
-    const warnings: string[] = [];
+    )
+    const allowedDatabaseIds = new Set(surfPoint.database_ids ?? [])
+    const imported: Array<ReturnType<typeof formatEntry>> = []
+    const warnings: string[] = []
 
     for (const row of rows) {
       if (!allowedDatabaseIds.has(row.targetDatabaseId)) {
         warnings.push(
           `Mapping "${row.mappingName}" targets database ${row.targetDatabaseId}, which is not attached to this surf point.`
-        );
-        continue;
+        )
+        continue
       }
 
       await this.validateEntryDataReferences(
         context,
         row.targetDatabaseId,
         row.data
-      );
+      )
 
       const { data: existing, error: existingError } = await this.db
         .from("entries")
@@ -4686,14 +4673,14 @@ export class SignalSurfRepository {
         .eq("playbook_id", source.playbook_id)
         .eq("database_id", row.targetDatabaseId)
         .eq("entry_key_hash", row.entryKeyHash)
-        .maybeSingle();
-      requireNoDbError(existingError, "Failed to read mapped import row");
+        .maybeSingle()
+      requireNoDbError(existingError, "Failed to read mapped import row")
 
       if (existing) {
         const nextData = {
           ...asRecord((existing as EntryRow).data),
           ...row.data,
-        };
+        }
         const { data: updated, error: updateError } = await this.db
           .from("entries")
           .update({
@@ -4705,10 +4692,10 @@ export class SignalSurfRepository {
           })
           .eq("id", (existing as EntryRow).id)
           .select(ENTRY_COLUMNS)
-          .single();
-        requireNoDbError(updateError, "Failed to update mapped import row");
-        imported.push(formatEntry(updated as EntryRow));
-        continue;
+          .single()
+        requireNoDbError(updateError, "Failed to update mapped import row")
+        imported.push(formatEntry(updated as EntryRow))
+        continue
       }
 
       const { data: inserted, error: insertError } = await this.db
@@ -4728,30 +4715,30 @@ export class SignalSurfRepository {
           updated_at: receivedAt,
         })
         .select(ENTRY_COLUMNS)
-        .single();
-      requireNoDbError(insertError, "Failed to insert mapped import row");
-      imported.push(formatEntry(inserted as EntryRow));
+        .single()
+      requireNoDbError(insertError, "Failed to insert mapped import row")
+      imported.push(formatEntry(inserted as EntryRow))
     }
 
     return {
       importedRows: imported.length,
       rows: imported,
       warnings,
-    };
+    }
   }
 
   private async listSourceRowsForSurfPoint(
     context: SignalSurfContext,
     surfPointId: string
   ): Promise<SourceRow[]> {
-    await this.assertSurfPointBelongsToProduct(context, surfPointId);
+    await this.assertSurfPointBelongsToProduct(context, surfPointId)
     const { data, error } = await this.db
       .from("sources")
       .select(SOURCE_COLUMNS)
-      .eq("playbook_id", surfPointId);
+      .eq("playbook_id", surfPointId)
 
-    requireNoDbError(error, "Failed to list surf point sources");
-    return (data ?? []) as SourceRow[];
+    requireNoDbError(error, "Failed to list surf point sources")
+    return (data ?? []) as SourceRow[]
   }
 
   private async resolveSourceDatabaseName(
@@ -4759,17 +4746,17 @@ export class SignalSurfRepository {
     sourceType: SourceTypeInput,
     config: JsonRecord
   ): Promise<string | null> {
-    const databaseId = readTrimmedString(config.databaseId);
+    const databaseId = readTrimmedString(config.databaseId)
     const requiresDatabase =
-      sourceType === "item-created" || sourceType === "item-updated";
+      sourceType === "item-created" || sourceType === "item-updated"
     if (!databaseId) {
       if (requiresDatabase) {
         throw new UserFacingError(
           `Missing config.databaseId. ${sourceType} sources require a product table to watch.`,
           { code: "BAD_REQUEST", status: 400 }
-        );
+        )
       }
-      return null;
+      return null
     }
 
     const { data, error } = await this.db
@@ -4777,59 +4764,59 @@ export class SignalSurfRepository {
       .select("id, name")
       .eq("id", databaseId)
       .eq("product_id", context.productId)
-      .maybeSingle();
+      .maybeSingle()
 
-    requireNoDbError(error, "Failed to validate source database");
+    requireNoDbError(error, "Failed to validate source database")
     if (!data) {
       throw new UserFacingError("Database not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
-    return readTrimmedString((data as { name?: string | null }).name) ?? "";
+    return readTrimmedString((data as { name?: string | null }).name) ?? ""
   }
 
   private async deleteSourceRows(
     context: SignalSurfContext,
     sources: SourceRow[]
   ): Promise<number> {
-    const sourceIds = uniqueIds(sources.map((source) => source.id));
-    if (sourceIds.length === 0) return 0;
+    const sourceIds = uniqueIds(sources.map((source) => source.id))
+    if (sourceIds.length === 0) return 0
 
     const { error: jobError } = await this.db
       .from("surf_jobs")
       .delete({ count: "exact" })
       .in("source_id", sourceIds)
-      .in("status", ACTIVE_SURF_JOB_STATUSES);
-    requireNoDbError(errorOrNull(jobError), "Failed to delete source jobs");
+      .in("status", ACTIVE_SURF_JOB_STATUSES)
+    requireNoDbError(errorOrNull(jobError), "Failed to delete source jobs")
 
     const { count, error } = await this.db
       .from("sources")
       .delete({ count: "exact" })
-      .in("id", sourceIds);
-    requireNoDbError(errorOrNull(error), "Failed to delete surf point sources");
+      .in("id", sourceIds)
+    requireNoDbError(errorOrNull(error), "Failed to delete surf point sources")
 
     const cleanupTargets = new Map<
       string,
       { surfPointId: string; endpointId: string }
-    >();
+    >()
     for (const source of sources) {
-      const endpointId = readSourceEndpointId(source);
-      if (!endpointId) continue;
+      const endpointId = readSourceEndpointId(source)
+      if (!endpointId) continue
       cleanupTargets.set(`${source.playbook_id}:${endpointId}`, {
         surfPointId: source.playbook_id,
         endpointId,
-      });
+      })
     }
     for (const target of cleanupTargets.values()) {
       await this.disableOrphanedPlatformSourceConfig(
         context,
         target.surfPointId,
         target.endpointId
-      );
+      )
     }
 
-    return count ?? sourceIds.length;
+    return count ?? sourceIds.length
   }
 
   private async enforceSourceExclusivity(
@@ -4841,23 +4828,23 @@ export class SignalSurfRepository {
   ): Promise<number> {
     const existingSources = (
       await this.listSourceRowsForSurfPoint(context, surfPointId)
-    ).filter((source) => source.id !== keepSourceId);
-    if (existingSources.length === 0) return 0;
+    ).filter((source) => source.id !== keepSourceId)
+    if (existingSources.length === 0) return 0
 
-    const nextIsInternal = isInternalSourceType(sourceType);
+    const nextIsInternal = isInternalSourceType(sourceType)
     const hasExistingInternal = existingSources.some(
       (source) => source.type === "internal"
-    );
-    if (!nextIsInternal && !hasExistingInternal) return 0;
+    )
+    if (!nextIsInternal && !hasExistingInternal) return 0
 
     if (!replaceExisting) {
       throw new UserFacingError(
         "Internal trigger sources are exclusive. Pass replaceExisting=true to replace existing sources, or delete the conflicting source first.",
         { code: "CONFLICT", status: 409 }
-      );
+      )
     }
 
-    return this.deleteSourceRows(context, existingSources);
+    return this.deleteSourceRows(context, existingSources)
   }
 
   private async disableOrphanedPlatformSourceConfig(
@@ -4865,42 +4852,42 @@ export class SignalSurfRepository {
     surfPointId: string,
     endpointId: string | null
   ): Promise<void> {
-    if (!endpointId) return;
+    if (!endpointId) return
 
     const remainingSources = await this.listSourceRowsForSurfPoint(
       context,
       surfPointId
-    );
+    )
     if (
       remainingSources.some(
         (source) => readSourceEndpointId(source) === endpointId
       )
     ) {
-      return;
+      return
     }
 
-    const now = new Date().toISOString();
+    const now = new Date().toISOString()
     const { error: searchConfigError } = await this.db
       .from("platform_search_config")
       .update({ is_enabled: false, updated_at: now })
       .eq("product_id", context.productId)
       .eq("playbook_id", surfPointId)
-      .eq("platform", endpointId);
+      .eq("platform", endpointId)
     requireNoDbError(
       errorOrNull(searchConfigError),
       "Failed to disable orphaned platform source keywords"
-    );
+    )
 
     const { error: trackedAccountsError } = await this.db
       .from("tracked_accounts")
       .update({ is_enabled: false, updated_at: now })
       .eq("product_id", context.productId)
       .eq("playbook_id", surfPointId)
-      .eq("platform", endpointId);
+      .eq("platform", endpointId)
     requireNoDbError(
       errorOrNull(trackedAccountsError),
       "Failed to disable orphaned platform tracked accounts"
-    );
+    )
   }
 
   private async syncPlatformSourceConfig(
@@ -4909,10 +4896,10 @@ export class SignalSurfRepository {
     endpointId: string | null,
     config: JsonRecord
   ): Promise<void> {
-    if (!endpointId) return;
+    if (!endpointId) return
 
     if (Object.prototype.hasOwnProperty.call(config, "keywords")) {
-      const keywords = readStringArray(config.keywords);
+      const keywords = readStringArray(config.keywords)
       const { error } = await this.db.from("platform_search_config").upsert(
         {
           product_id: context.productId,
@@ -4923,11 +4910,11 @@ export class SignalSurfRepository {
           keywords,
         },
         { onConflict: "playbook_id,platform" }
-      );
+      )
       requireNoDbError(
         errorOrNull(error),
         "Failed to update platform source keywords"
-      );
+      )
     }
 
     if (Object.prototype.hasOwnProperty.call(config, "trackedAccounts")) {
@@ -4936,16 +4923,16 @@ export class SignalSurfRepository {
         .delete()
         .eq("product_id", context.productId)
         .eq("playbook_id", surfPointId)
-        .eq("platform", endpointId);
+        .eq("platform", endpointId)
       requireNoDbError(
         errorOrNull(deleteError),
         "Failed to clear platform tracked accounts"
-      );
+      )
 
       const trackedAccounts = readStringArray(config.trackedAccounts).map(
         (username) => username.replace(/^@/, "")
-      );
-      if (trackedAccounts.length === 0) return;
+      )
+      if (trackedAccounts.length === 0) return
 
       const { error } = await this.db.from("tracked_accounts").upsert(
         trackedAccounts.map((username) => ({
@@ -4956,59 +4943,59 @@ export class SignalSurfRepository {
           is_enabled: true,
         })),
         { onConflict: "playbook_id,platform,username" }
-      );
+      )
       requireNoDbError(
         errorOrNull(error),
         "Failed to update platform tracked accounts"
-      );
+      )
     }
   }
 
   async listSurfPointSources(context: SignalSurfContext, surfPointId: string) {
-    await this.assertSurfPointBelongsToProduct(context, surfPointId);
+    await this.assertSurfPointBelongsToProduct(context, surfPointId)
 
     const { data, error } = await this.db
       .from("sources")
       .select(SOURCE_COLUMNS)
       .eq("playbook_id", surfPointId)
-      .order("updated_at", { ascending: false });
+      .order("updated_at", { ascending: false })
 
-    requireNoDbError(error, "Failed to list surf point sources");
-    const sources = (data ?? []) as SourceRow[];
+    requireNoDbError(error, "Failed to list surf point sources")
+    const sources = (data ?? []) as SourceRow[]
     return {
       surfPointId,
       sources: sources.map(formatSource),
       totalCount: sources.length,
-    };
+    }
   }
 
   async createSurfPointSource(
     context: SignalSurfContext,
     input: CreateSurfPointSourceInput
   ) {
-    const config = asRecord(input.config);
+    const config = asRecord(input.config)
     const sourceDatabaseName = await this.resolveSourceDatabaseName(
       context,
       input.sourceType,
       config
-    );
-    const fields = buildSourceFields(input, sourceDatabaseName);
+    )
+    const fields = buildSourceFields(input, sourceDatabaseName)
     const replacedCount = await this.enforceSourceExclusivity(
       context,
       input.surfPointId,
       input.sourceType,
       input.replaceExisting === true
-    );
+    )
 
     if (input.sourceType === "platform") {
-      const endpointId = readTrimmedString(fields.pullConfig?.endpoint_id);
+      const endpointId = readTrimmedString(fields.pullConfig?.endpoint_id)
       const existing = (
         await this.listSourceRowsForSurfPoint(context, input.surfPointId)
       ).find(
         (source) =>
           readTrimmedString(asRecord(source.pull_config).endpoint_id) ===
           endpointId
-      );
+      )
       if (existing) {
         const updateData: Record<string, unknown> = {
           pull_config: {
@@ -5016,48 +5003,45 @@ export class SignalSurfRepository {
             ...asRecord(fields.pullConfig),
           },
           updated_at: new Date().toISOString(),
-        };
-        if (input.name !== undefined) updateData.name = fields.name;
-        if (input.isActive !== undefined)
-          updateData.is_active = fields.isActive;
+        }
+        if (input.name !== undefined) updateData.name = fields.name
+        if (input.isActive !== undefined) updateData.is_active = fields.isActive
         if (input.dataSchema !== undefined)
-          updateData.data_schema = fields.dataSchema;
+          updateData.data_schema = fields.dataSchema
 
         const { data, error } = await this.db
           .from("sources")
           .update(updateData)
           .eq("id", existing.id)
           .select(SOURCE_COLUMNS)
-          .single();
-        requireNoDbError(error, "Failed to update existing platform source");
+          .single()
+        requireNoDbError(error, "Failed to update existing platform source")
 
         await this.syncPlatformSourceConfig(
           context,
           input.surfPointId,
           endpointId,
           config
-        );
+        )
 
         return {
           source: formatSource(data as SourceRow),
           replacedCount,
           updatedExisting: true,
-        };
+        }
       }
     }
 
     const userId =
-      context.userId ??
-      (await this.resolveProductOwnerId(context)) ??
-      undefined;
+      context.userId ?? (await this.resolveProductOwnerId(context)) ?? undefined
     if (!userId) {
       throw new UserFacingError(
         "Cannot create source because no source owner could be resolved.",
         { code: "CONFIG_ERROR", status: 500 }
-      );
+      )
     }
 
-    const now = new Date().toISOString();
+    const now = new Date().toISOString()
     const { data, error } = await this.db
       .from("sources")
       .insert({
@@ -5074,9 +5058,9 @@ export class SignalSurfRepository {
         updated_at: now,
       })
       .select(SOURCE_COLUMNS)
-      .single();
+      .single()
 
-    requireNoDbError(error, "Failed to create surf point source");
+    requireNoDbError(error, "Failed to create surf point source")
 
     if (input.sourceType === "platform") {
       await this.syncPlatformSourceConfig(
@@ -5084,17 +5068,17 @@ export class SignalSurfRepository {
         input.surfPointId,
         readTrimmedString(fields.pullConfig?.endpoint_id),
         config
-      );
+      )
     }
 
-    const source = formatSource(data as SourceRow);
+    const source = formatSource(data as SourceRow)
     return {
       source,
       ...(source.sourceType === "webhook"
         ? { webhookUrl: source.webhookUrl ?? null }
         : {}),
       replacedCount,
-    };
+    }
   }
 
   async updateSurfPointSource(
@@ -5105,44 +5089,44 @@ export class SignalSurfRepository {
       throw new UserFacingError(
         "Pass either pullConfig or pullConfigPatch, not both.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
     if (input.metadata !== undefined && input.metadataPatch !== undefined) {
       throw new UserFacingError(
         "Pass either metadata or metadataPatch, not both.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
 
-    const source = await this.getSourceForUpdate(context, input.sourceId);
-    const previousEndpointId = readSourceEndpointId(source);
+    const source = await this.getSourceForUpdate(context, input.sourceId)
+    const previousEndpointId = readSourceEndpointId(source)
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
-    };
-    let replacedCount = 0;
-    let configForPlatformSync: JsonRecord | null = null;
+    }
+    let replacedCount = 0
+    let configForPlatformSync: JsonRecord | null = null
 
-    const inferredSourceType = inferSourceType(source);
+    const inferredSourceType = inferSourceType(source)
     const rebuildSourceType =
       input.sourceType ??
       (input.config !== undefined && isSupportedSourceType(inferredSourceType)
         ? inferredSourceType
-        : undefined);
+        : undefined)
 
     if (input.config !== undefined && !rebuildSourceType) {
       throw new UserFacingError(
         "Cannot rebuild this source from config because its source type could not be inferred. Pass sourceType explicitly.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
 
     if (rebuildSourceType) {
-      const config = asRecord(input.config);
+      const config = asRecord(input.config)
       const sourceDatabaseName = await this.resolveSourceDatabaseName(
         context,
         rebuildSourceType,
         config
-      );
+      )
       const fields = buildSourceFields(
         {
           sourceType: rebuildSourceType,
@@ -5158,60 +5142,60 @@ export class SignalSurfRepository {
               : source.is_active ?? true,
         },
         sourceDatabaseName
-      );
+      )
       replacedCount = await this.enforceSourceExclusivity(
         context,
         source.playbook_id,
         rebuildSourceType,
         input.replaceExisting === true,
         source.id
-      );
-      updateData.name = fields.name;
-      updateData.type = fields.dbType;
-      updateData.pull_config = fields.pullConfig;
-      updateData.metadata = fields.metadata;
-      updateData.data_schema = fields.dataSchema;
-      updateData.is_active = fields.isActive;
-      if (rebuildSourceType === "platform") configForPlatformSync = config;
+      )
+      updateData.name = fields.name
+      updateData.type = fields.dbType
+      updateData.pull_config = fields.pullConfig
+      updateData.metadata = fields.metadata
+      updateData.data_schema = fields.dataSchema
+      updateData.is_active = fields.isActive
+      if (rebuildSourceType === "platform") configForPlatformSync = config
     } else {
       if (input.name !== undefined)
-        updateData.name = input.name?.trim() ? input.name.trim() : null;
-      if (input.isActive !== undefined) updateData.is_active = input.isActive;
+        updateData.name = input.name?.trim() ? input.name.trim() : null
+      if (input.isActive !== undefined) updateData.is_active = input.isActive
       if (input.dataSchema !== undefined) {
         updateData.data_schema =
           inferSourceType(source) === "webhook"
             ? normalizeWebhookDataSchema(input.dataSchema)
-            : input.dataSchema;
+            : input.dataSchema
       }
     }
 
     if (input.pullConfig !== undefined) {
-      updateData.pull_config = input.pullConfig;
+      updateData.pull_config = input.pullConfig
     }
     if (input.pullConfigPatch !== undefined) {
       updateData.pull_config = {
         ...asRecord(updateData.pull_config ?? source.pull_config),
         ...input.pullConfigPatch,
-      };
+      }
     }
     if (input.metadata !== undefined) {
-      updateData.metadata = input.metadata;
+      updateData.metadata = input.metadata
     }
     if (input.metadataPatch !== undefined) {
       updateData.metadata = {
         ...asRecord(updateData.metadata ?? source.metadata),
         ...input.metadataPatch,
-      };
+      }
     }
 
     const changedFields = Object.keys(updateData).filter(
       (key) => key !== "updated_at"
-    );
+    )
     if (changedFields.length === 0) {
       throw new UserFacingError("No fields to update.", {
         code: "BAD_REQUEST",
         status: 400,
-      });
+      })
     }
 
     const { data, error } = await this.db
@@ -5219,18 +5203,18 @@ export class SignalSurfRepository {
       .update(updateData)
       .eq("id", input.sourceId)
       .select(SOURCE_COLUMNS)
-      .single();
+      .single()
 
-    requireNoDbError(error, "Failed to update surf point source");
-    const updatedSource = data as SourceRow;
-    const nextEndpointId = readSourceEndpointId(updatedSource);
+    requireNoDbError(error, "Failed to update surf point source")
+    const updatedSource = data as SourceRow
+    const nextEndpointId = readSourceEndpointId(updatedSource)
 
     if (previousEndpointId && previousEndpointId !== nextEndpointId) {
       await this.disableOrphanedPlatformSourceConfig(
         context,
         source.playbook_id,
         previousEndpointId
-      );
+      )
     }
 
     if (configForPlatformSync) {
@@ -5239,10 +5223,10 @@ export class SignalSurfRepository {
         updatedSource.playbook_id,
         nextEndpointId,
         configForPlatformSync
-      );
+      )
     }
 
-    const formattedSource = formatSource(updatedSource);
+    const formattedSource = formatSource(updatedSource)
     return {
       source: formattedSource,
       ...(formattedSource.sourceType === "webhook"
@@ -5250,7 +5234,7 @@ export class SignalSurfRepository {
         : {}),
       changedFields,
       replacedCount,
-    };
+    }
   }
 
   async deleteSurfPointSource(
@@ -5260,36 +5244,36 @@ export class SignalSurfRepository {
     const sourceIds = uniqueIds([
       ...(input.sourceIds ?? []),
       ...(input.sourceId ? [input.sourceId] : []),
-    ]);
+    ])
     if (sourceIds.length === 0) {
       throw new UserFacingError("Pass sourceId or sourceIds.", {
         code: "BAD_REQUEST",
         status: 400,
-      });
+      })
     }
 
     const { data, error } = await this.db
       .from("sources")
       .select(SOURCE_COLUMNS)
-      .in("id", sourceIds);
-    requireNoDbError(error, "Failed to read surf point sources");
+      .in("id", sourceIds)
+    requireNoDbError(error, "Failed to read surf point sources")
 
-    const sources = (data ?? []) as SourceRow[];
+    const sources = (data ?? []) as SourceRow[]
     if (sources.length !== sourceIds.length) {
       throw new UserFacingError("Source not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
     for (const source of sources) {
-      await this.assertSurfPointBelongsToProduct(context, source.playbook_id);
+      await this.assertSurfPointBelongsToProduct(context, source.playbook_id)
     }
 
-    const deletedCount = await this.deleteSourceRows(context, sources);
+    const deletedCount = await this.deleteSourceRows(context, sources)
     return {
       sourceIds,
       deletedCount,
-    };
+    }
   }
 
   async setSurfPointSourceActive(
@@ -5300,18 +5284,18 @@ export class SignalSurfRepository {
       .from("sources")
       .select(SOURCE_COLUMNS)
       .eq("id", input.sourceId)
-      .maybeSingle();
+      .maybeSingle()
 
-    requireNoDbError(existingError, "Failed to read surf point source");
+    requireNoDbError(existingError, "Failed to read surf point source")
     if (!existing) {
       throw new UserFacingError("Source not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
 
-    const source = existing as SourceRow;
-    await this.assertSurfPointBelongsToProduct(context, source.playbook_id);
+    const source = existing as SourceRow
+    await this.assertSurfPointBelongsToProduct(context, source.playbook_id)
 
     const { data, error } = await this.db
       .from("sources")
@@ -5321,26 +5305,26 @@ export class SignalSurfRepository {
       })
       .eq("id", input.sourceId)
       .select(SOURCE_COLUMNS)
-      .single();
+      .single()
 
-    requireNoDbError(error, "Failed to update surf point source");
-    return { source: formatSource(data as SourceRow) };
+    requireNoDbError(error, "Failed to update surf point source")
+    return { source: formatSource(data as SourceRow) }
   }
 
   async listWebhookPayloadSamples(
     context: SignalSurfContext,
     input: ListWebhookPayloadSamplesInput
   ) {
-    await this.getWebhookSourceForImport(context, input.sourceId);
+    await this.getWebhookSourceForImport(context, input.sourceId)
     const { data, error } = await this.db
       .from("raw_signals")
       .select("id, source_id, data, status, received_at, dedup_key")
       .eq("source_id", input.sourceId)
       .order("received_at", { ascending: false })
-      .limit(input.limit ?? 5);
+      .limit(input.limit ?? 5)
 
-    requireNoDbError(error, "Failed to list webhook payload samples");
-    const samples = (data ?? []) as RawSignalRow[];
+    requireNoDbError(error, "Failed to list webhook payload samples")
+    const samples = (data ?? []) as RawSignalRow[]
     return {
       sourceId: input.sourceId,
       samples: samples.map((sample) => ({
@@ -5352,99 +5336,91 @@ export class SignalSurfRepository {
         payload: sample.data,
       })),
       totalCount: samples.length,
-    };
+    }
   }
 
   async previewImportMapping(
     context: SignalSurfContext,
     input: PreviewImportMappingInput
   ) {
-    const source = await this.getWebhookSourceForImport(
-      context,
-      input.sourceId
-    );
+    const source = await this.getWebhookSourceForImport(context, input.sourceId)
     const mapping = this.resolveWebhookImportMapping(
       source,
       input.importMapping
-    );
+    )
     const payload =
       input.payload !== undefined
         ? input.payload
         : (await this.getWebhookPayloadSample(input.sourceId, input.payloadId))
-            .data;
-    const preview = buildImportMappingPreview(mapping, payload);
+            .data
+    const preview = buildImportMappingPreview(mapping, payload)
     return {
       sourceId: input.sourceId,
       summary: importMappingSummary(mapping),
       rows: preview.rows.slice(0, 25),
       rowCount: preview.rows.length,
       warnings: preview.warnings,
-    };
+    }
   }
 
   async replayWebhookPayload(
     context: SignalSurfContext,
     input: ReplayWebhookPayloadInput
   ) {
-    const source = await this.getWebhookSourceForImport(
-      context,
-      input.sourceId
-    );
+    const source = await this.getWebhookSourceForImport(context, input.sourceId)
     const mapping = this.resolveWebhookImportMapping(
       source,
       input.importMapping
-    );
+    )
     const payload = await this.getWebhookPayloadSample(
       input.sourceId,
       input.payloadId
-    );
-    const preview = buildImportMappingPreview(mapping, payload.data);
+    )
+    const preview = buildImportMappingPreview(mapping, payload.data)
     const upsert = await this.upsertImportMappingPreviewRows(
       context,
       source,
       preview.rows,
       payload.id,
       payload.received_at ?? new Date().toISOString()
-    );
+    )
     return {
       sourceId: input.sourceId,
       payloadId: input.payloadId,
       importedRows: upsert.importedRows,
       rows: upsert.rows,
       warnings: [...preview.warnings, ...upsert.warnings],
-    };
+    }
   }
 
   async listSurfPointTools(context: SignalSurfContext, surfPointId: string) {
-    const surfPoint = await this.getSurfPointForUpdate(context, surfPointId);
-    const toolIds = uniqueStrings(
-      asRecord(surfPoint.tool_config).auto_tool_ids
-    );
+    const surfPoint = await this.getSurfPointForUpdate(context, surfPointId)
+    const toolIds = uniqueStrings(asRecord(surfPoint.tool_config).auto_tool_ids)
     return {
       surfPointId,
       toolIds,
       totalCount: toolIds.length,
-    };
+    }
   }
 
   async attachSurfPointTool(
     context: SignalSurfContext,
     input: SurfPointToolInput
   ) {
-    await this.assertProductToolBelongsToProduct(context, input.toolId);
+    await this.assertProductToolBelongsToProduct(context, input.toolId)
     return this.updateSurfPointToolIds(context, input.surfPointId, (toolIds) =>
       toolIds.includes(input.toolId) ? toolIds : [...toolIds, input.toolId]
-    );
+    )
   }
 
   async detachSurfPointTool(
     context: SignalSurfContext,
     input: SurfPointToolInput
   ) {
-    await this.assertProductToolBelongsToProduct(context, input.toolId);
+    await this.assertProductToolBelongsToProduct(context, input.toolId)
     return this.updateSurfPointToolIds(context, input.surfPointId, (toolIds) =>
       toolIds.filter((toolId) => toolId !== input.toolId)
-    );
+    )
   }
 
   private async getAccountListProfileForUpdate(
@@ -5456,9 +5432,9 @@ export class SignalSurfRepository {
       .select(ACCOUNT_LIST_PROFILE_COLUMNS)
       .eq("id", profileId)
       .eq("product_id", context.productId)
-      .maybeSingle();
+      .maybeSingle()
 
-    requireNoDbError(error, "Failed to fetch account list profile");
+    requireNoDbError(error, "Failed to fetch account list profile")
     if (!data) {
       throw new UserFacingError(
         "Account list profile not found or access denied.",
@@ -5466,9 +5442,9 @@ export class SignalSurfRepository {
           code: "NOT_FOUND",
           status: 404,
         }
-      );
+      )
     }
-    return data as AccountListProfileRow;
+    return data as AccountListProfileRow
   }
 
   private async resolveDatabaseIds(
@@ -5476,9 +5452,9 @@ export class SignalSurfRepository {
     databaseIds: string[] | undefined
   ): Promise<string[]> {
     if (databaseIds !== undefined) {
-      const ids = uniqueIds(databaseIds);
-      await this.assertDatabaseIdsBelongToProduct(context, ids);
-      return ids;
+      const ids = uniqueIds(databaseIds)
+      await this.assertDatabaseIdsBelongToProduct(context, ids)
+      return ids
     }
 
     const { data, error } = await this.db
@@ -5486,21 +5462,21 @@ export class SignalSurfRepository {
       .select("id")
       .eq("product_id", context.productId)
       .is("system_type", null)
-      .order("display_order", { ascending: true });
+      .order("display_order", { ascending: true })
 
-    requireNoDbError(error, "Failed to resolve default database");
-    const rows = (data ?? []) as Array<{ id: string }>;
-    if (rows.length === 1) return [rows[0].id];
+    requireNoDbError(error, "Failed to resolve default database")
+    const rows = (data ?? []) as Array<{ id: string }>
+    if (rows.length === 1) return [rows[0].id]
     if (rows.length > 1) {
       throw new UserFacingError(
         "databaseIds is required because this product has multiple databases.",
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
     throw new UserFacingError(
       "databaseIds is required because this product has no user-facing databases. Pass databaseIds: [] only for an intentional action-only surf point.",
       { code: "BAD_REQUEST", status: 400 }
-    );
+    )
   }
 
   private async findSurfPointByName(
@@ -5513,32 +5489,32 @@ export class SignalSurfRepository {
       .eq("product_id", context.productId)
       .eq("name", name.trim())
       .is("deleted_at", null)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to check existing surf point");
-    return (data as { id: string } | null) ?? null;
+      .maybeSingle()
+    requireNoDbError(error, "Failed to check existing surf point")
+    return (data as { id: string } | null) ?? null
   }
 
   private async assertDatabaseIdsBelongToProduct(
     context: SignalSurfContext,
     databaseIds: string[]
   ): Promise<void> {
-    if (databaseIds.length === 0) return;
+    if (databaseIds.length === 0) return
     const { data, error } = await this.db
       .from("databases")
       .select("id")
       .eq("product_id", context.productId)
-      .in("id", databaseIds);
+      .in("id", databaseIds)
 
-    requireNoDbError(error, "Failed to validate database access");
+    requireNoDbError(error, "Failed to validate database access")
     const found = new Set(
       ((data ?? []) as Array<{ id: string }>).map((row) => row.id)
-    );
-    const missing = databaseIds.filter((id) => !found.has(id));
+    )
+    const missing = databaseIds.filter((id) => !found.has(id))
     if (missing.length > 0) {
       throw new UserFacingError(
         `Database not found or access denied: ${missing.join(", ")}`,
         { code: "NOT_FOUND", status: 404 }
-      );
+      )
     }
   }
 
@@ -5546,48 +5522,48 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     databaseId: string
   ): Promise<void> {
-    await this.assertDatabaseIdsBelongToProduct(context, [databaseId]);
+    await this.assertDatabaseIdsBelongToProduct(context, [databaseId])
   }
 
   private async validateDatabaseSchemaReferences(
     context: SignalSurfContext,
     schema: JsonRecord
   ): Promise<void> {
-    const fields = schemaFields(schema);
-    const seenFieldKeys = new Set<string>();
+    const fields = schemaFields(schema)
+    const seenFieldKeys = new Set<string>()
     for (const field of fields) {
-      validateDatabaseField(field);
-      const key = String(field.key);
+      validateDatabaseField(field)
+      const key = String(field.key)
       if (seenFieldKeys.has(key)) {
         throw new UserFacingError(`Database field "${key}" already exists.`, {
           code: "CONFLICT",
           status: 409,
-        });
+        })
       }
-      seenFieldKeys.add(key);
-      if (field.type !== "item_ref") continue;
+      seenFieldKeys.add(key)
+      if (field.type !== "item_ref") continue
       const targetDatabaseId = firstString(
         field.target_database_id,
         field.targetDatabaseId
-      );
+      )
       if (targetDatabaseId) {
-        await this.assertDatabaseBelongsToProduct(context, targetDatabaseId);
+        await this.assertDatabaseBelongsToProduct(context, targetDatabaseId)
       }
     }
 
     const relations = Array.isArray(schema.relations)
       ? (schema.relations as unknown[])
-      : [];
+      : []
     for (const relation of relations) {
-      const record = asRecord(relation);
+      const record = asRecord(relation)
       const targetDatabaseId = firstString(
         record.target_database_id,
         record.targetDatabaseId,
         record.database_id,
         record.databaseId
-      );
+      )
       if (targetDatabaseId) {
-        await this.assertDatabaseBelongsToProduct(context, targetDatabaseId);
+        await this.assertDatabaseBelongsToProduct(context, targetDatabaseId)
       }
     }
   }
@@ -5601,15 +5577,15 @@ export class SignalSurfRepository {
       .select(DATABASE_COLUMNS)
       .eq("id", databaseId)
       .eq("product_id", context.productId)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to validate database access");
+      .maybeSingle()
+    requireNoDbError(error, "Failed to validate database access")
     if (!data) {
       throw new UserFacingError("Database not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
-    return data as DatabaseRow;
+    return data as DatabaseRow
   }
 
   private async updateDatabaseSchema(
@@ -5620,8 +5596,8 @@ export class SignalSurfRepository {
     const database = await this.getDatabaseAndValidateProduct(
       context,
       databaseId
-    );
-    const nextSchema = mutate(asRecord(database.schema));
+    )
+    const nextSchema = mutate(asRecord(database.schema))
     const { data, error } = await this.db
       .from("databases")
       .update({
@@ -5631,13 +5607,13 @@ export class SignalSurfRepository {
       .eq("id", databaseId)
       .eq("product_id", context.productId)
       .select(DATABASE_COLUMNS)
-      .single();
+      .single()
 
-    requireNoDbError(error, "Failed to update database schema");
+    requireNoDbError(error, "Failed to update database schema")
     return {
       database: formatDatabase(data as DatabaseRow),
       fields: schemaFields(asRecord((data as DatabaseRow).schema)),
-    };
+    }
   }
 
   private async assertSurfPointBelongsToProduct(
@@ -5650,13 +5626,13 @@ export class SignalSurfRepository {
       .eq("id", surfPointId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to validate surf point access");
+      .maybeSingle()
+    requireNoDbError(error, "Failed to validate surf point access")
     if (!data) {
       throw new UserFacingError("Surf point not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
   }
 
@@ -5669,13 +5645,13 @@ export class SignalSurfRepository {
       .select("id")
       .eq("id", toolId)
       .eq("product_id", context.productId)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to validate product tool access");
+      .maybeSingle()
+    requireNoDbError(error, "Failed to validate product tool access")
     if (!data) {
       throw new UserFacingError("Tool not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
   }
 
@@ -5683,23 +5659,23 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     toolIds: string[]
   ): Promise<void> {
-    const ids = uniqueStrings(toolIds);
-    if (ids.length === 0) return;
+    const ids = uniqueStrings(toolIds)
+    if (ids.length === 0) return
     const { data, error } = await this.db
       .from("product_tools")
       .select("id")
       .eq("product_id", context.productId)
-      .in("id", ids);
-    requireNoDbError(error, "Failed to validate product tool access");
+      .in("id", ids)
+    requireNoDbError(error, "Failed to validate product tool access")
     const found = new Set(
       ((data ?? []) as Array<{ id: string }>).map((row) => row.id)
-    );
-    const missing = ids.filter((id) => !found.has(id));
+    )
+    const missing = ids.filter((id) => !found.has(id))
     if (missing.length > 0) {
       throw new UserFacingError(
         `Tool not found or access denied: ${missing.join(", ")}`,
         { code: "NOT_FOUND", status: 404 }
-      );
+      )
     }
   }
 
@@ -5712,13 +5688,13 @@ export class SignalSurfRepository {
       .select("id")
       .eq("id", surfPointId)
       .eq("product_id", context.productId)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to validate surf point access");
+      .maybeSingle()
+    requireNoDbError(error, "Failed to validate surf point access")
     if (!data) {
       throw new UserFacingError("Surf point not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
   }
 
@@ -5728,9 +5704,9 @@ export class SignalSurfRepository {
     const { data, error } = await this.db
       .from("playbooks")
       .select("id")
-      .eq("product_id", context.productId);
-    requireNoDbError(error, "Failed to resolve product surf points");
-    return ((data ?? []) as Array<{ id: string }>).map((row) => row.id);
+      .eq("product_id", context.productId)
+    requireNoDbError(error, "Failed to resolve product surf points")
+    return ((data ?? []) as Array<{ id: string }>).map((row) => row.id)
   }
 
   private async findSurfJobById(jobId: string): Promise<SurfJobRow | null> {
@@ -5738,31 +5714,31 @@ export class SignalSurfRepository {
       .from("surf_jobs")
       .select("*")
       .eq("id", jobId)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to read surf job");
-    return (data as SurfJobRow | null) ?? null;
+      .maybeSingle()
+    requireNoDbError(error, "Failed to read surf job")
+    return (data as SurfJobRow | null) ?? null
   }
 
   private async getSurfJobAndValidateProduct(
     context: SignalSurfContext,
     jobId: string
   ): Promise<SurfJobRow> {
-    const job = await this.findSurfJobById(jobId);
+    const job = await this.findSurfJobById(jobId)
     if (!job) {
       throw new UserFacingError("Surf job not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
-    await this.assertSurfJobBelongsToProduct(context, job);
-    return job;
+    await this.assertSurfJobBelongsToProduct(context, job)
+    return job
   }
 
   private async assertSurfJobBelongsToProduct(
     context: SignalSurfContext,
     job: SurfJobRow
   ): Promise<void> {
-    await this.assertSurfPointInProduct(context, job.playbook_id);
+    await this.assertSurfPointInProduct(context, job.playbook_id)
   }
 
   private async getSurfPointRunTarget(
@@ -5775,15 +5751,15 @@ export class SignalSurfRepository {
       .eq("id", surfPointId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to validate surf point access");
+      .maybeSingle()
+    requireNoDbError(error, "Failed to validate surf point access")
     if (!data) {
       throw new UserFacingError("Surf point not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
-    return data as { id: string; name: string; is_active: boolean };
+    return data as { id: string; name: string; is_active: boolean }
   }
 
   private async assertSurfPointCanWriteDatabase(
@@ -5797,22 +5773,22 @@ export class SignalSurfRepository {
       .eq("id", surfPointId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to validate surf point target databases");
+      .maybeSingle()
+    requireNoDbError(error, "Failed to validate surf point target databases")
     if (!data) {
       throw new UserFacingError("Surf point not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
     const databaseIds = Array.isArray(data.database_ids)
       ? (data.database_ids as string[])
-      : [];
+      : []
     if (!databaseIds.includes(databaseId)) {
       throw new UserFacingError(
         `Surf point ${surfPointId} is not configured to write to database ${databaseId}.`,
         { code: "BAD_REQUEST", status: 400 }
-      );
+      )
     }
   }
 
@@ -5826,21 +5802,21 @@ export class SignalSurfRepository {
       .select("schema")
       .eq("id", databaseId)
       .eq("product_id", context.productId)
-      .single();
-    requireNoDbError(error, "Failed to validate entry references");
+      .single()
+    requireNoDbError(error, "Failed to validate entry references")
 
     const fields = Array.isArray(database?.schema?.fields)
       ? (database.schema.fields as Array<{
-          key?: unknown;
-          type?: unknown;
-          target_database_id?: unknown;
+          key?: unknown
+          type?: unknown
+          target_database_id?: unknown
         }>)
-      : [];
+      : []
 
     for (const field of fields) {
-      if (field.type !== "item_ref" || typeof field.key !== "string") continue;
-      const raw = data[field.key];
-      if (raw == null) continue;
+      if (field.type !== "item_ref" || typeof field.key !== "string") continue
+      const raw = data[field.key]
+      if (raw == null) continue
 
       if (
         typeof raw !== "object" ||
@@ -5851,27 +5827,27 @@ export class SignalSurfRepository {
         throw new UserFacingError(
           `Field "${field.key}" must be { database_id, entry_id }`,
           { code: "BAD_REQUEST", status: 400 }
-        );
+        )
       }
 
-      const value = raw as { database_id?: unknown; entry_id: string };
+      const value = raw as { database_id?: unknown; entry_id: string }
       const targetDatabaseId =
         typeof field.target_database_id === "string"
           ? field.target_database_id
-          : undefined;
+          : undefined
       if (targetDatabaseId && value.database_id !== targetDatabaseId) {
         throw new UserFacingError(
           `Field "${field.key}" must reference database ${targetDatabaseId}`,
           { code: "BAD_REQUEST", status: 400 }
-        );
+        )
       }
 
       const { data: target, error: targetError } = await this.db
         .from("entries")
         .select("id, database_id")
         .eq("id", value.entry_id)
-        .maybeSingle();
-      requireNoDbError(targetError, "Failed to validate referenced entry");
+        .maybeSingle()
+      requireNoDbError(targetError, "Failed to validate referenced entry")
 
       if (!target) {
         throw new UserFacingError(
@@ -5880,30 +5856,30 @@ export class SignalSurfRepository {
             code: "BAD_REQUEST",
             status: 400,
           }
-        );
+        )
       }
       if (!target.database_id) {
         throw new UserFacingError(
           `Referenced entry ${value.entry_id} is missing database scope`,
           { code: "BAD_REQUEST", status: 400 }
-        );
+        )
       }
       try {
-        await this.assertDatabaseBelongsToProduct(context, target.database_id);
+        await this.assertDatabaseBelongsToProduct(context, target.database_id)
       } catch (error) {
         if (error instanceof UserFacingError && error.code === "NOT_FOUND") {
           throw new UserFacingError(
             "Referenced entry not found or access denied.",
             { code: "BAD_REQUEST", status: 400 }
-          );
+          )
         }
-        throw error;
+        throw error
       }
       if (value.database_id && target.database_id !== value.database_id) {
         throw new UserFacingError(
           `Referenced entry belongs to database ${target.database_id}, not ${value.database_id}`,
           { code: "BAD_REQUEST", status: 400 }
-        );
+        )
       }
     }
   }
@@ -5917,8 +5893,8 @@ export class SignalSurfRepository {
       .select("id")
       .eq("id", folderId)
       .eq("product_id", context.productId)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to validate surf point folder access");
+      .maybeSingle()
+    requireNoDbError(error, "Failed to validate surf point folder access")
     if (!data) {
       throw new UserFacingError(
         "Surf point folder not found or access denied.",
@@ -5926,7 +5902,7 @@ export class SignalSurfRepository {
           code: "NOT_FOUND",
           status: 404,
         }
-      );
+      )
     }
   }
 
@@ -5939,13 +5915,13 @@ export class SignalSurfRepository {
       .select("id")
       .eq("id", folderId)
       .eq("product_id", context.productId)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to validate table folder access");
+      .maybeSingle()
+    requireNoDbError(error, "Failed to validate table folder access")
     if (!data) {
       throw new UserFacingError("Table folder not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
   }
 
@@ -5953,15 +5929,15 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     ids: string[]
   ): Promise<Array<{ id: string; name: string }>> {
-    if (ids.length === 0) return [];
+    if (ids.length === 0) return []
     const { data, error } = await this.db
       .from("playbooks")
       .select("id, name")
       .eq("product_id", context.productId)
       .is("deleted_at", null)
-      .in("id", ids);
-    requireNoDbError(error, "Failed to validate surf points");
-    return (data ?? []) as Array<{ id: string; name: string }>;
+      .in("id", ids)
+    requireNoDbError(error, "Failed to validate surf points")
+    return (data ?? []) as Array<{ id: string; name: string }>
   }
 
   private async getSurfPointForUpdate(
@@ -5974,15 +5950,15 @@ export class SignalSurfRepository {
       .eq("id", id)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
-      .maybeSingle();
-    requireNoDbError(error, "Failed to fetch surf point");
+      .maybeSingle()
+    requireNoDbError(error, "Failed to fetch surf point")
     if (!data) {
       throw new UserFacingError("Surf point not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
-    return data as SurfPointRow;
+    return data as SurfPointRow
   }
 
   private async updateSurfPointToolIds(
@@ -5990,18 +5966,18 @@ export class SignalSurfRepository {
     surfPointId: string,
     mutate: (toolIds: string[]) => string[]
   ) {
-    const existing = await this.getSurfPointForUpdate(context, surfPointId);
-    const currentToolConfig = asRecord(existing.tool_config);
-    const cleanToolConfig = withoutLegacyToolRouting(currentToolConfig);
-    const currentToolIds = uniqueStrings(currentToolConfig.auto_tool_ids);
-    const nextToolIds = uniqueStrings(mutate(currentToolIds));
+    const existing = await this.getSurfPointForUpdate(context, surfPointId)
+    const currentToolConfig = asRecord(existing.tool_config)
+    const cleanToolConfig = withoutLegacyToolRouting(currentToolConfig)
+    const currentToolIds = uniqueStrings(currentToolConfig.auto_tool_ids)
+    const nextToolIds = uniqueStrings(mutate(currentToolIds))
 
     if (sameStrings(currentToolIds, nextToolIds)) {
       return {
         surfPoint: formatSurfPoint(existing),
         toolIds: currentToolIds,
         changed: false,
-      };
+      }
     }
 
     const { data, error } = await this.db
@@ -6017,14 +5993,14 @@ export class SignalSurfRepository {
       .eq("product_id", context.productId)
       .is("deleted_at", null)
       .select(SURF_POINT_COLUMNS)
-      .single();
+      .single()
 
-    requireNoDbError(error, "Failed to update surf point tools");
+    requireNoDbError(error, "Failed to update surf point tools")
     return {
       surfPoint: formatSurfPoint(data as SurfPointRow),
       toolIds: nextToolIds,
       changed: true,
-    };
+    }
   }
 
   private async findFirstActiveSurfPoint(
@@ -6038,82 +6014,82 @@ export class SignalSurfRepository {
       .eq("is_active", true)
       .is("deleted_at", null)
       .order("display_order", { ascending: true })
-      .limit(1);
+      .limit(1)
 
-    for (const id of excludedIds) query = query.neq("id", id);
+    for (const id of excludedIds) query = query.neq("id", id)
 
-    const { data, error } = await query.maybeSingle();
-    requireNoDbError(error, "Failed to resolve replacement surf point");
-    return (data as { id: string } | null) ?? null;
+    const { data, error } = await query.maybeSingle()
+    requireNoDbError(error, "Failed to resolve replacement surf point")
+    return (data as { id: string } | null) ?? null
   }
 
   private async getEntryAndValidateProduct(
     context: SignalSurfContext,
     rowId: string
   ): Promise<EntryRow> {
-    const rows = await this.getEntriesAndValidateProduct(context, [rowId]);
-    const row = rows[0];
+    const rows = await this.getEntriesAndValidateProduct(context, [rowId])
+    const row = rows[0]
     if (!row) {
       throw new UserFacingError("Row not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
-      });
+      })
     }
-    return row;
+    return row
   }
 
   private async getEntriesAndValidateProduct(
     context: SignalSurfContext,
     rowIds: string[]
   ): Promise<EntryRow[]> {
-    if (rowIds.length === 0) return [];
+    if (rowIds.length === 0) return []
     const { data, error } = await this.db
       .from("entries")
       .select(ENTRY_COLUMNS)
-      .in("id", rowIds);
-    requireNoDbError(error, "Failed to fetch rows");
+      .in("id", rowIds)
+    requireNoDbError(error, "Failed to fetch rows")
 
-    const entries = (data ?? []) as EntryRow[];
+    const entries = (data ?? []) as EntryRow[]
     const orphanIds = entries
       .filter((entry) => !entry.database_id)
-      .map((entry) => entry.id);
+      .map((entry) => entry.id)
     if (orphanIds.length > 0) {
       throw new UserFacingError(
         `Rows are missing database scope and cannot be accessed through MCP: ${orphanIds.join(
           ", "
         )}`,
         { code: "NOT_FOUND", status: 404 }
-      );
+      )
     }
     const databaseIds = uniqueIds(
       entries
         .map((entry) => entry.database_id)
         .filter((id): id is string => typeof id === "string")
-    );
+    )
     try {
-      await this.assertDatabaseIdsBelongToProduct(context, databaseIds);
+      await this.assertDatabaseIdsBelongToProduct(context, databaseIds)
     } catch (error) {
       if (error instanceof UserFacingError && error.code === "NOT_FOUND") {
         throw new UserFacingError("Row not found or access denied.", {
           code: "NOT_FOUND",
           status: 404,
-        });
+        })
       }
-      throw error;
+      throw error
     }
-    return entries;
+    return entries
   }
 }
 
 function errorOrNull(
   error: unknown
 ): { message: string; code?: string } | null {
-  if (!error) return null;
+  if (!error) return null
   if (typeof error === "object" && "message" in error) {
-    const record = error as { message: string; code?: string };
-    return { message: record.message, code: record.code };
+    const record = error as { message: string; code?: string }
+    return { message: record.message, code: record.code }
   }
-  return { message: String(error) };
+  return { message: String(error) }
 }
 
 function upsertContextProduct(
@@ -6121,11 +6097,11 @@ function upsertContextProduct(
   product: SignalSurfProductContext,
   productIds: string[]
 ): void {
-  context.productIds = productIds;
+  context.productIds = productIds
   const productsById = new Map(
     (context.products ?? []).map((item) => [item.productId, item])
-  );
-  productsById.set(product.productId, product);
+  )
+  productsById.set(product.productId, product)
   context.products = productIds.map(
     (productId) =>
       productsById.get(productId) ?? {
@@ -6134,14 +6110,14 @@ function upsertContextProduct(
         organizationId: null,
         organizationName: null,
       }
-  );
+  )
 }
 
 function extractSavedViews(viewConfigs: JsonRecord | null) {
-  const configs = asRecord(viewConfigs);
+  const configs = asRecord(viewConfigs)
   const rawViews = Array.isArray(configs.saved_views)
     ? (configs.saved_views as unknown[])
-    : [];
+    : []
   const views = rawViews
     .filter((view): view is JsonRecord =>
       Boolean(view && typeof view === "object" && !Array.isArray(view))
@@ -6150,11 +6126,11 @@ function extractSavedViews(viewConfigs: JsonRecord | null) {
       const id =
         typeof view.id === "string" && view.id.trim()
           ? view.id.trim()
-          : "default";
+          : "default"
       const name =
         typeof view.name === "string" && view.name.trim()
           ? view.name.trim()
-          : id;
+          : id
       return {
         id,
         name,
@@ -6169,14 +6145,14 @@ function extractSavedViews(viewConfigs: JsonRecord | null) {
             : "and",
         filters: normalizeSavedViewFilters(view),
         raw: view,
-      };
-    });
+      }
+    })
 
-  if (views.length > 0) return views;
+  if (views.length > 0) return views
   const defaultView =
     typeof configs.default_view === "string" && configs.default_view.trim()
       ? configs.default_view.trim()
-      : "default";
+      : "default"
   return [
     {
       id: "default",
@@ -6189,67 +6165,65 @@ function extractSavedViews(viewConfigs: JsonRecord | null) {
       filters: [],
       raw: configs,
     },
-  ];
+  ]
 }
 
 function normalizeSavedViewFilters(raw: JsonRecord): TableFilterInput[] {
-  const candidates = [raw.column_filters, raw.filters, raw.filterGroups];
-  const filters: TableFilterInput[] = [];
+  const candidates = [raw.column_filters, raw.filters, raw.filterGroups]
+  const filters: TableFilterInput[] = []
   for (const candidate of candidates) {
-    if (!Array.isArray(candidate)) continue;
+    if (!Array.isArray(candidate)) continue
     for (const item of candidate) {
-      const record = asRecord(item);
+      const record = asRecord(item)
       const field = normalizeFieldKey(
         firstString(record.field, record.key, record.field_key, record.column)
-      );
+      )
       const op = normalizeFilterOperator(
         firstString(record.op, record.operator, record.comparator)
-      );
-      if (!field || !op) continue;
+      )
+      if (!field || !op) continue
       const value =
         "value" in record
           ? record.value
           : "values" in record
           ? record.values
-          : undefined;
-      filters.push({ field, op, value });
+          : undefined
+      filters.push({ field, op, value })
     }
   }
-  return filters;
+  return filters
 }
 
 function normalizeSavedViewSorts(
   viewConfigs: JsonRecord | null,
   raw: JsonRecord
 ): TableSortInput[] {
-  const configs = asRecord(viewConfigs);
+  const configs = asRecord(viewConfigs)
   const rawSorts = Array.isArray(raw.sorts)
     ? raw.sorts
     : Array.isArray(raw.sort)
     ? raw.sort
-    : [];
+    : []
   const sorts = rawSorts
     .map((item) => {
-      const record = asRecord(item);
+      const record = asRecord(item)
       const field = normalizeFieldKey(
         firstString(record.field, record.key, record.field_key, record.column)
-      );
-      if (!field) return null;
+      )
+      if (!field) return null
       return {
         field,
         direction:
           firstString(record.direction, record.dir)?.toLowerCase() === "desc"
             ? "desc"
             : "asc",
-      } as TableSortInput;
+      } as TableSortInput
     })
-    .filter((sort): sort is TableSortInput => Boolean(sort));
-  if (sorts.length > 0) return sorts;
+    .filter((sort): sort is TableSortInput => Boolean(sort))
+  if (sorts.length > 0) return sorts
 
-  const sortKey = normalizeFieldKey(
-    firstString(raw.sort_key, configs.sort_key)
-  );
-  if (!sortKey) return [];
+  const sortKey = normalizeFieldKey(firstString(raw.sort_key, configs.sort_key))
+  if (!sortKey) return []
   return [
     {
       field: sortKey,
@@ -6261,18 +6235,18 @@ function normalizeSavedViewSorts(
           ? "asc"
           : "desc",
     },
-  ];
+  ]
 }
 
 function firstString(...values: unknown[]): string | undefined {
-  return values.find((value): value is string => typeof value === "string");
+  return values.find((value): value is string => typeof value === "string")
 }
 
 function normalizeFilterOperator(
   value: string | undefined
 ): TableFilterOperator | null {
-  const normalized = value?.trim().toLowerCase();
-  if (!normalized) return null;
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) return null
   const aliases: Record<string, TableFilterOperator> = {
     "=": "eq",
     "==": "eq",
@@ -6289,8 +6263,8 @@ function normalizeFilterOperator(
     on_or_after: "gte",
     empty: "is_empty",
     not_empty: "is_not_empty",
-  };
-  const candidate = aliases[normalized] ?? normalized;
+  }
+  const candidate = aliases[normalized] ?? normalized
   return [
     "eq",
     "neq",
@@ -6310,7 +6284,7 @@ function normalizeFilterOperator(
     "relation_in",
   ].includes(candidate)
     ? (candidate as TableFilterOperator)
-    : null;
+    : null
 }
 
 function rowMatchesTableFilters(
@@ -6318,60 +6292,57 @@ function rowMatchesTableFilters(
   filters: TableFilterInput[],
   logic: "and" | "or"
 ): boolean {
-  const checks = filters.map((filter) => tableFilterMatches(row, filter));
-  return logic === "or" ? checks.some(Boolean) : checks.every(Boolean);
+  const checks = filters.map((filter) => tableFilterMatches(row, filter))
+  return logic === "or" ? checks.some(Boolean) : checks.every(Boolean)
 }
 
 function tableFilterMatches(row: EntryRow, filter: TableFilterInput): boolean {
-  const actual = getTableFieldValue(row, filter.field);
+  const actual = getTableFieldValue(row, filter.field)
   switch (filter.op) {
     case "eq":
-      return valuesEqual(actual, filter.value);
+      return valuesEqual(actual, filter.value)
     case "neq":
-      return !valuesEqual(actual, filter.value);
+      return !valuesEqual(actual, filter.value)
     case "in":
-      return asArray(filter.value).some((value) => valuesEqual(actual, value));
+      return asArray(filter.value).some((value) => valuesEqual(actual, value))
     case "not_in":
-      return !asArray(filter.value).some((value) => valuesEqual(actual, value));
+      return !asArray(filter.value).some((value) => valuesEqual(actual, value))
     case "contains":
-      return valueContains(actual, filter.value);
+      return valueContains(actual, filter.value)
     case "starts_with":
       return String(actual ?? "")
         .toLowerCase()
-        .startsWith(String(filter.value ?? "").toLowerCase());
+        .startsWith(String(filter.value ?? "").toLowerCase())
     case "is_empty":
-      return isEmptyValue(actual);
+      return isEmptyValue(actual)
     case "is_not_empty":
-      return !isEmptyValue(actual);
+      return !isEmptyValue(actual)
     case "gt":
-      return compareValues(actual, filter.value) > 0;
+      return compareValues(actual, filter.value) > 0
     case "gte":
-      return compareValues(actual, filter.value) >= 0;
+      return compareValues(actual, filter.value) >= 0
     case "lt":
-      return compareValues(actual, filter.value) < 0;
+      return compareValues(actual, filter.value) < 0
     case "lte":
-      return compareValues(actual, filter.value) <= 0;
+      return compareValues(actual, filter.value) <= 0
     case "between": {
-      const [min, max] = asArray(filter.value);
-      return compareValues(actual, min) >= 0 && compareValues(actual, max) <= 0;
+      const [min, max] = asArray(filter.value)
+      return compareValues(actual, min) >= 0 && compareValues(actual, max) <= 0
     }
     case "array_contains": {
-      if (!Array.isArray(actual)) return false;
-      const expected = asArray(filter.value);
+      if (!Array.isArray(actual)) return false
+      const expected = asArray(filter.value)
       return expected.every((value) =>
         actual.some((item) => valuesEqual(item, value))
-      );
+      )
     }
     case "relation_is":
-      return valuesEqual(
-        relationEntryId(actual),
-        relationEntryId(filter.value)
-      );
+      return valuesEqual(relationEntryId(actual), relationEntryId(filter.value))
     case "relation_in": {
-      const id = relationEntryId(actual);
+      const id = relationEntryId(actual)
       return asArray(filter.value).some((value) =>
         valuesEqual(id, relationEntryId(value))
-      );
+      )
     }
   }
 }
@@ -6382,15 +6353,15 @@ function sortTableRows(rows: EntryRow[], sorts: TableSortInput[]): EntryRow[] {
       const cmp = compareValues(
         getTableFieldValue(left, sort.field),
         getTableFieldValue(right, sort.field)
-      );
-      if (cmp !== 0) return sort.direction === "desc" ? -cmp : cmp;
+      )
+      if (cmp !== 0) return sort.direction === "desc" ? -cmp : cmp
     }
-    return 0;
-  });
+    return 0
+  })
 }
 
 function getTableFieldValue(row: EntryRow, field: string): unknown {
-  const normalized = normalizeFieldKey(field);
+  const normalized = normalizeFieldKey(field)
   const metadata: Record<string, unknown> = {
     id: row.id,
     rowId: row.id,
@@ -6412,94 +6383,94 @@ function getTableFieldValue(row: EntryRow, field: string): unknown {
     created_at: row.created_at,
     updatedAt: row.updated_at,
     updated_at: row.updated_at,
-  };
-  if (normalized.startsWith("meta.")) {
-    return metadata[normalized.slice("meta.".length)];
   }
-  if (normalized in metadata) return metadata[normalized];
-  return asRecord(row.data)[normalized];
+  if (normalized.startsWith("meta.")) {
+    return metadata[normalized.slice("meta.".length)]
+  }
+  if (normalized in metadata) return metadata[normalized]
+  return asRecord(row.data)[normalized]
 }
 
 function normalizeFieldKey(field: string | undefined): string {
-  const trimmed = field?.trim() ?? "";
+  const trimmed = field?.trim() ?? ""
   return trimmed
     .replace(/^output\./, "")
     .replace(/^data\./, "")
-    .replace(/^_rel\./, "");
+    .replace(/^_rel\./, "")
 }
 
 function valuesEqual(left: unknown, right: unknown): boolean {
-  if (left === right) return true;
-  if (left == null || right == null) return left == null && right == null;
-  return String(left).toLowerCase() === String(right).toLowerCase();
+  if (left === right) return true
+  if (left == null || right == null) return left == null && right == null
+  return String(left).toLowerCase() === String(right).toLowerCase()
 }
 
 function valueContains(actual: unknown, expected: unknown): boolean {
-  if (actual == null) return false;
+  if (actual == null) return false
   if (Array.isArray(actual)) {
-    return actual.some((item) => valuesEqual(item, expected));
+    return actual.some((item) => valuesEqual(item, expected))
   }
   if (typeof actual === "object") {
     return JSON.stringify(actual)
       .toLowerCase()
-      .includes(String(expected ?? "").toLowerCase());
+      .includes(String(expected ?? "").toLowerCase())
   }
   return String(actual)
     .toLowerCase()
-    .includes(String(expected ?? "").toLowerCase());
+    .includes(String(expected ?? "").toLowerCase())
 }
 
 function compareValues(left: unknown, right: unknown): number {
-  if (left == null && right == null) return 0;
-  if (left == null) return -1;
-  if (right == null) return 1;
+  if (left == null && right == null) return 0
+  if (left == null) return -1
+  if (right == null) return 1
 
-  const leftNumber = toFiniteNumber(left);
-  const rightNumber = toFiniteNumber(right);
+  const leftNumber = toFiniteNumber(left)
+  const rightNumber = toFiniteNumber(right)
   if (leftNumber != null && rightNumber != null) {
-    return leftNumber - rightNumber;
+    return leftNumber - rightNumber
   }
 
-  const leftDate = toDateMs(left);
-  const rightDate = toDateMs(right);
+  const leftDate = toDateMs(left)
+  const rightDate = toDateMs(right)
   if (leftDate != null && rightDate != null) {
-    return leftDate - rightDate;
+    return leftDate - rightDate
   }
 
   return String(left).localeCompare(String(right), undefined, {
     sensitivity: "base",
     numeric: true,
-  });
+  })
 }
 
 function toFiniteNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value !== "string" || !value.trim()) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value !== "string" || !value.trim()) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 function toDateMs(value: unknown): number | null {
-  if (typeof value !== "string") return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  if (typeof value !== "string") return null
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : value == null ? [] : [value];
+  return Array.isArray(value) ? value : value == null ? [] : [value]
 }
 
 function isEmptyValue(value: unknown): boolean {
-  if (value == null) return true;
-  if (typeof value === "string") return value.trim() === "";
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === "object") return Object.keys(value).length === 0;
-  return false;
+  if (value == null) return true
+  if (typeof value === "string") return value.trim() === ""
+  if (Array.isArray(value)) return value.length === 0
+  if (typeof value === "object") return Object.keys(value).length === 0
+  return false
 }
 
 function relationEntryId(value: unknown): unknown {
-  const record = asRecord(value);
-  return record.entry_id ?? record.entryId ?? value;
+  const record = asRecord(value)
+  return record.entry_id ?? record.entryId ?? value
 }
 
 function schemaFields(schema: JsonRecord): JsonRecord[] {
@@ -6509,23 +6480,23 @@ function schemaFields(schema: JsonRecord): JsonRecord[] {
           Boolean(field && typeof field === "object" && !Array.isArray(field))
         )
         .map((field) => ({ ...field }))
-    : [];
+    : []
 }
 
 function validateDatabaseField(field: JsonRecord): void {
-  const key = field.key;
-  const type = field.type;
+  const key = field.key
+  const type = field.type
   if (typeof key !== "string" || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
     throw new UserFacingError(
       "Database field key must match /^[A-Za-z_][A-Za-z0-9_]*$/.",
       { code: "BAD_REQUEST", status: 400 }
-    );
+    )
   }
   if (typeof type !== "string" || !type.trim()) {
     throw new UserFacingError("Database field type is required.", {
       code: "BAD_REQUEST",
       status: 400,
-    });
+    })
   }
 }
 
@@ -6536,12 +6507,12 @@ function assertFieldKeyAvailable(
 ): void {
   const existing = fields.find(
     (field) => field.key === fieldKey && field.key !== currentKey
-  );
+  )
   if (existing) {
     throw new UserFacingError(`Database field "${fieldKey}" already exists.`, {
       code: "CONFLICT",
       status: 409,
-    });
+    })
   }
 }
 
@@ -6563,7 +6534,7 @@ function formatAccountListProfile(row: AccountListProfileRow) {
     createdBy: row.created_by ?? null,
     createdAt: row.created_at ?? null,
     updatedAt: row.updated_at ?? null,
-  };
+  }
 }
 
 function formatSurfPoint(row: SurfPointRow) {
@@ -6589,13 +6560,13 @@ function formatSurfPoint(row: SurfPointRow) {
     displayOrder: row.display_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
+  }
 }
 
 function formatSource(row: SourceRow) {
-  const pullConfig = asRecord(row.pull_config);
-  const metadata = asRecord(row.metadata);
-  const sourceType = inferSourceType(row);
+  const pullConfig = asRecord(row.pull_config)
+  const metadata = asRecord(row.metadata)
+  const sourceType = inferSourceType(row)
   const source: Record<string, unknown> = {
     id: row.id,
     sourceId: row.id,
@@ -6613,14 +6584,14 @@ function formatSource(row: SourceRow) {
     isActive: row.is_active ?? null,
     createdAt: row.created_at ?? null,
     updatedAt: row.updated_at ?? null,
-  };
+  }
   if (sourceType === "webhook") {
-    source.webhookUrl = buildWebhookSignalUrl(row.id);
+    source.webhookUrl = buildWebhookSignalUrl(row.id)
     source.importMapping = importMappingSummary(
       readImportMapping(row.data_schema)
-    );
+    )
   }
-  return source;
+  return source
 }
 
 function formatSurfJob(row: SurfJobRow) {
@@ -6647,15 +6618,15 @@ function formatSurfJob(row: SurfJobRow) {
     workerId: row.worker_id ?? null,
     lockedUntil: row.locked_until ?? null,
     lastError: row.last_error ?? null,
-  };
+  }
 }
 
 function formatProductTool(row: ProductToolRow) {
-  const config = asRecord(row.config);
+  const config = asRecord(row.config)
   const displayName =
     readTrimmedString(config.nickname) ??
     readTrimmedString(config.name) ??
-    row.tool_type;
+    row.tool_type
   return {
     id: row.id,
     toolId: row.id,
@@ -6666,7 +6637,7 @@ function formatProductTool(row: ProductToolRow) {
     isEnabled: row.is_enabled ?? null,
     createdAt: row.created_at ?? null,
     updatedAt: row.updated_at ?? null,
-  };
+  }
 }
 
 function formatBrandContext(row: ProductGoalsRow) {
@@ -6681,7 +6652,7 @@ function formatBrandContext(row: ProductGoalsRow) {
     competitors: uniqueStrings(row.competitors),
     officialWebsite: readTrimmedString(row.official_website),
     updatedAt: row.updated_at ?? null,
-  };
+  }
 }
 
 function formatProduct(
@@ -6697,7 +6668,7 @@ function formatProduct(
     ownerId: row.owner_id,
     createdAt: row.created_at ?? null,
     updatedAt: row.updated_at ?? null,
-  };
+  }
 }
 
 function formatDatabase(row: DatabaseRow) {
@@ -6716,7 +6687,7 @@ function formatDatabase(row: DatabaseRow) {
     displayOrder: row.display_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
+  }
 }
 
 function formatEntry(row: EntryRow) {
@@ -6735,5 +6706,5 @@ function formatEntry(row: EntryRow) {
     triggered: row.triggered,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
+  }
 }

@@ -1,19 +1,16 @@
-import type { JsonRecord } from "./types.js";
+import type { JsonRecord } from "./types.js"
 
-export const PUBLIC_TABLE_TEMPLATES = [
-  "outbound_accounts",
-  "contacts",
-] as const;
+export const PUBLIC_TABLE_TEMPLATES = ["outbound_accounts", "contacts"] as const
 
-export type PublicTableTemplate = (typeof PUBLIC_TABLE_TEMPLATES)[number];
+export type PublicTableTemplate = (typeof PUBLIC_TABLE_TEMPLATES)[number]
 
 type PublicTableTemplateDefinition = {
-  description: string;
-  color: string;
-  itemType: string;
-  schema: JsonRecord;
-  viewConfigs: JsonRecord;
-};
+  description: string
+  color: string
+  itemType: string
+  schema: JsonRecord
+  viewConfigs: JsonRecord
+}
 
 const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
   template_key: "outbound_accounts",
@@ -288,7 +285,7 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
   subtitle_field: "fit_reason",
   time_field: "observed_at",
   link_field: "website",
-};
+}
 
 const OUTBOUND_ACCOUNT_VIEW_CONFIGS: JsonRecord = {
   default_view: "table",
@@ -328,7 +325,7 @@ const OUTBOUND_ACCOUNT_VIEW_CONFIGS: JsonRecord = {
   sort_key: "fit_score",
   sort_direction: "desc",
   board: { group_field: "status" },
-};
+}
 
 const CONTACT_SCHEMA: JsonRecord = {
   template_key: "contacts",
@@ -432,7 +429,7 @@ const CONTACT_SCHEMA: JsonRecord = {
   primary_field: "name",
   subtitle_field: "company",
   link_field: "profile_url",
-};
+}
 
 const CONTACT_VIEW_CONFIGS: JsonRecord = {
   default_view: "table",
@@ -447,7 +444,7 @@ const CONTACT_VIEW_CONFIGS: JsonRecord = {
     { id: "board", name: "By Channel", viewType: "board" },
   ],
   board: { group_field: "channel" },
-};
+}
 
 const TABLE_TEMPLATES: Record<
   PublicTableTemplate,
@@ -469,30 +466,30 @@ const TABLE_TEMPLATES: Record<
     schema: CONTACT_SCHEMA,
     viewConfigs: CONTACT_VIEW_CONFIGS,
   },
-};
+}
 
 function recordValue(value: unknown): JsonRecord | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as JsonRecord)
-    : null;
+    : null
 }
 
 function mergeFields(templateSchema: JsonRecord, customSchema?: JsonRecord) {
   const templateFields = Array.isArray(templateSchema.fields)
     ? templateSchema.fields
-    : [];
+    : []
   const templateKeys = new Set(
     templateFields
       .map((field) => recordValue(field)?.key)
       .filter((key): key is string => typeof key === "string")
-  );
+  )
   const additiveFields = Array.isArray(customSchema?.fields)
     ? customSchema.fields.filter((field) => {
-        const key = recordValue(field)?.key;
-        return typeof key !== "string" || !templateKeys.has(key);
+        const key = recordValue(field)?.key
+        return typeof key !== "string" || !templateKeys.has(key)
       })
-    : [];
-  return [...templateFields, ...additiveFields];
+    : []
+  return [...templateFields, ...additiveFields]
 }
 
 function mergeViewConfigs(
@@ -501,24 +498,24 @@ function mergeViewConfigs(
 ): JsonRecord {
   const templateViews = Array.isArray(templateViewConfigs.saved_views)
     ? templateViewConfigs.saved_views
-    : [];
+    : []
   const templateViewIds = new Set(
     templateViews
       .map((view) => recordValue(view)?.id)
       .filter((id): id is string => typeof id === "string")
-  );
+  )
   const additiveViews = Array.isArray(customViewConfigs?.saved_views)
     ? customViewConfigs.saved_views.filter((view) => {
-        const id = recordValue(view)?.id;
-        return typeof id !== "string" || !templateViewIds.has(id);
+        const id = recordValue(view)?.id
+        return typeof id !== "string" || !templateViewIds.has(id)
       })
-    : [];
+    : []
 
   return {
     ...customViewConfigs,
     ...templateViewConfigs,
     saved_views: [...templateViews, ...additiveViews],
-  };
+  }
 }
 
 export function applyPublicTableTemplate(
@@ -526,7 +523,7 @@ export function applyPublicTableTemplate(
   customSchema?: JsonRecord,
   customViewConfigs?: JsonRecord
 ) {
-  const definition = TABLE_TEMPLATES[template];
+  const definition = TABLE_TEMPLATES[template]
   return {
     description: definition.description,
     color: definition.color,
@@ -537,5 +534,5 @@ export function applyPublicTableTemplate(
       fields: mergeFields(definition.schema, customSchema),
     },
     viewConfigs: mergeViewConfigs(definition.viewConfigs, customViewConfigs),
-  };
+  }
 }
