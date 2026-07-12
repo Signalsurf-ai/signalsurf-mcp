@@ -36,6 +36,10 @@ import {
   type DeeplineEnvelope,
   unwrapDeepline,
 } from "./deepline.js"
+import {
+  buildDeeplineSearchPayload,
+  deeplineSearchPayloadHasConstraint,
+} from "./deepline-search.js"
 import { UserFacingError } from "./errors.js"
 import { canonicalJson, canonicalSha256 } from "./canonical-json.js"
 import { FIELD_CONVENTIONS } from "./conventions.js"
@@ -1823,13 +1827,30 @@ export class SignalSurfRepository {
   private async runDeeplineSearch(
     context: SignalSurfContext,
     toolId: string,
+    kind: "people" | "companies",
     input: DeeplineSearchInput
   ) {
     const apiKey = await this.resolveDeeplineApiKey(context)
-    const payload = cleanDeeplinePayload({
-      ...(input.filters ?? {}),
-      per_page: input.limit ?? 10,
-    })
+    let payload: JsonRecord
+    try {
+      payload = buildDeeplineSearchPayload(
+        toolId,
+        kind,
+        input.filters,
+        input.limit
+      )
+    } catch (error) {
+      throw new UserFacingError(
+        error instanceof Error ? error.message : "Invalid Deepline filters.",
+        { code: "INVALID_INPUT", status: 400 }
+      )
+    }
+    if (!deeplineSearchPayloadHasConstraint(payload)) {
+      throw new UserFacingError(
+        "Provide at least one supported search filter before running Deepline.",
+        { code: "INVALID_INPUT", status: 400 }
+      )
+    }
     const envelope = await executeDeeplineTool(toolId, payload, apiKey)
     if (envelope.status !== undefined && !deeplineStatusOk(envelope.status)) {
       throw new UserFacingError(`Deepline returned status ${envelope.status}`, {
@@ -1847,6 +1868,7 @@ export class SignalSurfRepository {
     return this.runDeeplineSearch(
       context,
       DEEPLINE_TOOL_IDS.searchPeople(),
+      "people",
       input
     )
   }
@@ -1858,6 +1880,7 @@ export class SignalSurfRepository {
     return this.runDeeplineSearch(
       context,
       DEEPLINE_TOOL_IDS.searchCompanies(),
+      "companies",
       input
     )
   }
