@@ -56,6 +56,124 @@
     "wait_for_surf_job": "ed75b9d72cc36b4d40ce48206d7d90fef1d95cf87de5558ad89996aa1a070662"
   },
   "semanticFixtures": {
+    "add_table_field": {
+      "valid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "field": {
+            "key": "company_name",
+            "type": "text",
+            "label": "Company name"
+          }
+        }
+      ],
+      "invalid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "field": { "key": "invalid key", "type": "text" }
+        }
+      ]
+    },
+    "apply_flow_edits": {
+      "valid": [
+        {
+          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "edits": [
+            { "op": "add_node", "ref": "research", "node": { "type": "agent" } }
+          ]
+        }
+      ],
+      "invalid": [
+        {
+          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "edits": []
+        }
+      ]
+    },
+    "cancel_surf_job": {
+      "valid": [{ "jobId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "jobId": "not-a-uuid" }]
+    },
+    "create_campaign": {
+      "valid": [
+        {
+          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "contactTableId": "00000000-0000-4000-8000-000000000002",
+          "steps": [
+            { "copy": "Introduce SignalSurf and ask for a short call." }
+          ]
+        }
+      ],
+      "invalid": [
+        {
+          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "contactTableId": "00000000-0000-4000-8000-000000000002",
+          "steps": []
+        }
+      ]
+    },
+    "create_product": {
+      "valid": [{ "name": "North America GTM" }],
+      "invalid": [{ "name": "" }]
+    },
+    "create_relation_field": {
+      "valid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "key": "account",
+          "targetDatabaseId": "00000000-0000-4000-8000-000000000002"
+        }
+      ],
+      "invalid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "key": "invalid key",
+          "targetDatabaseId": "00000000-0000-4000-8000-000000000002"
+        }
+      ]
+    },
+    "create_signal": {
+      "valid": [
+        {
+          "surfPointId": "00000000-0000-4000-8000-000000000001",
+          "sourceType": "rss",
+          "name": "Industry news"
+        }
+      ],
+      "invalid": [
+        {
+          "surfPointId": "00000000-0000-4000-8000-000000000001",
+          "sourceType": "unsupported"
+        }
+      ]
+    },
+    "create_surf_point": {
+      "valid": [{ "name": "Research target accounts", "databaseIds": [] }],
+      "invalid": [{ "name": "" }]
+    },
+    "create_table": {
+      "valid": [
+        {
+          "name": "Target accounts",
+          "schema": { "company_name": { "type": "text" } }
+        }
+      ],
+      "invalid": [{ "name": "" }]
+    },
+    "create_table_row": {
+      "valid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "data": { "company_name": "Acme" }
+        }
+      ],
+      "invalid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "data": "not-an-object"
+        }
+      ]
+    },
     "deepline_enrich_contact": {
       "valid": [
         {
@@ -92,6 +210,322 @@
           "toolId": "hubspot_create_contact",
           "approvalRequestId": "not-a-uuid",
           "payload": {}
+        }
+      ]
+    },
+    "deepline_search_catalog": {
+      "valid": [{ "query": "CRM contact creation", "limit": 10 }],
+      "invalid": [{ "limit": 0 }]
+    },
+    "deepline_search_companies": {
+      "valid": [
+        { "filters": { "organization_locations": ["Taiwan"] }, "limit": 10 }
+      ],
+      "invalid": [{ "limit": 26 }]
+    },
+    "deepline_search_people": {
+      "valid": [{ "filters": { "person_titles": ["VP Sales"] }, "limit": 10 }],
+      "invalid": [{ "limit": 26 }]
+    },
+    "delete_signal": {
+      "valid": [{ "sourceId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "sourceIds": [] }]
+    },
+    "delete_surf_point": {
+      "valid": [{ "surfPointIds": ["00000000-0000-4000-8000-000000000001"] }],
+      "invalid": [{ "surfPointIds": [] }]
+    },
+    "delete_table": {
+      "valid": [{ "databaseIds": ["00000000-0000-4000-8000-000000000001"] }],
+      "invalid": [{ "databaseIds": [] }]
+    },
+    "delete_table_rows": {
+      "valid": [{ "rowIds": ["00000000-0000-4000-8000-000000000001"] }],
+      "invalid": [{ "rowIds": [] }]
+    },
+    "describe_node_types": {
+      "valid": [{}],
+      "invalid": [null]
+    },
+    "disable_quick_surf": {
+      "valid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "fieldKey": "company_domain"
+        }
+      ],
+      "invalid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "fieldKey": ""
+        }
+      ]
+    },
+    "enable_quick_surf": {
+      "valid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "fieldKey": "company_domain",
+          "whatToDo": "Find the company's primary domain."
+        }
+      ],
+      "invalid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "fieldKey": "company_domain",
+          "whatToDo": ""
+        }
+      ]
+    },
+    "find_capabilities": {
+      "valid": [{ "query": "update table rows" }],
+      "invalid": [{ "query": 42 }]
+    },
+    "get_brand_context": {
+      "valid": [{}],
+      "invalid": [{ "productId": "not-a-uuid" }]
+    },
+    "get_context": {
+      "valid": [{}],
+      "invalid": [null]
+    },
+    "get_enrichment_context": {
+      "valid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "fieldKey": "company_domain"
+        }
+      ],
+      "invalid": [{ "databaseId": "not-a-uuid" }]
+    },
+    "get_node_upstream_context": {
+      "valid": [
+        {
+          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "nodeId": "research-node"
+        }
+      ],
+      "invalid": [
+        {
+          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "nodeId": ""
+        }
+      ]
+    },
+    "get_surf_job": {
+      "valid": [{ "jobId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "jobId": "not-a-uuid" }]
+    },
+    "get_surf_point": {
+      "valid": [{ "surfPointId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "surfPointId": "not-a-uuid" }]
+    },
+    "get_table_row": {
+      "valid": [{ "rowId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "rowId": "not-a-uuid" }]
+    },
+    "list_product_tools": {
+      "valid": [{ "includeDisabled": false, "limit": 100 }],
+      "invalid": [{ "limit": 0 }]
+    },
+    "list_quick_surf": {
+      "valid": [{ "databaseId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "databaseId": "not-a-uuid" }]
+    },
+    "list_signals": {
+      "valid": [{ "surfPointId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "surfPointId": "not-a-uuid" }]
+    },
+    "list_surf_jobs": {
+      "valid": [{ "status": "completed", "limit": 50, "offset": 0 }],
+      "invalid": [{ "limit": 0 }]
+    },
+    "list_surf_point_tools": {
+      "valid": [{ "surfPointId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "surfPointId": "not-a-uuid" }]
+    },
+    "list_surf_points": {
+      "valid": [{ "includeInactive": true, "limit": 100 }],
+      "invalid": [{ "limit": 0 }]
+    },
+    "list_table_fields": {
+      "valid": [{ "databaseId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "databaseId": "not-a-uuid" }]
+    },
+    "list_table_views": {
+      "valid": [{ "databaseId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "databaseId": "not-a-uuid" }]
+    },
+    "list_tables": {
+      "valid": [{ "includeSystem": false, "limit": 100 }],
+      "invalid": [{ "limit": 0 }]
+    },
+    "read_table": {
+      "valid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "filters": [{ "field": "status", "op": "eq", "value": "qualified" }],
+          "limit": 50
+        }
+      ],
+      "invalid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "filters": [{ "field": "status", "op": "unsupported" }]
+        }
+      ]
+    },
+    "read_table_view": {
+      "valid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "viewId": "qualified-accounts",
+          "limit": 50
+        }
+      ],
+      "invalid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "viewId": ""
+        }
+      ]
+    },
+    "remove_table_field": {
+      "valid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "fieldKey": "company_domain"
+        }
+      ],
+      "invalid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "fieldKey": ""
+        }
+      ]
+    },
+    "run_quick_surf": {
+      "valid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "fieldKey": "company_domain",
+          "scope": "first10"
+        }
+      ],
+      "invalid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "fieldKey": "company_domain",
+          "scope": "first1000"
+        }
+      ]
+    },
+    "run_surf_point": {
+      "valid": [
+        {
+          "surfPointId": "00000000-0000-4000-8000-000000000001",
+          "idempotencyKey": "nightly-2026-07-12"
+        }
+      ],
+      "invalid": [{ "surfPointId": "not-a-uuid" }]
+    },
+    "test_surf_point_node": {
+      "valid": [
+        {
+          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "nodeId": "research-node",
+          "sampleText": "Acme launched a new product."
+        }
+      ],
+      "invalid": [
+        {
+          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "nodeId": ""
+        }
+      ]
+    },
+    "update_signal": {
+      "valid": [
+        {
+          "sourceId": "00000000-0000-4000-8000-000000000001",
+          "name": "Industry news"
+        }
+      ],
+      "invalid": [{ "sourceId": "not-a-uuid" }]
+    },
+    "update_surf_point": {
+      "valid": [
+        {
+          "surfPointId": "00000000-0000-4000-8000-000000000001",
+          "name": "Qualified accounts"
+        }
+      ],
+      "invalid": [{ "surfPointId": "not-a-uuid" }]
+    },
+    "update_surf_point_flow": {
+      "valid": [
+        {
+          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "flow": { "version": 2, "nodes": [], "edges": [] }
+        }
+      ],
+      "invalid": [
+        {
+          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "flow": { "version": 1, "nodes": [], "edges": [] }
+        }
+      ]
+    },
+    "update_table": {
+      "valid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "name": "Qualified accounts"
+        }
+      ],
+      "invalid": [{ "databaseId": "not-a-uuid" }]
+    },
+    "update_table_field": {
+      "valid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "fieldKey": "company_name",
+          "patch": { "label": "Company" }
+        }
+      ],
+      "invalid": [
+        {
+          "databaseId": "00000000-0000-4000-8000-000000000001",
+          "fieldKey": "company_name",
+          "patch": "not-an-object"
+        }
+      ]
+    },
+    "update_table_rows": {
+      "valid": [
+        {
+          "edits": [
+            {
+              "rowId": "00000000-0000-4000-8000-000000000001",
+              "dataPatch": { "status": "qualified" }
+            }
+          ]
+        }
+      ],
+      "invalid": [{ "edits": [] }]
+    },
+    "wait_for_surf_job": {
+      "valid": [
+        {
+          "jobId": "00000000-0000-4000-8000-000000000001",
+          "timeoutMs": 30000,
+          "pollIntervalMs": 1000
+        }
+      ],
+      "invalid": [
+        {
+          "jobId": "00000000-0000-4000-8000-000000000001",
+          "pollIntervalMs": 50
         }
       ]
     }

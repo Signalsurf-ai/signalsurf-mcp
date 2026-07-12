@@ -148,7 +148,8 @@ automatically replayed; a new action requires a new Web approval.
 
 SignalSurf Web owns human resolution. The shared contract artifact at
 `docs/public-tool-contract.json` pins the public input schemas and valid/invalid
-semantic fixtures so Web and this server can reject drift in CI.
+semantic fixtures for every advertised tool so Web and this server can reject
+schema or fixture-coverage drift in CI.
 
 Do not add raw SQL, arbitrary table-name access, service-role-like operations,
 or tools that bypass SignalSurf's existing provenance, changelog, job, or

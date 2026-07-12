@@ -75,6 +75,10 @@ describe("public MCP tool contract", () => {
 
   it("keeps shared semantic fixtures accepted or rejected by the canonical schemas", async () => {
     const contract = await readContract()
+    expect(Object.keys(contract.semanticFixtures).sort()).toEqual(
+      [...PUBLIC_MCP_TOOL_NAMES].sort()
+    )
+
     for (const [toolName, fixtures] of Object.entries(
       contract.semanticFixtures
     )) {
@@ -83,10 +87,15 @@ describe("public MCP tool contract", () => {
           toolName as keyof typeof PUBLIC_MCP_TOOL_SCHEMAS
         ]
       expect(
-        shape,
-        `${toolName} must have a canonical input schema`
-      ).toBeDefined()
-      const schema = z.object(shape as z.ZodRawShape)
+        fixtures.valid.length,
+        `${toolName} needs a valid fixture`
+      ).toBeGreaterThan(0)
+      expect(
+        fixtures.invalid.length,
+        `${toolName} needs an invalid fixture`
+      ).toBeGreaterThan(0)
+
+      const schema = z.object((shape ?? {}) as z.ZodRawShape)
       for (const fixture of fixtures.valid) {
         expect(
           schema.safeParse(fixture).success,
