@@ -2174,6 +2174,86 @@ describe("SignalSurfRepository", () => {
     })
   })
 
+  it("creates outbound account and contact tables from additive templates", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    const accounts = await repo.createTable(context, {
+      name: "Outbound Accounts",
+      template: "outbound_accounts",
+      schema: {
+        fields: [
+          { key: "website", type: "text", label: "Wrong override" },
+          { key: "is_yc", type: "boolean", label: "YC" },
+        ],
+      },
+    })
+    const accountSchema = accounts.database.schema as {
+      template_key?: string
+      database_kind?: string
+      required_fields?: string[]
+      fields?: Array<Record<string, unknown>>
+    }
+    const accountFields = new Map(
+      accountSchema.fields?.map((field) => [field.key, field]) ?? []
+    )
+
+    expect(accounts.database).toMatchObject({ itemType: "outbound_account" })
+    expect(accountSchema).toMatchObject({
+      template_key: "outbound_accounts",
+      database_kind: "outbound.account_list",
+      required_fields: ["company", "status"],
+    })
+    expect(accountFields.get("website")).toMatchObject({
+      type: "url",
+      label: "Website",
+    })
+    expect(accountFields.get("status")).toMatchObject({
+      type: "enum",
+      options: ["new", "researching", "qualified", "rejected"],
+    })
+    expect(accountFields.get("is_yc")).toMatchObject({
+      type: "boolean",
+      label: "YC",
+    })
+    expect(accountFields.has("campaign_ready")).toBe(false)
+
+    const contacts = await repo.createTable(context, {
+      name: "Outbound Contacts",
+      template: "contacts",
+      schema: {
+        fields: [
+          { key: "email", type: "text", label: "Wrong override" },
+          {
+            key: "account",
+            type: "item_ref",
+            target_database_id: accounts.database.databaseId,
+            label: "Account",
+          },
+        ],
+      },
+    })
+    const contactSchema = contacts.database.schema as {
+      template_key?: string
+      fields?: Array<Record<string, unknown>>
+    }
+    const contactFields = new Map(
+      contactSchema.fields?.map((field) => [field.key, field]) ?? []
+    )
+
+    expect(contacts.database).toMatchObject({ itemType: "contact" })
+    expect(contactSchema.template_key).toBe("contacts")
+    expect(contactFields.get("email")).toMatchObject({ type: "email" })
+    expect(contactFields.get("linkedin_url")).toMatchObject({
+      type: "url",
+      contact_platform: "linkedin",
+    })
+    expect(contactFields.get("account")).toMatchObject({
+      type: "item_ref",
+      target_database_id: accounts.database.databaseId,
+    })
+  })
+
   it("rejects table schemas that reference another product", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
