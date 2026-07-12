@@ -97,7 +97,7 @@ describe("Deepline capabilities", () => {
     expect(reqInit.headers.Authorization).toBe("Bearer dl_test")
   })
 
-  it("search_people passes the filters + per_page through to Apollo", async () => {
+  it("search_people uses managed Crustdata V3 by default", async () => {
     vi.stubEnv("DEEPLINE_DISABLED", "")
     const fetchMock = stubFetch({
       status: "completed",
@@ -111,10 +111,25 @@ describe("Deepline capabilities", () => {
     expect((res.result as { total_entries: number }).total_entries).toBe(5)
     const call = (fetchMock as unknown as { mock: { calls: unknown[][] } }).mock
       .calls[0]
-    const reqInit = (call as [string, { body: string }])[1]
-    expect(JSON.parse(reqInit.body).payload).toEqual({
-      person_titles: ["VP of Sales"],
-      per_page: 3,
+    const [url, reqInit] = call as [string, { body: string }]
+    expect(url).toContain("/crustdata_v3_person_search/execute")
+    expect(JSON.parse(reqInit.body).payload).toMatchObject({
+      limit: 3,
+      filters: {
+        op: "and",
+        conditions: [
+          {
+            op: "or",
+            conditions: [
+              {
+                field: "experience.employment_details.current.title",
+                type: "(.)",
+                value: "VP of Sales",
+              },
+            ],
+          },
+        ],
+      },
     })
   })
 

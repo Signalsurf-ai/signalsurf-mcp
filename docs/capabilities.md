@@ -92,8 +92,8 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `run_quick_surf`            | `surf_points.execute` | No          | Queues column, row-subset, or single-cell enrichment; column/subset runs apply the persisted run gate                 |
 | `list_product_tools`        | `surf_points.read`    | No          | Lists safe product tool metadata; config secrets are not exposed                                                      |
 | `list_surf_point_tools`     | `surf_points.read`    | No          | Lists tool ids from `tool_config.auto_tool_ids` (attach/detach via `update_surf_point` toolConfigPatch)               |
-| `deepline_search_people`    | `deepline.read`       | No          | Runs the curated Apollo-backed people search through Deepline                                                         |
-| `deepline_search_companies` | `deepline.read`       | No          | Runs the curated Apollo-backed company search through Deepline                                                        |
+| `deepline_search_people`    | `deepline.read`       | No          | Runs managed Crustdata V3 people search; Apollo is an explicit BYOC override                                          |
+| `deepline_search_companies` | `deepline.read`       | No          | Runs managed Crustdata V3 company search; Apollo is an explicit BYOC override                                         |
 | `deepline_enrich_contact`   | `deepline.enrich`     | No          | Finds a work email through Deepline's configured email finder                                                         |
 | `deepline_search_catalog`   | `deepline.read`       | No          | Searches Deepline's live v2 tool catalog for provider tool ids                                                        |
 | `deepline_execute_tool`     | `deepline.execute`    | No          | Executes one selected Deepline tool only after atomically consuming an exact, unexpired Web approval                  |

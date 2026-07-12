@@ -8,11 +8,9 @@ const productTargetSchema = {
   productId: uuidSchema.optional(),
 }
 
-// Deepline curated capabilities. Search tools take an Apollo-shaped `filters`
-// object passed through to Deepline (apollo_search_people / apollo_company_search
-// accepted fields, e.g. person_titles, person_seniorities, person_locations,
-// organization_num_employees_ranges, q_keywords / q_organization_keyword_tags,
-// organization_locations). Enrich takes name + domain/company (leadmagic).
+// Deepline curated search defaults to managed Crustdata V3. It accepts both
+// provider-neutral nested fields and the established Apollo-shaped names;
+// Apollo remains an explicit deployment-level BYOC override.
 export const deeplineSearchPeopleSchema = {
   ...productTargetSchema,
   filters: jsonObjectSchema.optional(),

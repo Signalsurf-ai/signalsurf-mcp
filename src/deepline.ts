@@ -19,10 +19,10 @@ export const DEFAULT_DEEPLINE_EXECUTE_TIMEOUT_MS = 60_000
 export const DEEPLINE_TOOL_IDS = {
   searchPeople: () =>
     process.env.DEEPLINE_PROSPECT_SEARCH_TOOL_ID?.trim() ||
-    "apollo_search_people",
+    "crustdata_v3_person_search",
   searchCompanies: () =>
     process.env.DEEPLINE_COMPANY_SEARCH_TOOL_ID?.trim() ||
-    "apollo_company_search",
+    "crustdata_v3_company_search",
   emailFinder: () =>
     process.env.DEEPLINE_EMAIL_FINDER_TOOL_ID?.trim() ||
     "leadmagic_email_finder",
