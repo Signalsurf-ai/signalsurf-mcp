@@ -575,7 +575,7 @@ export const PUBLIC_MCP_TOOLS = {
   deepline_search_people: {
     title: "Search People via Deepline",
     description:
-      "Search people through Deepline's managed Crustdata V3 search for an authorized product. Pass provider-neutral nested people/company filters or the backward-compatible Apollo-shaped names (person_titles, person_seniorities, person_locations, organization_locations, organization_num_employees_ranges, contact_email_status). Apollo remains an explicit BYOC deployment override. Returns preview rows + match counts; emails require the separate enrich step.",
+      "Search people through Deepline's managed Crustdata V3 search for an authorized product after consuming an exact, unexpired one-time Web approval. Pass provider-neutral nested people/company filters or the backward-compatible Apollo-shaped names (person_titles, person_seniorities, person_locations, organization_locations, organization_num_employees_ranges, contact_email_status). Apollo remains an explicit BYOC deployment override. Returns preview rows + match counts; emails require the separate enrich step.",
     requiredCapability: "deepline.read",
     surferSurface: "account_list_icp_builder",
     publicStatus: "supported",
@@ -584,7 +584,7 @@ export const PUBLIC_MCP_TOOLS = {
   deepline_search_companies: {
     title: "Search Companies via Deepline",
     description:
-      "Search companies through Deepline's managed Crustdata V3 search for an authorized product. Pass provider-neutral company filters or the backward-compatible Apollo-shaped names (q_organization_keyword_tags, q_organization_domains_list, organization_locations, organization_not_locations, organization_num_employees_ranges); funding_stages is also supported. Apollo remains an explicit BYOC deployment override.",
+      "Search companies through Deepline's managed Crustdata V3 search for an authorized product after consuming an exact, unexpired one-time Web approval. Pass provider-neutral company filters or the backward-compatible Apollo-shaped names (q_organization_keyword_tags, q_organization_domains_list, organization_locations, organization_not_locations, organization_num_employees_ranges); funding_stages is also supported. Apollo remains an explicit BYOC deployment override.",
     requiredCapability: "deepline.read",
     surferSurface: "account_list_icp_builder",
     publicStatus: "supported",
@@ -593,7 +593,7 @@ export const PUBLIC_MCP_TOOLS = {
   deepline_enrich_contact: {
     title: "Find a Contact Email via Deepline",
     description:
-      "Find a verified work email for a person via Deepline (leadmagic email finder). Requires firstName + lastName and at least one of domain / companyName. Spends Deepline credits ONLY on a hit (misses are free). Requires a Deepline integration key on the product.",
+      "Find a verified work email for a person via Deepline (leadmagic email finder) after consuming an exact, unexpired one-time Web approval. Requires firstName + lastName and at least one of domain / companyName. Spends Deepline credits ONLY on a hit (misses are free). Requires a Deepline integration key on the product.",
     requiredCapability: "deepline.enrich",
     surferSurface: "account_list_icp_builder",
     publicStatus: "supported",

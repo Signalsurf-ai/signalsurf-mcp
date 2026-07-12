@@ -12,11 +12,11 @@
     "create_surf_point": "9ced59ca51b3e73368e30cf129639b7f24d0db102fcd9f33dd9f8a0883cbfc30",
     "create_table": "09026a7b3d7b4e7042aac4fc797df275c79c68b0110c0919de9379e2c877782d",
     "create_table_row": "655f6146cdb35da8b68f90612d2077e7857f534b98a192ca1a9b5fbefe910ef9",
-    "deepline_enrich_contact": "920dab03c93a4674c5dea8b6993f78664d53ddf89068425c729078e1c72f1365",
+    "deepline_enrich_contact": "3ca3cbf4f115edd6e7352711f3e5ec61766e5e4db8274c1b3bec7d09ef450184",
     "deepline_execute_tool": "ddc00d136b0b73d0373953f27d524d8aeb5f3040c3d95dc8b48070148e0c4efc",
     "deepline_search_catalog": "c0925c1d0a2285fbe3616059eea6f54f7141462723c223d448c09d6ac750a895",
-    "deepline_search_companies": "aae839b9be6f7ca37ac139eb11403f6afc69c356cbe330a32d536977e78a4a57",
-    "deepline_search_people": "aae839b9be6f7ca37ac139eb11403f6afc69c356cbe330a32d536977e78a4a57",
+    "deepline_search_companies": "e5c19945432b9796b008952bf919cb9ba7878bede571cfa809227c9ba9502bfc",
+    "deepline_search_people": "e5c19945432b9796b008952bf919cb9ba7878bede571cfa809227c9ba9502bfc",
     "delete_signal": "410aa6abe17bb991e89937d0868633d9554c0c61a0039d67f4d419e7d98c1b08",
     "delete_surf_point": "0584c8600d874ae3d633451f74cf4732e7a7292f96f5ca3205940cfba22311f9",
     "delete_table": "c1cdbe19ad327e7c906830066d3b3d3620e4924b008b948c62717041a0217ef5",
@@ -180,12 +180,24 @@
           "firstName": "Jane",
           "lastName": "Doe",
           "domain": "acme.com"
+        },
+        {
+          "firstName": "Jane",
+          "lastName": "Doe",
+          "companyName": "Acme",
+          "approvalRequestId": "00000000-0000-4000-8000-000000000777"
         }
       ],
       "invalid": [
         {
           "lastName": "Doe",
           "domain": "acme.com"
+        },
+        {
+          "firstName": "Jane",
+          "lastName": "Doe",
+          "domain": "acme.com",
+          "approvalRequestId": "not-a-uuid"
         }
       ]
     },
@@ -219,13 +231,25 @@
     },
     "deepline_search_companies": {
       "valid": [
-        { "filters": { "organization_locations": ["Taiwan"] }, "limit": 10 }
+        { "filters": { "organization_locations": ["Taiwan"] }, "limit": 10 },
+        {
+          "filters": { "funding_stages": ["Seed"] },
+          "limit": 5,
+          "approvalRequestId": "00000000-0000-4000-8000-000000000777"
+        }
       ],
-      "invalid": [{ "limit": 26 }]
+      "invalid": [{ "limit": 26 }, { "approvalRequestId": "not-a-uuid" }]
     },
     "deepline_search_people": {
-      "valid": [{ "filters": { "person_titles": ["VP Sales"] }, "limit": 10 }],
-      "invalid": [{ "limit": 26 }]
+      "valid": [
+        { "filters": { "person_titles": ["VP Sales"] }, "limit": 10 },
+        {
+          "filters": { "person_titles": ["Founder"] },
+          "limit": 5,
+          "approvalRequestId": "00000000-0000-4000-8000-000000000777"
+        }
+      ],
+      "invalid": [{ "limit": 26 }, { "approvalRequestId": "not-a-uuid" }]
     },
     "delete_signal": {
       "valid": [{ "sourceId": "00000000-0000-4000-8000-000000000001" }],

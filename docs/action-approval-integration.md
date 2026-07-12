@@ -1,10 +1,12 @@
 # Hosted MCP Action Approval Integration
 
-`deepline_execute_tool` depends on the SignalSurf Web migration and approval UI
-for `public.mcp_action_approvals`. Deploy Web first; until the table is present,
-generic Deepline execution fails closed with `APPROVAL_UNAVAILABLE` and makes no
-provider request. The Web migration keeps a temporary database-side compatibility
-trigger that derives `oauth_grant_id` from `oauth_token_id`, so the previous
+Chargeable Deepline tools depend on the SignalSurf Web migration and approval UI
+for `public.mcp_action_approvals`. This includes curated company/people search,
+contact enrichment, and generic `deepline_execute_tool`. Deploy Web first; until
+the table is present, Deepline execution fails closed with
+`APPROVAL_UNAVAILABLE` and makes no provider request. The Web migration keeps a
+temporary database-side compatibility trigger that derives `oauth_grant_id`
+from `oauth_token_id`, so the previous
 hosted writer remains available during the migrate-before-MCP rollout.
 
 ## Required Web Contract
@@ -49,7 +51,8 @@ default grant includes only `mcp:deepline.read`.
 
 ## Hosted Claim And Finalization
 
-For a call with `toolId` and `payload`, hosted MCP computes
+For a chargeable call, hosted MCP first resolves its provider `toolId` and
+canonical payload, then computes
 `SHA-256(canonicalJson(payload))`. Canonical JSON recursively sorts object keys,
 preserves array order, omits undefined object members, and emits compact JSON.
 
