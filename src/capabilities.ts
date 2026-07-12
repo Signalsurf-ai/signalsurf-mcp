@@ -215,7 +215,7 @@ export const PUBLIC_MCP_TOOLS = {
   find_capabilities: {
     title: "Find Capabilities",
     description:
-      "Search this MCP's tools and guided prompts by intent (e.g. \"enrich a table\", \"find leads\", \"set up a surf point\") instead of scanning the whole tool list. Returns the best-matching tools and prompts (filtered to what your token can use) plus a hint on how to proceed. Start here when you are unsure which tool or prompt fits the task. Pass an empty query to see the available guided workflows.",
+      'Search this MCP\'s tools and guided prompts by intent (e.g. "enrich a table", "find leads", "set up a surf point") instead of scanning the whole tool list. Returns the best-matching tools and prompts (filtered to what your token can use) plus a hint on how to proceed. Start here when you are unsure which tool or prompt fits the task. Pass an empty query to see the available guided workflows.',
     requiredCapability: "context.read",
     surferSurface: "tool discovery",
     publicStatus: "supported",
@@ -395,7 +395,7 @@ export const PUBLIC_MCP_TOOLS = {
   update_table: {
     title: "Update Table",
     description:
-      "Update SignalSurf table metadata, custom schema, saved-view config, and folder placement after product-scope verification.",
+      "Update SignalSurf table metadata, custom schema, saved-view config, and folder placement after product-scope verification. Pass template to upgrade a compatible existing table to the canonical outbound_accounts or contacts baseline while preserving additive custom fields.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -493,8 +493,7 @@ export const PUBLIC_MCP_TOOLS = {
   },
   update_table_field: {
     title: "Update Table Field",
-    description:
-      "Patch one schema field in an authorized SignalSurf table.",
+    description: "Patch one schema field in an authorized SignalSurf table.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -647,7 +646,7 @@ export const PUBLIC_MCP_TOOLS = {
   run_quick_surf: {
     title: "Run Quick Surf",
     description:
-      "Queue Quick Surf enrichment for a column. Pass exactly one mode: scope ('first10' | 'first100' | 'all', capped at 1000 rows) to backfill across rows, entryIds for a specific row subset, or entryId for a single cell. Column/subset runs apply the persisted runCondition gate before queueing and return queued, skipped, rawSignalIds, jobs, and touched entryIds. Poll with list_surf_jobs / wait_for_surf_job. Credits are charged by the brain as each job runs.",
+      "Queue Quick Surf enrichment for a column. Pass exactly one mode: scope ('first10' | 'first100' | 'all', capped at 1000 rows) to backfill across rows, entryIds for a specific row subset, or entryId for a single cell. Populated cells are skipped by default and reported as skippedExisting; pass overwriteExisting=true only with explicit user consent to refresh them. Column/subset runs also apply the persisted runCondition gate. Poll returned jobs with list_surf_jobs / wait_for_surf_job. Credits are charged by the brain as each job runs.",
     requiredCapability: "surf_points.execute",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",

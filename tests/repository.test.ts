@@ -2120,6 +2120,9 @@ describe("SignalSurfRepository", () => {
       name: "Agent Accounts",
       itemType: "account",
       schema: {
+        template_key: "outbound_accounts",
+        schema_version: 2,
+        database_kind: "outbound.account_list",
         fields: [
           { key: "name", type: "text", label: "Name" },
           {
@@ -2172,6 +2175,29 @@ describe("SignalSurfRepository", () => {
         },
       },
     })
+
+    const upgraded = await repo.updateTable(context, {
+      databaseId: created.database.databaseId,
+      template: "outbound_accounts",
+    })
+    const upgradedFields = upgraded.database.schema.fields as Array<{
+      key: string
+      type?: string
+    }>
+    expect(upgraded.database).toMatchObject({
+      itemType: "outbound_account",
+      schema: {
+        template_key: "outbound_accounts",
+        schema_version: 3,
+      },
+    })
+    expect(upgradedFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "company", type: "string" }),
+        expect.objectContaining({ key: "tech_stack", type: "array" }),
+        expect.objectContaining({ key: "priority", type: "enum" }),
+      ])
+    )
   })
 
   it("creates outbound account and contact tables from additive templates", async () => {
@@ -2211,6 +2237,14 @@ describe("SignalSurfRepository", () => {
     expect(accountFields.get("status")).toMatchObject({
       type: "enum",
       options: ["new", "researching", "qualified", "rejected"],
+    })
+    expect(accountSchema).toMatchObject({ schema_version: 3 })
+    expect(accountFields.get("tech_stack")).toMatchObject({ type: "array" })
+    expect(accountFields.get("active_job_count")).toMatchObject({
+      type: "number",
+    })
+    expect(accountFields.get("hiring_signal")).toMatchObject({
+      type: "string",
     })
     expect(accountFields.get("is_yc")).toMatchObject({
       type: "boolean",
@@ -2252,6 +2286,18 @@ describe("SignalSurfRepository", () => {
       type: "item_ref",
       target_database_id: accounts.database.databaseId,
     })
+  })
+
+  it("refuses to apply an outbound template to an unclassified table", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.updateTable(context, {
+        databaseId: db1,
+        template: "outbound_accounts",
+      })
+    ).rejects.toThrow(/already classified as outbound\.account_list/i)
   })
 
   it("rejects table schemas that reference another product", async () => {
@@ -2600,7 +2646,9 @@ describe("SignalSurfRepository", () => {
 
     expect(result.rows[0]?.note).toBe("Note only, no data change.")
     expect(
-      db.rpcCalls.some((call) => call.name === "update_entries_with_source_batch")
+      db.rpcCalls.some(
+        (call) => call.name === "update_entries_with_source_batch"
+      )
     ).toBe(false)
   })
 
@@ -2610,7 +2658,9 @@ describe("SignalSurfRepository", () => {
 
     await expect(
       repo.updateTableRows(context, {
-        edits: [{ rowId: row1, data: { name: "X" }, dataPatch: { stage: "y" } }],
+        edits: [
+          { rowId: row1, data: { name: "X" }, dataPatch: { stage: "y" } },
+        ],
       })
     ).rejects.toThrow("pass either data or dataPatch, not both")
   })
@@ -2625,7 +2675,10 @@ describe("SignalSurfRepository", () => {
           {
             rowId: row1,
             dataPatch: {
-              parent: { database_id: otherProductDb, entry_id: otherProductRow },
+              parent: {
+                database_id: otherProductDb,
+                entry_id: otherProductRow,
+              },
             },
           },
         ],

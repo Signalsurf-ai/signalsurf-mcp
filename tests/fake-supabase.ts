@@ -80,9 +80,13 @@ export class FakeSupabase {
       }
 
       const membership = this.tables.organization_members?.find(
-        (row) => row.organization_id === organizationId && row.user_id === userId
+        (row) =>
+          row.organization_id === organizationId && row.user_id === userId
       )
-      if (args.p_organization_id && !["owner", "editor"].includes(membership?.role)) {
+      if (
+        args.p_organization_id &&
+        !["owner", "editor"].includes(membership?.role)
+      ) {
         return { data: null, error: { message: "organization access denied" } }
       }
 
@@ -131,14 +135,18 @@ export class FakeSupabase {
       return { data: product, error: null }
     }
     if (name === "update_entry_with_source") {
-      const row = this.tables.entries.find((entry) => entry.id === args.p_entry_id)
+      const row = this.tables.entries.find(
+        (entry) => entry.id === args.p_entry_id
+      )
       if (!row) return { data: null, error: { message: "Entry not found" } }
       row.data = clone(args.p_data)
       row.updated_at = "rpc-updated"
       return { data: null, error: null }
     }
     if (name === "update_entry_note_with_source") {
-      const row = this.tables.entries.find((entry) => entry.id === args.p_entry_id)
+      const row = this.tables.entries.find(
+        (entry) => entry.id === args.p_entry_id
+      )
       if (!row) return { data: null, error: { message: "Entry not found" } }
       row.note = args.p_note
       row.updated_at = "rpc-updated"
@@ -154,6 +162,82 @@ export class FakeSupabase {
         row.updated_at = "rpc-updated"
       }
       return { data: null, error: null }
+    }
+    if (name === "enqueue_quick_surf_jobs") {
+      const queued: Row[] = []
+      const skippedPending: Row[] = []
+      this.tables.raw_signals ??= []
+      this.tables.surf_jobs ??= []
+      for (const entry of (args.p_entries as Row[]) ?? []) {
+        const activeJob = this.tables.surf_jobs.find((job) => {
+          if (
+            job.source_id !== args.p_source_id ||
+            job.product_id !== args.p_product_id ||
+            !["pending", "processing"].includes(job.status)
+          ) {
+            return false
+          }
+          const signal = this.tables.raw_signals.find(
+            (row) => row.id === job.payload?.raw_signal_id
+          )
+          return (
+            signal?.data?.entry_id === entry.entry_id &&
+            signal?.data?.target_field === args.p_target_field
+          )
+        })
+        if (activeJob) {
+          skippedPending.push({
+            entry_id: entry.entry_id,
+            raw_signal_id: activeJob.payload.raw_signal_id,
+            job_id: activeJob.id,
+          })
+          continue
+        }
+        const rawSignal = {
+          id: entry.raw_signal_id,
+          source_id: args.p_source_id,
+          status: "pending",
+          data: {
+            event_type: "manual_trigger",
+            triggered_by: args.p_triggered_by,
+            source_id: args.p_source_id,
+            target_field: args.p_target_field,
+            preserve_existing: args.p_preserve_existing,
+            entry_id: entry.entry_id,
+            entry_data: entry.entry_data ?? null,
+            database_id: entry.database_id,
+          },
+        }
+        const job = {
+          id: entry.job_id,
+          job_type: "analyze",
+          status: "pending",
+          priority: 50,
+          attempt_count: 0,
+          max_attempts: 3,
+          product_id: args.p_product_id,
+          user_id: args.p_user_id,
+          source_id: args.p_source_id,
+          playbook_id: args.p_playbook_id,
+          payload: {
+            raw_signal_id: entry.raw_signal_id,
+            playbook_id: args.p_playbook_id,
+            target_field: args.p_target_field,
+            triggered_by: args.p_triggered_by,
+          },
+        }
+        this.tables.raw_signals.push(rawSignal)
+        this.tables.surf_jobs.push(job)
+        queued.push({
+          entry_id: entry.entry_id,
+          raw_signal_id: entry.raw_signal_id,
+          job,
+        })
+      }
+      return {
+        data: { queued, skipped_pending: skippedPending },
+        error: null,
+      }
     }
     return { data: null, error: null }
   }
@@ -205,11 +289,10 @@ class FakeQuery implements PromiseLike<any> {
   }
 
   upsert(values: Row | Row[], options?: { onConflict?: string }) {
-    const conflictKeys =
-      options?.onConflict
-        ?.split(",")
-        .map((key) => key.trim())
-        .filter(Boolean) ?? ["id"]
+    const conflictKeys = options?.onConflict
+      ?.split(",")
+      .map((key) => key.trim())
+      .filter(Boolean) ?? ["id"]
     this.op = { type: "upsert", values, conflictKeys }
     return this
   }
@@ -299,14 +382,18 @@ class FakeQuery implements PromiseLike<any> {
     if (configuredError) return { data: null, error: configuredError }
     const rows = this.db.tables[this.table]
     if (this.op.type === "insert") {
-      const values = Array.isArray(this.op.values) ? this.op.values : [this.op.values]
+      const values = Array.isArray(this.op.values)
+        ? this.op.values
+        : [this.op.values]
       const inserted = values.map((value) => clone(value))
       rows.push(...inserted)
       return this.finalize(inserted)
     }
 
     if (this.op.type === "upsert") {
-      const values = Array.isArray(this.op.values) ? this.op.values : [this.op.values]
+      const values = Array.isArray(this.op.values)
+        ? this.op.values
+        : [this.op.values]
       const conflictKeys = this.op.conflictKeys
       const upserted = values.map((value) =>
         this.db.upsertRow(this.table, value, conflictKeys)
@@ -322,7 +409,9 @@ class FakeQuery implements PromiseLike<any> {
 
     if (this.op.type === "delete") {
       const matchingIds = new Set(matching.map((row) => row.id))
-      this.db.tables[this.table] = rows.filter((row) => !matchingIds.has(row.id))
+      this.db.tables[this.table] = rows.filter(
+        (row) => !matchingIds.has(row.id)
+      )
       return {
         data: null,
         error: null,

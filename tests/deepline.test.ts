@@ -56,7 +56,10 @@ function approvalRow(
   }
 }
 
-function stubFetch(body: unknown, init: { ok?: boolean; status?: number } = {}) {
+function stubFetch(
+  body: unknown,
+  init: { ok?: boolean; status?: number } = {}
+) {
   const mock = vi.fn(async () => ({
     ok: init.ok ?? true,
     status: init.status ?? 200,
@@ -102,7 +105,10 @@ describe("Deepline capabilities", () => {
     expect(res.email).toBe("jane@acme.com")
     const call = (fetchMock as unknown as { mock: { calls: unknown[][] } }).mock
       .calls[0]
-    const [url, reqInit] = call as [string, { body: string; headers: Record<string, string> }]
+    const [url, reqInit] = call as [
+      string,
+      { body: string; headers: Record<string, string> }
+    ]
     expect(String(url)).toContain("/api/v2/integrations/")
     expect(JSON.parse(reqInit.body).payload).toEqual({
       first_name: "Jane",
@@ -270,7 +276,10 @@ describe("Deepline capabilities", () => {
     })
     const [url, reqInit] = (
       fetchMock as unknown as { mock: { calls: unknown[][] } }
-    ).mock.calls[0] as [string, { method: string; headers: Record<string, string> }]
+    ).mock.calls[0] as [
+      string,
+      { method: string; headers: Record<string, string> }
+    ]
     expect(String(url)).toContain("/api/v2/tools")
     expect(reqInit.method).toBe("GET")
     expect(reqInit.headers.Authorization).toBe("Bearer dl_test")
@@ -378,6 +387,7 @@ describe("Deepline capabilities", () => {
           privateKey: "secret-private-key",
           accessKey: "secret-access-key",
           bearer: "Bearer secret-token",
+          company_domain: "acme.com",
           config: {
             authorization: "Bearer nested-token",
             opaque: "must-not-be-visible",
@@ -414,6 +424,7 @@ describe("Deepline capabilities", () => {
         privateKey: "secret-private-key",
         accessKey: "secret-access-key",
         bearer: "Bearer secret-token",
+        company_domain: "acme.com",
         config: {
           authorization: "Bearer nested-token",
           opaque: "must-not-be-visible",
@@ -427,6 +438,7 @@ describe("Deepline capabilities", () => {
             apiKey: "[REDACTED]",
             accessKey: "[REDACTED]",
             bearer: "[REDACTED]",
+            company_domain: "acme.com",
             config: {
               authorization: "[REDACTED]",
               opaque: "[HIDDEN]",
@@ -435,13 +447,14 @@ describe("Deepline capabilities", () => {
             email: "jane@acme.com",
             privateKey: "[REDACTED]",
           },
-          fieldCount: 6,
+          fieldCount: 7,
           byteLength: expect.any(Number),
         },
       },
     })
     const preview = JSON.stringify(db.tables.mcp_action_approvals[0].preview)
     expect(preview).toContain("jane@acme.com")
+    expect(preview).toContain("acme.com")
     expect(preview).not.toContain("secret-api-key")
     expect(preview).not.toContain("secret-private-key")
     expect(preview).not.toContain("secret-access-key")
@@ -459,6 +472,7 @@ describe("Deepline capabilities", () => {
           privateKey: "secret-private-key",
           accessKey: "secret-access-key",
           bearer: "Bearer secret-token",
+          company_domain: "acme.com",
           config: {
             authorization: "Bearer nested-token",
             opaque: "must-not-be-visible",
@@ -545,10 +559,9 @@ describe("Deepline capabilities", () => {
       })
     ).rejects.toMatchObject({ code: "APPROVAL_REQUIRED" })
     expect(db.tables.mcp_action_approvals).toHaveLength(2)
-    expect(db.tables.mcp_action_approvals.map((row) => row.status).sort()).toEqual([
-      "expired",
-      "pending",
-    ])
+    expect(
+      db.tables.mcp_action_approvals.map((row) => row.status).sort()
+    ).toEqual(["expired", "pending"])
     expect(noop).not.toHaveBeenCalled()
   })
 
@@ -777,12 +790,12 @@ describe("Deepline capabilities", () => {
       })
 
     const results = await Promise.allSettled([execute(), execute()])
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(
-      1
-    )
-    expect(results.filter((result) => result.status === "rejected")).toHaveLength(
-      1
-    )
+    expect(
+      results.filter((result) => result.status === "fulfilled")
+    ).toHaveLength(1)
+    expect(
+      results.filter((result) => result.status === "rejected")
+    ).toHaveLength(1)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(db.tables.mcp_action_approvals[0].status).toBe("executed")
   })

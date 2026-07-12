@@ -79,7 +79,9 @@ describe("Quick Surf column enrichment", () => {
     expect(result.reused).toBe(false)
     expect(result.surfPointId).toBeTruthy()
 
-    const playbook = db.tables.playbooks.find((p) => p.id === result.surfPointId)
+    const playbook = db.tables.playbooks.find(
+      (p) => p.id === result.surfPointId
+    )
     expect(playbook?.product_id).toBe(context.productId)
     expect(playbook?.surf_prompt).toContain("work email")
     expect(playbook?.relevance_threshold).toBe(0)
@@ -173,7 +175,10 @@ describe("Quick Surf column enrichment", () => {
     const listed = await repo.listQuickSurf(context, { databaseId: db1 })
     expect(listed.columns.map((c) => c.fieldKey)).toEqual(["work_email"])
 
-    await repo.disableQuickSurf(context, { databaseId: db1, fieldKey: "work_email" })
+    await repo.disableQuickSurf(context, {
+      databaseId: db1,
+      fieldKey: "work_email",
+    })
     const afterDisable = await repo.listQuickSurf(context, { databaseId: db1 })
     expect(afterDisable.columns).toHaveLength(0)
     // surf_prompt is preserved even while disabled.
@@ -211,6 +216,7 @@ describe("Quick Surf column enrichment", () => {
     expect(run.queued).toBe(2)
     expect(run.rawSignalIds).toHaveLength(2)
     expect(db.tables.raw_signals).toHaveLength(2)
+    expect(db.tables.raw_signals[0].data.preserve_existing).toBe(true)
     const jobs = db.tables.surf_jobs
     expect(jobs).toHaveLength(2)
     for (const job of jobs) {
@@ -219,6 +225,43 @@ describe("Quick Surf column enrichment", () => {
       expect(job.product_id).toBe(context.productId)
       expect(job.payload.target_field).toBe("work_email")
     }
+  })
+
+  it("skips populated cells unless an explicit refresh opts into overwrite", async () => {
+    const db = makeDb()
+    db.tables.entries[0].data.work_email = "ada@example.com"
+    const repo = makeRepo(db)
+    await repo.enableQuickSurf(context, {
+      databaseId: db1,
+      fieldKey: "work_email",
+      whatToDo: "Find the work email.",
+    })
+
+    const missingOnly = await repo.runQuickSurf(context, {
+      databaseId: db1,
+      fieldKey: "work_email",
+      scope: "first10",
+    })
+    expect(missingOnly).toMatchObject({
+      queued: 1,
+      skipped: 1,
+      skippedExisting: 1,
+      entryIds: [entry2],
+    })
+
+    const refresh = await repo.runQuickSurf(context, {
+      databaseId: db1,
+      fieldKey: "work_email",
+      scope: "first10",
+      overwriteExisting: true,
+    })
+    expect(refresh).toMatchObject({
+      queued: 1,
+      skipped: 1,
+      skippedExisting: 0,
+      skippedPending: 1,
+    })
+    expect(db.tables.raw_signals.at(-1)?.data.preserve_existing).toBe(false)
   })
 
   it("runs a single cell by entryId", async () => {
@@ -238,6 +281,31 @@ describe("Quick Surf column enrichment", () => {
     expect(run.queued).toBe(1)
     expect(db.tables.surf_jobs).toHaveLength(1)
     expect(db.tables.raw_signals[0].data.entry_id).toBe(entry1)
+    expect(db.tables.raw_signals[0].data.preserve_existing).toBe(true)
+  })
+
+  it("skips a populated single cell unless overwrite is explicit", async () => {
+    const db = makeDb()
+    db.tables.entries[0].data.work_email = "ada@example.com"
+    const repo = makeRepo(db)
+    await repo.enableQuickSurf(context, {
+      databaseId: db1,
+      fieldKey: "work_email",
+      whatToDo: "Find the work email.",
+    })
+
+    const run = await repo.runQuickSurf(context, {
+      databaseId: db1,
+      fieldKey: "work_email",
+      entryId: entry1,
+    })
+    expect(run).toMatchObject({
+      mode: "cell",
+      queued: 0,
+      skippedExisting: 1,
+    })
+    expect(run).not.toHaveProperty("value")
+    expect(db.tables.surf_jobs).toHaveLength(0)
   })
 
   it("runs an explicit row subset and applies the persisted run condition", async () => {
@@ -263,6 +331,54 @@ describe("Quick Surf column enrichment", () => {
     expect(run.entryIds).toEqual([entry1])
     expect(db.tables.raw_signals).toHaveLength(1)
     expect(db.tables.raw_signals[0].data.entry_id).toBe(entry1)
+  })
+
+  it("rejects an explicit subset when any requested row is missing", async () => {
+    const db = makeDb()
+    const repo = makeRepo(db)
+    await repo.enableQuickSurf(context, {
+      databaseId: db1,
+      fieldKey: "work_email",
+      whatToDo: "Find the work email.",
+    })
+
+    await expect(
+      repo.runQuickSurf(context, {
+        databaseId: db1,
+        fieldKey: "work_email",
+        entryIds: [entry1, "00000000-0000-4000-8000-000000000399"],
+      })
+    ).rejects.toThrow(/not found in this table/i)
+    expect(db.tables.surf_jobs).toHaveLength(0)
+  })
+
+  it("reports scope-all truncation before populated cells are filtered", async () => {
+    const db = makeDb()
+    db.tables.entries[0].data.work_email = "ada@example.com"
+    for (let index = 0; index < 999; index += 1) {
+      db.tables.entries.push({
+        id: `10000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        database_id: db1,
+        data: { name: `Lead ${index}` },
+        updated_at: "2026-05-01T00:00:00Z",
+      })
+    }
+    const repo = makeRepo(db)
+    await repo.enableQuickSurf(context, {
+      databaseId: db1,
+      fieldKey: "work_email",
+      whatToDo: "Find the work email.",
+    })
+
+    const run = await repo.runQuickSurf(context, {
+      databaseId: db1,
+      fieldKey: "work_email",
+      scope: "all",
+    })
+
+    expect(run.queued).toBe(999)
+    expect(run.skippedExisting).toBe(1)
+    expect(run.note).toMatch(/newest 1000 source rows/i)
   })
 
   it("requires one run mode, and refuses to run a column with no Quick Surf", async () => {

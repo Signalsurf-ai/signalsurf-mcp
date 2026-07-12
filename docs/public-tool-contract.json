@@ -44,13 +44,13 @@
     "read_table": "4bfe23e9f6b2a3a115a2bca2b5a824c279b34657db35500c83b41558f266a6f9",
     "read_table_view": "f70116ef07702700fa64abe648ff0487bca64ddb2d0ffd56addd4ba150540004",
     "remove_table_field": "113b03a1ad01ac9b3b467b79ea37388d0bf39ba1cf78896af4ca1d77694ef066",
-    "run_quick_surf": "74372ba3ff823f129554256cd2c6d6ddca4c102a7cd601c84235577da92566e1",
+    "run_quick_surf": "28602e016977ee96d989ad142615e8256a4ba94bfd2fc6ddb98215e21067fa4d",
     "run_surf_point": "800a3c8bfa52045238ced038a1f5538578681be21e249a2a7e7e60aec8350370",
     "test_surf_point_node": "745edec507f3408916196bf3ea368cfcc739776d4aa2e2cc4baaedb2b823faeb",
     "update_signal": "240d95324ff776f807d375c05a9f05d556ff8b288067e7a3eb0d807f93efd2b8",
     "update_surf_point": "44b139cdc5f2dfd7e738e1ab3d5900bc0e87a306c0a4456b9d5d176ce6b946b9",
     "update_surf_point_flow": "ffe22203402f3c533e4ce32cec33d14c7e8fc3d0c1cfde0538661b932d303e82",
-    "update_table": "49086af19b498da3028869441b4a051859f566a58716ea00c79a0041b79bfca8",
+    "update_table": "33a4dc6016ca396a7426f3d5c3a881f42bbe2862909048d83d57427ea82cdd21",
     "update_table_field": "163308439e0cf459ccf27101947e735a74dcfe64c710cc900b2c6ed15ca0a6d6",
     "update_table_rows": "8f112935d8aedda0699c3262d7df9cf0def4c7def6325c2fe5ab66e1254dd8ef",
     "wait_for_surf_job": "ed75b9d72cc36b4d40ce48206d7d90fef1d95cf87de5558ad89996aa1a070662"
@@ -161,10 +161,7 @@
           }
         }
       ],
-      "invalid": [
-        { "name": "" },
-        { "name": "Targets", "template": "unknown" }
-      ]
+      "invalid": [{ "name": "" }, { "name": "Targets", "template": "unknown" }]
     },
     "create_table_row": {
       "valid": [
@@ -439,7 +436,8 @@
         {
           "databaseId": "00000000-0000-4000-8000-000000000001",
           "fieldKey": "company_domain",
-          "scope": "first10"
+          "scope": "first10",
+          "overwriteExisting": true
         }
       ],
       "invalid": [

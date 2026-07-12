@@ -191,11 +191,7 @@ const runConditionSchema = z.object({
     "in",
   ]),
   value: z
-    .union([
-      z.string(),
-      z.number(),
-      z.array(z.union([z.string(), z.number()])),
-    ])
+    .union([z.string(), z.number(), z.array(z.union([z.string(), z.number()]))])
     .nullish(),
 })
 
@@ -220,6 +216,7 @@ export const runQuickSurfSchema = {
   scope: z.enum(["first10", "first100", "all"]).optional(),
   entryId: uuidSchema.optional(),
   entryIds: z.array(uuidSchema).min(1).max(1000).optional(),
+  overwriteExisting: z.boolean().default(false).optional(),
 }
 
 export const deleteSurfPointSchema = {
@@ -250,6 +247,7 @@ export const createTableSchema = {
 export const updateTableSchema = {
   ...productTargetSchema,
   databaseId: uuidSchema,
+  template: z.enum(PUBLIC_TABLE_TEMPLATES).optional(),
   name: z.string().trim().min(1).max(100).optional(),
   description: z.string().trim().max(1000).nullable().optional(),
   icon: z.string().trim().max(50).nullable().optional(),
@@ -409,22 +407,41 @@ const flowGraphInputSchema = z
         "Directed edges { id, source, target, condition }. condition: always | on_pass | on_fail | category:<label> | step:<index>."
       ),
   })
-  .describe("SurfPointFlowV2 graph: { version: 2, nodes: [...], edges: [...] }.")
+  .describe(
+    "SurfPointFlowV2 graph: { version: 2, nodes: [...], edges: [...] }."
+  )
 
 const flowEditOpInputSchema = z.object({
-  op: z.enum(["add_node", "connect", "update_node", "remove_node", "remove_edge"]),
+  op: z.enum([
+    "add_node",
+    "connect",
+    "update_node",
+    "remove_node",
+    "remove_edge",
+  ]),
   ref: z
     .string()
     .optional()
-    .describe("add_node: a local handle later ops in this batch can reference."),
+    .describe(
+      "add_node: a local handle later ops in this batch can reference."
+    ),
   node: z
     .record(z.string(), z.unknown())
     .optional()
     .describe("add_node: the node to add (without id; the server mints it)."),
-  source: z.string().optional().describe("connect: source node id or batch ref."),
-  target: z.string().optional().describe("connect: target node id or batch ref."),
+  source: z
+    .string()
+    .optional()
+    .describe("connect: source node id or batch ref."),
+  target: z
+    .string()
+    .optional()
+    .describe("connect: target node id or batch ref."),
   condition: z.string().optional().describe("connect: edge condition."),
-  nodeId: z.string().optional().describe("update_node / remove_node: node id or ref."),
+  nodeId: z
+    .string()
+    .optional()
+    .describe("update_node / remove_node: node id or ref."),
   patch: z
     .record(z.string(), z.unknown())
     .optional()
@@ -468,7 +485,9 @@ export const createCampaignSchema = {
         gate: z
           .enum(["none", "replied", "not_replied"])
           .optional()
-          .describe("Condition after the wait. Step 1 is always unconditional."),
+          .describe(
+            "Condition after the wait. Step 1 is always unconditional."
+          ),
       })
     )
     .min(1),

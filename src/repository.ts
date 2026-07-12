@@ -81,6 +81,7 @@ const APPROVAL_PREVIEW_SAFE_KEY = new Set([
   "body",
   "cc",
   "company",
+  "companydomain",
   "companyname",
   "currency",
   "domain",
@@ -218,12 +219,21 @@ type RunQuickSurfInput = {
   scope?: "first10" | "first100" | "all"
   entryId?: string
   entryIds?: string[]
+  overwriteExisting?: boolean
 }
 
 const QUICK_SURF_SCOPE_LIMITS: Record<string, number> = {
   first10: 10,
   first100: 100,
   all: 1000,
+}
+
+function hasQuickSurfCellValue(data: unknown, fieldKey: string): boolean {
+  const value = asRecord((data ?? {}) as JsonRecord)[fieldKey]
+  if (value == null) return false
+  if (typeof value === "string") return value.trim().length > 0
+  if (Array.isArray(value)) return value.length > 0
+  return true
 }
 
 function buildQuickSurfMetadata(
@@ -355,6 +365,7 @@ type CreateTableInput = {
 
 type UpdateTableInput = {
   databaseId: string
+  template?: PublicTableTemplate
   name?: string
   description?: string | null
   icon?: string | null
@@ -866,7 +877,11 @@ function redactApprovalPreviewValue(
   depth = 0,
   allowPrimitive = false
 ): unknown {
-  if (value === null || typeof value === "boolean" || typeof value === "number") {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number"
+  ) {
     return allowPrimitive ? value : "[HIDDEN]"
   }
   if (typeof value === "string") {
@@ -880,7 +895,9 @@ function redactApprovalPreviewValue(
         redactApprovalPreviewValue(item, depth + 1, allowPrimitive)
       )
     if (value.length > APPROVAL_PREVIEW_MAX_ARRAY_ITEMS) {
-      preview.push(`[${value.length - APPROVAL_PREVIEW_MAX_ARRAY_ITEMS} more items]`)
+      preview.push(
+        `[${value.length - APPROVAL_PREVIEW_MAX_ARRAY_ITEMS} more items]`
+      )
     }
     return preview
   }
@@ -890,7 +907,10 @@ function redactApprovalPreviewValue(
     ([left], [right]) => left.localeCompare(right)
   )
   const preview: JsonRecord = {}
-  for (const [key, nestedValue] of entries.slice(0, APPROVAL_PREVIEW_MAX_FIELDS)) {
+  for (const [key, nestedValue] of entries.slice(
+    0,
+    APPROVAL_PREVIEW_MAX_FIELDS
+  )) {
     const normalizedKey = key.replace(/[^a-z0-9]/gi, "")
     preview[key] = APPROVAL_PREVIEW_SENSITIVE_KEY.test(normalizedKey)
       ? "[REDACTED]"
@@ -1521,8 +1541,9 @@ export class SignalSurfRepository {
         .map((product) => product.organization_id)
         .filter((id): id is string => Boolean(id))
     )
-    const organizationsById =
-      await this.resolveOrganizationsById(organizationIds)
+    const organizationsById = await this.resolveOrganizationsById(
+      organizationIds
+    )
 
     return uniqueProductIds.map((productId) => {
       const product = productsById.get(productId)
@@ -1874,10 +1895,13 @@ export class SignalSurfRepository {
           : "deepline_search_companies",
     })
     if (!execution.ok) {
-      throw new UserFacingError(`Deepline returned status ${execution.status}`, {
-        code: "UPSTREAM_ERROR",
-        status: 502,
-      })
+      throw new UserFacingError(
+        `Deepline returned status ${execution.status}`,
+        {
+          code: "UPSTREAM_ERROR",
+          status: 502,
+        }
+      )
     }
     return {
       toolId,
@@ -1916,7 +1940,10 @@ export class SignalSurfRepository {
   ) {
     // leadmagic needs a lookup target. Reject locally rather than spend a paid
     // call on first/last name alone (which yields an ambiguous/empty result).
-    if (!readTrimmedString(input.domain) && !readTrimmedString(input.companyName)) {
+    if (
+      !readTrimmedString(input.domain) &&
+      !readTrimmedString(input.companyName)
+    ) {
       throw new UserFacingError(
         "Provide a domain or companyName to find an email.",
         { code: "INVALID_INPUT", status: 400 }
@@ -1939,10 +1966,13 @@ export class SignalSurfRepository {
       approvalMcpToolName: "deepline_enrich_contact",
     })
     if (!execution.ok) {
-      throw new UserFacingError(`Deepline returned status ${execution.status}`, {
-        code: "UPSTREAM_ERROR",
-        status: 502,
-      })
+      throw new UserFacingError(
+        `Deepline returned status ${execution.status}`,
+        {
+          code: "UPSTREAM_ERROR",
+          status: 502,
+        }
+      )
     }
     const raw = execution.result
     const record =
@@ -1951,8 +1981,8 @@ export class SignalSurfRepository {
       typeof record.email === "string"
         ? record.email
         : typeof record.work_email === "string"
-          ? (record.work_email as string)
-          : null
+        ? (record.work_email as string)
+        : null
     return {
       toolId,
       email,
@@ -1984,8 +2014,7 @@ export class SignalSurfRepository {
     const payload = input.payload ?? {}
     const payloadSha256 = mcpActionPayloadSha256(payload)
     const approvalRequestId = readTrimmedString(input.approvalRequestId)
-    const mcpToolName =
-      input.approvalMcpToolName ?? "deepline_execute_tool"
+    const mcpToolName = input.approvalMcpToolName ?? "deepline_execute_tool"
     const externalAction = `deepline:${input.toolId}`
 
     if (
@@ -2227,7 +2256,8 @@ export class SignalSurfRepository {
         }
       )
     }
-    const ok = envelope.status === undefined || deeplineStatusOk(envelope.status)
+    const ok =
+      envelope.status === undefined || deeplineStatusOk(envelope.status)
     const result = unwrapDeepline(envelope)
     const resultRecord =
       result && typeof result === "object"
@@ -2450,11 +2480,11 @@ export class SignalSurfRepository {
       const finalRubric =
         input.scoringRubric !== undefined
           ? input.scoringRubric
-          : (existing?.scoring_rubric ?? null)
+          : existing?.scoring_rubric ?? null
       const finalSurf =
         input.surfPrompt !== undefined
           ? input.surfPrompt
-          : (existing?.surf_prompt ?? null)
+          : existing?.surf_prompt ?? null
       updateData.prompt_template = joinPromptSections(finalRubric, finalSurf)
     }
 
@@ -2593,8 +2623,7 @@ export class SignalSurfRepository {
   ) {
     const problems = validateFlow(flow)
     const blocking = problems.filter(
-      (problem) =>
-        problem.code === "cycle" || problem.code === "dangling_edge"
+      (problem) => problem.code === "cycle" || problem.code === "dangling_edge"
     )
     if (blocking.length > 0) {
       throw new UserFacingError(
@@ -2612,7 +2641,11 @@ export class SignalSurfRepository {
         `Some create_row/object_sink fields map to columns that don't exist: ${fieldProblems
           .map((problem) => problem.message)
           .join("; ")}`,
-        { code: "BAD_REQUEST", status: 400, details: { fieldProblems, tables } }
+        {
+          code: "BAD_REQUEST",
+          status: 400,
+          details: { fieldProblems, tables },
+        }
       )
     }
 
@@ -2654,8 +2687,7 @@ export class SignalSurfRepository {
     requireNoDbError(error, "Failed to save surf point flow")
 
     const warnings = problems.filter(
-      (problem) =>
-        problem.code !== "cycle" && problem.code !== "dangling_edge"
+      (problem) => problem.code !== "cycle" && problem.code !== "dangling_edge"
     )
     return {
       nodeCount: flow.nodes.length,
@@ -2700,7 +2732,11 @@ export class SignalSurfRepository {
       (kind) => `${kind}-${randomUUID().slice(0, 8)}`
     )
     if (!result.ok) {
-      return { playbookId: input.playbookId, applied: false, results: result.results }
+      return {
+        playbookId: input.playbookId,
+        applied: false,
+        results: result.results,
+      }
     }
     const summary = await this.persistPlaybookFlow(
       context,
@@ -2724,7 +2760,9 @@ export class SignalSurfRepository {
     const loaded = await this.loadPlaybookFlow(context, input.playbookId)
     if (!loaded.flow.nodes.some((node) => node.id === input.nodeId)) {
       throw new UserFacingError(
-        `No node "${input.nodeId}" in this surf point's flow. Existing node ids: ${loaded.flow.nodes
+        `No node "${
+          input.nodeId
+        }" in this surf point's flow. Existing node ids: ${loaded.flow.nodes
           .map((node) => node.id)
           .join(", ")}`,
         { code: "NOT_FOUND", status: 404 }
@@ -2790,7 +2828,11 @@ export class SignalSurfRepository {
     const contactTable = table as { item_type?: string; name?: string }
     if (contactTable.item_type !== "contact") {
       throw new UserFacingError(
-        `"${contactTable.name ?? input.contactTableId}" is not a Contacts list (item_type=${contactTable.item_type}). A campaign enrols from a Contacts table.`,
+        `"${
+          contactTable.name ?? input.contactTableId
+        }" is not a Contacts list (item_type=${
+          contactTable.item_type
+        }). A campaign enrols from a Contacts table.`,
         { code: "BAD_REQUEST", status: 400 }
       )
     }
@@ -2803,10 +2845,13 @@ export class SignalSurfRepository {
     requireNoDbError(productError, "Failed to resolve product owner")
     const ownerId = (product as { owner_id?: string } | null)?.owner_id
     if (!ownerId) {
-      throw new UserFacingError(`Product not found (id: ${context.productId}).`, {
-        code: "NOT_FOUND",
-        status: 404,
-      })
+      throw new UserFacingError(
+        `Product not found (id: ${context.productId}).`,
+        {
+          code: "NOT_FOUND",
+          status: 404,
+        }
+      )
     }
 
     const { data: toolRow, error: toolError } = await this.db
@@ -2881,7 +2926,9 @@ export class SignalSurfRepository {
     const loaded = await this.loadPlaybookFlow(context, input.playbookId)
     if (!loaded.flow.nodes.some((node) => node.id === input.nodeId)) {
       throw new UserFacingError(
-        `No node "${input.nodeId}" in this surf point's flow. Existing node ids: ${loaded.flow.nodes
+        `No node "${
+          input.nodeId
+        }" in this surf point's flow. Existing node ids: ${loaded.flow.nodes
           .map((node) => node.id)
           .join(", ")}`,
         { code: "NOT_FOUND", status: 404 }
@@ -3323,7 +3370,9 @@ export class SignalSurfRepository {
   async runQuickSurf(context: SignalSurfContext, input: RunQuickSurfInput) {
     const entryIds = uniqueIds(input.entryIds ?? [])
     const modeCount =
-      (input.scope ? 1 : 0) + (input.entryId ? 1 : 0) + (entryIds.length ? 1 : 0)
+      (input.scope ? 1 : 0) +
+      (input.entryId ? 1 : 0) +
+      (entryIds.length ? 1 : 0)
     if (modeCount === 0) {
       throw new UserFacingError(
         'Provide scope ("first10" | "first100" | "all"), entryId for a single cell, or entryIds for a specific row subset.',
@@ -3386,8 +3435,7 @@ export class SignalSurfRepository {
       )
     }
 
-    const userId =
-      context.userId ?? (await this.resolveProductOwnerId(context))
+    const userId = context.userId ?? (await this.resolveProductOwnerId(context))
     if (!userId) {
       throw new UserFacingError(
         "Cannot queue Quick Surf because no job user could be resolved.",
@@ -3399,47 +3447,47 @@ export class SignalSurfRepository {
       id: string
       data: unknown
       database_id?: string | null
-    }): Promise<{ rawSignalId: string; job: ReturnType<typeof formatSurfJob> }> => {
+    }): Promise<
+      | {
+          queued: true
+          rawSignalId: string
+          job: ReturnType<typeof formatSurfJob>
+        }
+      | {
+          queued: false
+        }
+    > => {
       const rawSignalId = randomUUID()
-      const { error: rawError } = await this.db.from("raw_signals").insert({
-        id: rawSignalId,
-        source_id: source.id,
-        status: "pending",
-        data: {
-          event_type: "manual_trigger",
-          triggered_at: new Date().toISOString(),
-          triggered_by: "mcp",
-          source_id: source.id,
-          target_field: input.fieldKey,
-          entry_id: entry.id,
-          entry_data: entry.data ?? null,
-          database_id: entry.database_id ?? input.databaseId,
-        },
-      })
-      requireNoDbError(rawError, "Failed to enqueue Quick Surf signal")
-      const { data: jobRow, error: jobError } = await this.db
-        .from("surf_jobs")
-        .insert({
-          id: randomUUID(),
-          job_type: "analyze",
-          status: "pending",
-          priority: 50,
-          product_id: playbook.product_id,
-          user_id: userId,
-          source_id: source.id,
-          playbook_id: playbook.id,
-          payload: {
+      const jobId = randomUUID()
+      const { data, error } = await this.db.rpc("enqueue_quick_surf_jobs", {
+        p_entries: [
+          {
+            entry_id: entry.id,
+            entry_data: entry.data ?? null,
+            database_id: entry.database_id ?? input.databaseId,
             raw_signal_id: rawSignalId,
-            playbook_id: playbook.id,
-            target_field: input.fieldKey,
-            triggered_by: "mcp",
+            job_id: jobId,
           },
-          max_attempts: 3,
-        })
-        .select("*")
-        .single()
-      requireNoDbError(jobError, "Failed to enqueue Quick Surf job")
-      return { rawSignalId, job: formatSurfJob(jobRow as SurfJobRow) }
+        ],
+        p_source_id: source.id,
+        p_playbook_id: playbook.id,
+        p_product_id: playbook.product_id,
+        p_user_id: userId,
+        p_target_field: input.fieldKey,
+        p_preserve_existing: input.overwriteExisting !== true,
+        p_triggered_by: "mcp",
+      })
+      requireNoDbError(error, "Failed to enqueue Quick Surf job")
+      const result = asRecord(data)
+      const queuedRows = Array.isArray(result.queued) ? result.queued : []
+      const queuedRow = asRecord(queuedRows[0])
+      if (!queuedRow.raw_signal_id) return { queued: false }
+      const job = asRecord(queuedRow.job)
+      return {
+        queued: true,
+        rawSignalId: String(queuedRow.raw_signal_id),
+        job: formatSurfJob(job as SurfJobRow),
+      }
     }
 
     if (input.entryId) {
@@ -3456,9 +3504,39 @@ export class SignalSurfRepository {
           { code: "NOT_FOUND", status: 404 }
         )
       }
+      if (
+        !input.overwriteExisting &&
+        hasQuickSurfCellValue(entry.data, input.fieldKey)
+      ) {
+        return {
+          success: true,
+          mode: "cell" as const,
+          databaseId: input.databaseId,
+          fieldKey: input.fieldKey,
+          entryId: input.entryId,
+          surfPointId: playbook.id,
+          queued: 0,
+          skipped: 1,
+          skippedExisting: 1,
+        }
+      }
       const queued = await enqueue(
         entry as { id: string; data: unknown; database_id?: string | null }
       )
+      if (!queued.queued) {
+        return {
+          success: true,
+          mode: "cell" as const,
+          databaseId: input.databaseId,
+          fieldKey: input.fieldKey,
+          entryId: input.entryId,
+          surfPointId: playbook.id,
+          queued: 0,
+          skipped: 1,
+          skippedExisting: 0,
+          skippedPending: 1,
+        }
+      }
       return {
         success: true,
         mode: "cell" as const,
@@ -3467,6 +3545,8 @@ export class SignalSurfRepository {
         entryId: input.entryId,
         surfPointId: playbook.id,
         queued: 1,
+        skipped: 0,
+        skippedExisting: 0,
         rawSignalIds: [queued.rawSignalId],
         jobs: [queued.job],
       }
@@ -3480,15 +3560,31 @@ export class SignalSurfRepository {
     const { data: rows, error: rowsError } =
       entryIds.length > 0
         ? await rowsQuery.in("id", entryIds)
-        : await rowsQuery.order("updated_at", { ascending: false }).limit(limit)
+        : await rowsQuery
+            .order("updated_at", { ascending: false })
+            .limit(input.scope === "all" ? limit + 1 : limit)
     requireNoDbError(rowsError, "Failed to list rows for Quick Surf")
-    const allEntries = (rows ?? []) as Array<{
+    const loadedEntries = (rows ?? []) as Array<{
       id: string
       data: unknown
       database_id?: string | null
     }>
+    if (entryIds.length > 0) {
+      const foundIds = new Set(loadedEntries.map((entry) => entry.id))
+      const missingIds = entryIds.filter((entryId) => !foundIds.has(entryId))
+      if (missingIds.length > 0) {
+        throw new UserFacingError(
+          `Some requested entries were not found in this table: ${missingIds.join(
+            ", "
+          )}.`,
+          { code: "NOT_FOUND", status: 404 }
+        )
+      }
+    }
+    const truncated = input.scope === "all" && loadedEntries.length > limit
+    const allEntries = truncated ? loadedEntries.slice(0, limit) : loadedEntries
     const runCondition = parseRunCondition(source.metadata.run_condition)
-    const entries = runCondition
+    const conditionMatchedEntries = runCondition
       ? allEntries.filter((entry) =>
           evaluateRunCondition(
             runCondition,
@@ -3496,15 +3592,28 @@ export class SignalSurfRepository {
           )
         )
       : allEntries
-    const skipped = allEntries.length - entries.length
+    const skippedCondition = allEntries.length - conditionMatchedEntries.length
+    const missingEntries = input.overwriteExisting
+      ? conditionMatchedEntries
+      : conditionMatchedEntries.filter(
+          (entry) => !hasQuickSurfCellValue(entry.data, input.fieldKey)
+        )
+    const skippedExisting =
+      conditionMatchedEntries.length - missingEntries.length
+    const entries = missingEntries
+    let skippedPending = 0
     const rawSignalIds: string[] = []
     const jobs: ReturnType<typeof formatSurfJob>[] = []
     for (const entry of entries) {
       const queued = await enqueue(entry)
+      if (!queued.queued) {
+        skippedPending += 1
+        continue
+      }
       rawSignalIds.push(queued.rawSignalId)
       jobs.push(queued.job)
     }
-    const truncated = input.scope === "all" && entries.length === limit
+    const skipped = skippedCondition + skippedExisting + skippedPending
     return {
       success: true,
       mode: "column" as const,
@@ -3515,12 +3624,14 @@ export class SignalSurfRepository {
       surfPointId: playbook.id,
       queued: rawSignalIds.length,
       skipped,
+      skippedExisting,
+      skippedPending,
       rawSignalIds,
       entryIds: entries.map((entry) => entry.id),
       jobs,
       ...(truncated
         ? {
-            note: `Capped at ${limit} rows. There may be more — re-run to continue.`,
+            note: `Capped at the newest ${limit} source rows. Use explicit entryIds for older rows.`,
           }
         : {}),
     }
@@ -3728,7 +3839,11 @@ export class SignalSurfRepository {
       await this.assertDatabaseFolderBelongsToProduct(context, input.folderId)
     }
     const template = input.template
-      ? applyPublicTableTemplate(input.template, input.schema, input.viewConfigs)
+      ? applyPublicTableTemplate(
+          input.template,
+          input.schema,
+          input.viewConfigs
+        )
       : null
     const schema = template?.schema ?? input.schema ?? { fields: [] }
     await this.validateDatabaseSchemaReferences(context, schema)
@@ -3742,11 +3857,11 @@ export class SignalSurfRepository {
         name: input.name.trim(),
         description:
           input.description === undefined
-            ? (template?.description ?? null)
+            ? template?.description ?? null
             : input.description?.trim() || null,
         icon: input.icon ?? null,
         color:
-          input.color === undefined ? (template?.color ?? null) : input.color,
+          input.color === undefined ? template?.color ?? null : input.color,
         schema,
         item_type: (template?.itemType ?? input.itemType?.trim()) || null,
         system_type: null,
@@ -3774,9 +3889,13 @@ export class SignalSurfRepository {
       context,
       input.databaseId
     )
-    if (input.schema !== undefined && input.schemaPatch !== undefined) {
+    if (
+      [input.template, input.schema, input.schemaPatch].filter(
+        (value) => value !== undefined
+      ).length > 1
+    ) {
       throw new UserFacingError(
-        "Pass either schema or schemaPatch, not both.",
+        "Pass only one of template, schema, or schemaPatch.",
         {
           code: "BAD_REQUEST",
           status: 400,
@@ -3803,6 +3922,36 @@ export class SignalSurfRepository {
     if (input.folderId !== undefined) updateData.folder_id = input.folderId
     if (input.displayOrder !== undefined)
       updateData.display_order = input.displayOrder
+
+    if (input.template !== undefined) {
+      const existingSchema = asRecord(existing.schema)
+      const expectedKind =
+        input.template === "outbound_accounts"
+          ? "outbound.account_list"
+          : "outbound.contact_list"
+      const currentTemplate = existingSchema.template_key
+      const currentKind = existingSchema.database_kind
+      if (
+        (typeof currentTemplate === "string" &&
+          currentTemplate !== input.template) ||
+        (typeof currentKind === "string" && currentKind !== expectedKind) ||
+        (typeof currentTemplate !== "string" && typeof currentKind !== "string")
+      ) {
+        throw new UserFacingError(
+          `Template "${input.template}" can only upgrade a table already classified as ${expectedKind}.`,
+          { code: "BAD_REQUEST", status: 400 }
+        )
+      }
+      const template = applyPublicTableTemplate(
+        input.template,
+        existingSchema,
+        asRecord(existing.view_configs)
+      )
+      await this.validateDatabaseSchemaReferences(context, template.schema)
+      updateData.schema = template.schema
+      updateData.item_type = template.itemType
+      updateData.view_configs = template.viewConfigs
+    }
 
     if (input.schema !== undefined) {
       const nextSchema = input.schema ?? {}
@@ -4118,7 +4267,10 @@ export class SignalSurfRepository {
   // those fields. Every edit is validated (ownership, item_ref references,
   // playbook/database match) before ANY write, so one bad edit rejects the
   // whole call.
-  async updateTableRows(context: SignalSurfContext, input: UpdateTableRowsInput) {
+  async updateTableRows(
+    context: SignalSurfContext,
+    input: UpdateTableRowsInput
+  ) {
     const rowIds = input.edits.map((edit) => edit.rowId)
     const ids = uniqueIds(rowIds)
     if (ids.length !== rowIds.length) {
@@ -4279,7 +4431,9 @@ export class SignalSurfRepository {
 
     if (input.fieldKey && !fieldKeys.includes(input.fieldKey)) {
       throw new UserFacingError(
-        `Unknown fieldKey "${input.fieldKey}". Valid field keys: ${fieldKeys.join(", ")}`,
+        `Unknown fieldKey "${
+          input.fieldKey
+        }". Valid field keys: ${fieldKeys.join(", ")}`,
         { code: "BAD_REQUEST", status: 400 }
       )
     }
@@ -4981,11 +5135,11 @@ export class SignalSurfRepository {
           dataSchema:
             input.dataSchema !== undefined
               ? input.dataSchema
-              : (source.data_schema ?? { fields: [] }),
+              : source.data_schema ?? { fields: [] },
           isActive:
             input.isActive !== undefined
               ? input.isActive
-              : (source.is_active ?? true),
+              : source.is_active ?? true,
         },
         sourceDatabaseName
       )
@@ -6032,8 +6186,8 @@ function normalizeSavedViewFilters(raw: JsonRecord): TableFilterInput[] {
         "value" in record
           ? record.value
           : "values" in record
-            ? record.values
-            : undefined
+          ? record.values
+          : undefined
       filters.push({ field, op, value })
     }
   }
@@ -6048,8 +6202,8 @@ function normalizeSavedViewSorts(
   const rawSorts = Array.isArray(raw.sorts)
     ? raw.sorts
     : Array.isArray(raw.sort)
-      ? raw.sort
-      : []
+    ? raw.sort
+    : []
   const sorts = rawSorts
     .map((item) => {
       const record = asRecord(item)

@@ -48,6 +48,16 @@ describe("buildBuildLeadListPrompt", () => {
     expect(text).toMatch(/concrete.*portfolio.*web research/i)
     expect(text).toMatch(/broad TAM.*deepline_search_companies/i)
     expect(text).toMatch(/bounded 5-10 row limit/i)
+    expect(text).toContain("active_job_count")
+    expect(text).toContain("theirstack_technographics")
+    expect(text).toContain("tech_stack as an array")
+    expect(text).toMatch(/if and only if the user explicitly asks/i)
+    expect(text).toContain(
+      'update_table({ databaseId, template: "outbound_accounts" })'
+    )
+    expect(text).toMatch(/preserving additive custom fields/i)
+    expect(text).toMatch(/before any paid confirmation.*call read_table/i)
+    expect(text).toMatch(/each exact paid call currently has its own approval/i)
   })
 
   it("embeds the resolved databaseId when provided", () => {

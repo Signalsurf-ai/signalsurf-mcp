@@ -26,6 +26,9 @@ export const DEEPLINE_TOOL_IDS = {
   emailFinder: () =>
     process.env.DEEPLINE_EMAIL_FINDER_TOOL_ID?.trim() ||
     "leadmagic_email_finder",
+  technographics: () =>
+    process.env.DEEPLINE_TECHNOGRAPHICS_TOOL_ID?.trim() ||
+    "theirstack_technographics",
 }
 
 /** Kill-switch (default off). Mirrors SignalsurfWeb's DEEPLINE_DISABLED. */

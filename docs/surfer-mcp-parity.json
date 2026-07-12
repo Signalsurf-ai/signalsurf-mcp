@@ -97,6 +97,12 @@
     "get_pipeline_status": ["list_surf_jobs"],
     "list_action_history": ["list_surf_jobs"],
     "trigger_discovery": ["run_surf_point"],
+    "lead_gen_find_accounts": [
+      "deepline_search_companies",
+      "deepline_execute_tool",
+      "create_table_row",
+      "update_table_rows"
+    ],
     "lead_gen_find_people": [
       "deepline_search_people",
       "deepline_search_companies",

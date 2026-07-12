@@ -30,11 +30,17 @@ describe("Deepline managed search routing", () => {
         organization_locations: ["United States"],
         organization_num_employees_ranges: ["11,50"],
         funding_stages: ["Seed", "Series A"],
+        technologies: ["HubSpot", "Salesforce"],
+        activeJobCount: { min: 2, max: 20 },
       },
       5
     )
 
     expect(payload.limit).toBe(5)
+    expect(payload.sorts).toEqual([
+      { column: "headcount.total", order: "desc" },
+    ])
+    expect(payload.fields).toContain("hiring.openings_count")
     expect(payload.fields).not.toContain("locations.country")
     expect(payload.fields).not.toContain("locations.headquarters")
     expect(leafConditions(payload.filters)).toEqual(
@@ -42,6 +48,13 @@ describe("Deepline managed search routing", () => {
         { field: "locations.country", type: "in", value: ["USA"] },
         { field: "headcount.total", type: "=>", value: 11 },
         { field: "headcount.total", type: "=<", value: 50 },
+        { field: "hiring.openings_count", type: "=>", value: 2 },
+        { field: "hiring.openings_count", type: "=<", value: 20 },
+        {
+          field: "technographics.technologies.name",
+          type: "in",
+          value: ["HubSpot", "Salesforce"],
+        },
         {
           field: "funding.last_round_type",
           type: "in",
@@ -49,6 +62,20 @@ describe("Deepline managed search routing", () => {
         },
       ])
     )
+  })
+
+  it("rejects people constraints on company search instead of silently broadening", () => {
+    expect(() =>
+      buildDeeplineSearchPayload(
+        "crustdata_v3_company_search",
+        "companies",
+        {
+          company: { locations: ["United States"] },
+          people: { titles: ["VP Sales"] },
+        },
+        5
+      )
+    ).toThrow(/people/)
   })
 
   it("translates people filters to Crustdata V3", () => {
@@ -189,5 +216,13 @@ describe("Deepline managed search routing", () => {
         5
       )
     ).toThrow(/person_title/)
+    expect(() =>
+      buildDeeplineSearchPayload(
+        "apollo_company_search",
+        "companies",
+        { activeJobCount: { min: 1 } },
+        5
+      )
+    ).toThrow(/activeJobCount/)
   })
 })
