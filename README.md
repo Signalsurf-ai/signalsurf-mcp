@@ -391,7 +391,9 @@ Sources and surf point tools:
   `analyze` surf job per matching row: pass `scope` (`first10` | `first100` |
   `all`, capped at 1000), a specific `entryIds` subset, or a single `entryId`.
   Column/subset runs apply the persisted `runCondition` before queueing and
-  return `queued`, `skipped`, `rawSignalIds`, jobs, and the touched `entryIds`;
+  skip populated cells by default, returning the count as `skippedExisting`.
+  Pass `overwriteExisting=true` only when the user explicitly approves a
+  refresh. Runs return `queued`, `skipped`, `rawSignalIds`, jobs, and the touched `entryIds`;
   poll the returned jobs with `list_surf_jobs` / `wait_for_surf_job`. Credits
   are charged by the brain as each job runs. Enable needs `mcp:sources.write`,
   list needs `mcp:sources.read`, and run needs `mcp:surf_points.execute`.

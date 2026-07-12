@@ -67,8 +67,8 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `cancel_surf_job`           | `surf_points.execute` | No          | Cancels a pending Surf Point execution job                                                                            |
 | `delete_surf_point`         | `surf_points.delete`  | Yes         | Soft-deletes Surf Points and cancels pending jobs                                                                     |
 | `list_tables`               | `tables.read`         | No          | Lists product tables                                                                                                  |
-| `create_table`              | `schemas.write`       | No          | Creates a product table from an outbound/contact template or custom schema, with saved-view config                     |
-| `update_table`              | `schemas.write`       | No          | Updates table metadata, custom schema, and saved-view config                                                          |
+| `create_table`              | `schemas.write`       | No          | Creates a product table from an outbound/contact template or custom schema, with saved-view config                    |
+| `update_table`              | `schemas.write`       | No          | Updates metadata or applies a canonical template upgrade while preserving additive custom fields                      |
 | `delete_table`              | `tables.delete`       | Yes         | Deletes user-facing tables and unlinks them from active Surf Points after product-scope verification                  |
 | `list_table_views`          | `tables.read`         | No          | Lists saved table views from view configuration                                                                       |
 | `read_table`                | `tables.read`         | No          | Reads rows with pagination, containment filters, and UI-style filters/sorts                                           |
@@ -89,7 +89,7 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `enable_quick_surf`         | `sources.write`       | No          | Binds a hidden manual-trigger source to one table column with instruction, optional auto-fill, and optional run gate  |
 | `disable_quick_surf`        | `sources.write`       | No          | Turns off a column binding while preserving its instruction and gate                                                  |
 | `list_quick_surf`           | `sources.read`        | No          | Lists Quick Surf-enabled columns for a table with their instructions                                                  |
-| `run_quick_surf`            | `surf_points.execute` | No          | Queues column, row-subset, or single-cell enrichment; column/subset runs apply the persisted run gate                 |
+| `run_quick_surf`            | `surf_points.execute` | No          | Queues enrichment, skips populated cells by default, and requires explicit overwrite consent for refreshes            |
 | `list_product_tools`        | `surf_points.read`    | No          | Lists safe product tool metadata; config secrets are not exposed                                                      |
 | `list_surf_point_tools`     | `surf_points.read`    | No          | Lists tool ids from `tool_config.auto_tool_ids` (attach/detach via `update_surf_point` toolConfigPatch)               |
 | `deepline_search_people`    | `deepline.read`       | No          | Runs a bounded managed Crustdata V3 people search after one-time Web approval; Apollo is an explicit BYOC override    |

@@ -1,6 +1,6 @@
-export const MCP_LEGACY_READ_SCOPE = "mcp:read"
-export const MCP_LEGACY_WRITE_SCOPE = "mcp:write"
-export const MCP_OFFLINE_ACCESS_SCOPE = "offline_access"
+export const MCP_LEGACY_READ_SCOPE = "mcp:read";
+export const MCP_LEGACY_WRITE_SCOPE = "mcp:write";
+export const MCP_OFFLINE_ACCESS_SCOPE = "offline_access";
 
 export const MCP_GRANULAR_SCOPES = [
   "mcp:products.write",
@@ -18,7 +18,7 @@ export const MCP_GRANULAR_SCOPES = [
   "mcp:deepline.read",
   "mcp:deepline.enrich",
   "mcp:deepline.execute",
-] as const
+] as const;
 
 // account_lists scopes are understood and enforced by this MCP server, but the
 // authorization server (www.signalsurf.ai) does not yet register them, so it rejects
@@ -30,11 +30,11 @@ export const MCP_GRANULAR_SCOPES = [
 export const MCP_ACCOUNT_LIST_SCOPES = [
   "mcp:account_lists.read",
   "mcp:account_lists.write",
-] as const
+] as const;
 
 // The old combined write scope remains accepted but is not advertised. New
 // grants split paid enrichment from open-ended provider execution.
-export const MCP_DEEPLINE_LEGACY_SCOPES = ["mcp:deepline.write"] as const
+export const MCP_DEEPLINE_LEGACY_SCOPES = ["mcp:deepline.write"] as const;
 
 export const MCP_SUPPORTED_SCOPES = [
   MCP_LEGACY_READ_SCOPE,
@@ -43,19 +43,19 @@ export const MCP_SUPPORTED_SCOPES = [
   ...MCP_ACCOUNT_LIST_SCOPES,
   ...MCP_DEEPLINE_LEGACY_SCOPES,
   MCP_OFFLINE_ACCESS_SCOPE,
-] as const
+] as const;
 
 export const MCP_RESOURCE_SCOPES = [
   MCP_LEGACY_READ_SCOPE,
   MCP_LEGACY_WRITE_SCOPE,
   ...MCP_GRANULAR_SCOPES,
-] as const
+] as const;
 
 export const MCP_DEFAULT_RESOURCE_SCOPES = MCP_GRANULAR_SCOPES.filter(
   (scope) => scope !== "mcp:deepline.enrich" && scope !== "mcp:deepline.execute"
-)
+);
 
-export type McpScope = (typeof MCP_SUPPORTED_SCOPES)[number]
+export type McpScope = (typeof MCP_SUPPORTED_SCOPES)[number];
 
 export type McpCapability =
   | "context.read"
@@ -75,7 +75,7 @@ export type McpCapability =
   | "account_lists.write"
   | "deepline.read"
   | "deepline.enrich"
-  | "deepline.execute"
+  | "deepline.execute";
 
 export type PublicMcpToolName =
   | "get_context"
@@ -129,60 +129,60 @@ export type PublicMcpToolName =
   | "deepline_search_companies"
   | "deepline_enrich_contact"
   | "deepline_search_catalog"
-  | "deepline_execute_tool"
+  | "deepline_execute_tool";
 
 type PublicMcpToolDefinition = {
-  title: string
-  description: string
-  requiredCapability: McpCapability
-  requiredCapabilities?: readonly McpCapability[]
-  surferSurface: string
-  publicStatus: "supported"
+  title: string;
+  description: string;
+  requiredCapability: McpCapability;
+  requiredCapabilities?: readonly McpCapability[];
+  surferSurface: string;
+  publicStatus: "supported";
   annotations: {
-    readOnlyHint: boolean
-    destructiveHint: boolean
-    idempotentHint: boolean
-    openWorldHint: boolean
-  }
-}
+    readOnlyHint: boolean;
+    destructiveHint: boolean;
+    idempotentHint: boolean;
+    openWorldHint: boolean;
+  };
+};
 
 const READ_ANNOTATIONS = {
   readOnlyHint: true,
   destructiveHint: false,
   idempotentHint: true,
   openWorldHint: false,
-} as const
+} as const;
 
 const CREATE_ANNOTATIONS = {
   readOnlyHint: false,
   destructiveHint: false,
   idempotentHint: false,
   openWorldHint: false,
-} as const
+} as const;
 
 const EXTERNAL_READ_ANNOTATIONS = {
   ...READ_ANNOTATIONS,
   openWorldHint: true,
-} as const
+} as const;
 
 const EXTERNAL_CREATE_ANNOTATIONS = {
   ...CREATE_ANNOTATIONS,
   openWorldHint: true,
-} as const
+} as const;
 
 const MUTATE_ANNOTATIONS = {
   readOnlyHint: false,
   destructiveHint: false,
   idempotentHint: false,
   openWorldHint: false,
-} as const
+} as const;
 
 const DELETE_ANNOTATIONS = {
   readOnlyHint: false,
   destructiveHint: true,
   idempotentHint: false,
   openWorldHint: false,
-} as const
+} as const;
 
 export const PUBLIC_MCP_TOOLS = {
   get_context: {
@@ -215,7 +215,7 @@ export const PUBLIC_MCP_TOOLS = {
   find_capabilities: {
     title: "Find Capabilities",
     description:
-      "Search this MCP's tools and guided prompts by intent (e.g. \"enrich a table\", \"find leads\", \"set up a surf point\") instead of scanning the whole tool list. Returns the best-matching tools and prompts (filtered to what your token can use) plus a hint on how to proceed. Start here when you are unsure which tool or prompt fits the task. Pass an empty query to see the available guided workflows.",
+      'Search this MCP\'s tools and guided prompts by intent (e.g. "enrich a table", "find leads", "set up a surf point") instead of scanning the whole tool list. Returns the best-matching tools and prompts (filtered to what your token can use) plus a hint on how to proceed. Start here when you are unsure which tool or prompt fits the task. Pass an empty query to see the available guided workflows.',
     requiredCapability: "context.read",
     surferSurface: "tool discovery",
     publicStatus: "supported",
@@ -395,7 +395,7 @@ export const PUBLIC_MCP_TOOLS = {
   update_table: {
     title: "Update Table",
     description:
-      "Update SignalSurf table metadata, custom schema, saved-view config, and folder placement after product-scope verification.",
+      "Update SignalSurf table metadata, custom schema, saved-view config, and folder placement after product-scope verification. Pass template to upgrade a compatible existing table to the canonical outbound_accounts or contacts baseline while preserving additive custom fields.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -493,8 +493,7 @@ export const PUBLIC_MCP_TOOLS = {
   },
   update_table_field: {
     title: "Update Table Field",
-    description:
-      "Patch one schema field in an authorized SignalSurf table.",
+    description: "Patch one schema field in an authorized SignalSurf table.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -647,23 +646,23 @@ export const PUBLIC_MCP_TOOLS = {
   run_quick_surf: {
     title: "Run Quick Surf",
     description:
-      "Queue Quick Surf enrichment for a column. Pass exactly one mode: scope ('first10' | 'first100' | 'all', capped at 1000 rows) to backfill across rows, entryIds for a specific row subset, or entryId for a single cell. Column/subset runs apply the persisted runCondition gate before queueing and return queued, skipped, rawSignalIds, jobs, and touched entryIds. Poll with list_surf_jobs / wait_for_surf_job. Credits are charged by the brain as each job runs.",
+      "Queue Quick Surf enrichment for a column. Pass exactly one mode: scope ('first10' | 'first100' | 'all', capped at 1000 rows) to backfill across rows, entryIds for a specific row subset, or entryId for a single cell. Populated cells are skipped by default and reported as skippedExisting; pass overwriteExisting=true only with explicit user consent to refresh them. Column/subset runs also apply the persisted runCondition gate. Poll returned jobs with list_surf_jobs / wait_for_surf_job. Credits are charged by the brain as each job runs.",
     requiredCapability: "surf_points.execute",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
     annotations: CREATE_ANNOTATIONS,
   },
-} as const satisfies Record<PublicMcpToolName, PublicMcpToolDefinition>
+} as const satisfies Record<PublicMcpToolName, PublicMcpToolDefinition>;
 
 export const PUBLIC_MCP_TOOL_NAMES = Object.keys(
   PUBLIC_MCP_TOOLS
-) as PublicMcpToolName[]
+) as PublicMcpToolName[];
 
 export function requiredCapabilitiesForTool(
   toolName: PublicMcpToolName
 ): readonly McpCapability[] {
-  const definition: PublicMcpToolDefinition = PUBLIC_MCP_TOOLS[toolName]
-  return definition.requiredCapabilities ?? [definition.requiredCapability]
+  const definition: PublicMcpToolDefinition = PUBLIC_MCP_TOOLS[toolName];
+  return definition.requiredCapabilities ?? [definition.requiredCapability];
 }
 
 const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
@@ -736,7 +735,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "deepline.enrich",
     "deepline.execute",
   ],
-}
+};
 
 const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "context.read": [MCP_LEGACY_READ_SCOPE],
@@ -757,47 +756,49 @@ const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "deepline.read": ["mcp:deepline.read"],
   "deepline.enrich": ["mcp:deepline.enrich"],
   "deepline.execute": ["mcp:deepline.execute"],
-}
+};
 
 export function parseStoredScopes(scope: string | undefined | null): string[] {
-  return scope?.trim() ? scope.trim().split(/\s+/) : []
+  return scope?.trim() ? scope.trim().split(/\s+/) : [];
 }
 
 export function isSupportedMcpScope(scope: string): scope is McpScope {
-  return (MCP_SUPPORTED_SCOPES as readonly string[]).includes(scope)
+  return (MCP_SUPPORTED_SCOPES as readonly string[]).includes(scope);
 }
 
 export function grantedCapabilitiesForScopes(
   scopes: readonly string[]
 ): McpCapability[] {
-  const capabilities = new Set<McpCapability>()
+  const capabilities = new Set<McpCapability>();
   for (const scope of scopes) {
-    if (!isSupportedMcpScope(scope)) continue
+    if (!isSupportedMcpScope(scope)) continue;
     for (const capability of SCOPE_GRANTS[scope]) {
-      capabilities.add(capability)
+      capabilities.add(capability);
     }
   }
-  return [...capabilities]
+  return [...capabilities];
 }
 
 export function scopesGrantCapability(
   scopes: readonly string[],
   capability: McpCapability
 ): boolean {
-  return grantedCapabilitiesForScopes(scopes).includes(capability)
+  return grantedCapabilitiesForScopes(scopes).includes(capability);
 }
 
 export function requiredScopesForCapability(
   capability: McpCapability
 ): readonly string[] {
-  return CAPABILITY_SCOPE_HINTS[capability]
+  return CAPABILITY_SCOPE_HINTS[capability];
 }
 
 export function scopeImpliesWriteAccess(scope: string): boolean {
-  if (!isSupportedMcpScope(scope)) return false
-  return SCOPE_GRANTS[scope].some((capability) => !capability.endsWith(".read"))
+  if (!isSupportedMcpScope(scope)) return false;
+  return SCOPE_GRANTS[scope].some(
+    (capability) => !capability.endsWith(".read")
+  );
 }
 
 export function scopesImplyWriteAccess(scopes: readonly string[]): boolean {
-  return scopes.some((scope) => scopeImpliesWriteAccess(scope))
+  return scopes.some((scope) => scopeImpliesWriteAccess(scope));
 }

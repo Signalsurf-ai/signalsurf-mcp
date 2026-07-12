@@ -11,9 +11,9 @@
 //   x-deepline-execute-response-contract: v2-tool-response
 //   -> { status: "completed"|"success"|"ok", toolResponse: { raw } }
 
-const DEFAULT_BASE_URL = "https://code.deepline.com"
-const EXECUTE_RESPONSE_CONTRACT = "v2-tool-response"
-export const DEFAULT_DEEPLINE_EXECUTE_TIMEOUT_MS = 60_000
+const DEFAULT_BASE_URL = "https://code.deepline.com";
+const EXECUTE_RESPONSE_CONTRACT = "v2-tool-response";
+export const DEFAULT_DEEPLINE_EXECUTE_TIMEOUT_MS = 60_000;
 
 /** Tool ids confirmed against the live catalog; env-overridable. */
 export const DEEPLINE_TOOL_IDS = {
@@ -26,14 +26,17 @@ export const DEEPLINE_TOOL_IDS = {
   emailFinder: () =>
     process.env.DEEPLINE_EMAIL_FINDER_TOOL_ID?.trim() ||
     "leadmagic_email_finder",
-}
+  technographics: () =>
+    process.env.DEEPLINE_TECHNOGRAPHICS_TOOL_ID?.trim() ||
+    "theirstack_technographics",
+};
 
 /** Kill-switch (default off). Mirrors SignalsurfWeb's DEEPLINE_DISABLED. */
 export function isDeeplineDisabled(): boolean {
-  const v = process.env.DEEPLINE_DISABLED
-  if (!v) return false
-  const s = v.trim().toLowerCase()
-  return s === "1" || s === "true" || s === "yes" || s === "on"
+  const v = process.env.DEEPLINE_DISABLED;
+  if (!v) return false;
+  const s = v.trim().toLowerCase();
+  return s === "1" || s === "true" || s === "yes" || s === "on";
 }
 
 function baseUrl(): string {
@@ -41,44 +44,44 @@ function baseUrl(): string {
     process.env.DEEPLINE_API_BASE_URL ||
     process.env.DEEPLINE_HOST_URL ||
     DEFAULT_BASE_URL
-  ).replace(/\/+$/, "")
+  ).replace(/\/+$/, "");
 }
 
 export interface DeeplineEnvelope {
-  status?: string
-  toolResponse?: { raw?: unknown } | null
-  result?: unknown
-  data?: unknown
-  [key: string]: unknown
+  status?: string;
+  toolResponse?: { raw?: unknown } | null;
+  result?: unknown;
+  data?: unknown;
+  [key: string]: unknown;
 }
 
 export function deeplineStatusOk(status: unknown): boolean {
-  return status === "completed" || status === "success" || status === "ok"
+  return status === "completed" || status === "success" || status === "ok";
 }
 
 export function unwrapDeepline(envelope: DeeplineEnvelope): unknown {
   if (envelope?.toolResponse && "raw" in envelope.toolResponse) {
-    return envelope.toolResponse.raw
+    return envelope.toolResponse.raw;
   }
-  if (envelope?.result !== undefined) return envelope.result
-  if (envelope?.data !== undefined) return envelope.data
-  return envelope
+  if (envelope?.result !== undefined) return envelope.result;
+  if (envelope?.data !== undefined) return envelope.data;
+  return envelope;
 }
 
 /** Drop undefined/empty fields so finders that reject unknown/empty keys 200. */
 export function cleanDeeplinePayload(
   obj: Record<string, unknown>
 ): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
+  const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (value == null) continue
-    if (typeof value === "string" && !value.trim()) continue
-    out[key] = value
+    if (value == null) continue;
+    if (typeof value === "string" && !value.trim()) continue;
+    out[key] = value;
   }
-  return out
+  return out;
 }
 
-export type FetchLike = typeof fetch
+export type FetchLike = typeof fetch;
 
 /** List Deepline's live v2 tool catalog. Throws on a non-2xx response. */
 export async function listDeeplineTools(
@@ -91,18 +94,18 @@ export async function listDeeplineTools(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-  })
+  });
   if (!res.ok) {
-    const text = await res.text().catch(() => "")
+    const text = await res.text().catch(() => "");
     throw new Error(
       `Deepline tool catalog -> HTTP ${res.status}${
         text ? `: ${text.slice(0, 300)}` : ""
       }`
-    )
+    );
   }
-  const data = (await res.json()) as { tools?: unknown } | unknown[]
-  const tools = Array.isArray(data) ? data : data.tools
-  return Array.isArray(tools) ? (tools as Array<Record<string, unknown>>) : []
+  const data = (await res.json()) as { tools?: unknown } | unknown[];
+  const tools = Array.isArray(data) ? data : data.tools;
+  return Array.isArray(tools) ? (tools as Array<Record<string, unknown>>) : [];
 }
 
 /** Execute one Deepline tool. Throws on a non-2xx (message carries the status). */
@@ -113,8 +116,8 @@ export async function executeDeeplineTool(
   fetchImpl: FetchLike = fetch,
   timeoutMs = DEFAULT_DEEPLINE_EXECUTE_TIMEOUT_MS
 ): Promise<DeeplineEnvelope> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetchImpl(
       `${baseUrl()}/api/v2/integrations/${encodeURIComponent(toolId)}/execute`,
@@ -128,12 +131,12 @@ export async function executeDeeplineTool(
         body: JSON.stringify({ payload }),
         signal: controller.signal,
       }
-    )
+    );
     if (!res.ok) {
-      throw new Error(`Deepline ${toolId} -> HTTP ${res.status}`)
+      throw new Error(`Deepline ${toolId} -> HTTP ${res.status}`);
     }
-    return (await res.json()) as DeeplineEnvelope
+    return (await res.json()) as DeeplineEnvelope;
   } finally {
-    clearTimeout(timeout)
+    clearTimeout(timeout);
   }
 }

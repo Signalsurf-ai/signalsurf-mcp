@@ -1,20 +1,23 @@
-import type { JsonRecord } from "./types.js"
+import type { JsonRecord } from "./types.js";
 
-export const PUBLIC_TABLE_TEMPLATES = ["outbound_accounts", "contacts"] as const
+export const PUBLIC_TABLE_TEMPLATES = [
+  "outbound_accounts",
+  "contacts",
+] as const;
 
-export type PublicTableTemplate = (typeof PUBLIC_TABLE_TEMPLATES)[number]
+export type PublicTableTemplate = (typeof PUBLIC_TABLE_TEMPLATES)[number];
 
 type PublicTableTemplateDefinition = {
-  description: string
-  color: string
-  itemType: string
-  schema: JsonRecord
-  viewConfigs: JsonRecord
-}
+  description: string;
+  color: string;
+  itemType: string;
+  schema: JsonRecord;
+  viewConfigs: JsonRecord;
+};
 
 const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
   template_key: "outbound_accounts",
-  schema_version: 2,
+  schema_version: 3,
   database_kind: "outbound.account_list",
   required_fields: ["company", "status"],
   stable_entry_keys: ["domain"],
@@ -25,13 +28,16 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
     "employee_count",
     "funding_stage",
     "latest_round_date",
+    "tech_stack",
+    "active_job_count",
+    "hiring_signal",
     "fit_score",
     "tier",
     "status",
     "fit_reason",
   ],
   migration_note:
-    "Schema v2 is the company/account baseline for outbound: identify accounts, enrich buying context, qualify ICP fit with human review, tier them, and then hand qualified rows to people/contact discovery. Contact readiness, campaign state, replies, and meetings belong to contact or campaign tables.",
+    "Schema v3 is the company/account baseline for outbound: identify accounts, preserve structured technology and hiring data, enrich buying context, qualify ICP fit with human review, tier them, and then hand qualified rows to people/contact discovery. Contact readiness, campaign state, replies, and meetings belong to contact or campaign tables.",
   fields: [
     {
       key: "company",
@@ -45,7 +51,8 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
       key: "domain",
       type: "string",
       label: "Domain",
-      description: "Stable company domain used for deduplication when available.",
+      description:
+        "Stable company domain used for deduplication when available.",
       is_entry_key: true,
       is_unique: true,
       ai_enabled: true,
@@ -87,14 +94,16 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
       key: "evidence_url",
       type: "url",
       label: "Evidence URL",
-      description: "Best proof URL supporting a fit, stage, signal, or qualification claim.",
+      description:
+        "Best proof URL supporting a fit, stage, signal, or qualification claim.",
     },
     {
       key: "evidence",
       role: "summary",
       type: "string",
       label: "Evidence",
-      description: "Short explanation of the proof behind this row and any qualification signals.",
+      description:
+        "Short explanation of the proof behind this row and any qualification signals.",
     },
     {
       key: "observed_at",
@@ -108,7 +117,8 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
       role: "score",
       type: "number",
       label: "Confidence",
-      description: "0-1 confidence in the row based on source quality and evidence completeness.",
+      description:
+        "0-1 confidence in the row based on source quality and evidence completeness.",
     },
     {
       key: "segment",
@@ -152,7 +162,8 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
         "private_equity",
         "acquired",
       ],
-      description: "Latest known company stage or funding band used for outbound qualification.",
+      description:
+        "Latest known company stage or funding band used for outbound qualification.",
     },
     {
       key: "tech_stack",
@@ -166,32 +177,44 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
       role: "timestamp",
       type: "date",
       label: "Latest Round",
-      description: "Announcement or close date of the latest known funding round.",
+      description:
+        "Announcement or close date of the latest known funding round.",
+    },
+    {
+      key: "active_job_count",
+      type: "number",
+      label: "Active Jobs",
+      description:
+        "Current open-job count returned by the licensed company-data provider.",
     },
     {
       key: "hiring_signal",
       type: "string",
       label: "Hiring Signal",
-      description: "Hiring, team-building, or role-opening evidence relevant to the ICP.",
+      description:
+        "Hiring, team-building, or role-opening evidence relevant to the ICP.",
     },
     {
       key: "target_buyer",
       type: "string",
       label: "Target Buyer",
-      description: "Likely buyer persona or department to find after the account is qualified.",
+      description:
+        "Likely buyer persona or department to find after the account is qualified.",
     },
     {
       key: "offer_angle",
       type: "string",
       label: "Offer Angle",
-      description: "Reason this account should care about the offer being sold.",
+      description:
+        "Reason this account should care about the offer being sold.",
     },
     {
       key: "fit_score",
       role: "score",
       type: "number",
       label: "Fit Score",
-      description: "1-10 ICP fit score. Prefer Quick Surf for reusable scoring across rows.",
+      description:
+        "1-10 ICP fit score. Prefer Quick Surf for reusable scoring across rows.",
     },
     {
       key: "tier",
@@ -211,7 +234,8 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
       key: "risk_reason",
       type: "string",
       label: "Risk Reason",
-      description: "Known risk, disqualification concern, stale evidence, or missing information.",
+      description:
+        "Known risk, disqualification concern, stale evidence, or missing information.",
     },
     {
       key: "status",
@@ -264,7 +288,7 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
   subtitle_field: "fit_reason",
   time_field: "observed_at",
   link_field: "website",
-}
+};
 
 const OUTBOUND_ACCOUNT_VIEW_CONFIGS: JsonRecord = {
   default_view: "table",
@@ -290,7 +314,6 @@ const OUTBOUND_ACCOUNT_VIEW_CONFIGS: JsonRecord = {
     "output.observed_at",
     "output.confidence",
     "output.segment",
-    "output.tech_stack",
     "output.hiring_signal",
     "output.target_buyer",
     "output.offer_angle",
@@ -305,7 +328,7 @@ const OUTBOUND_ACCOUNT_VIEW_CONFIGS: JsonRecord = {
   sort_key: "fit_score",
   sort_direction: "desc",
   board: { group_field: "status" },
-}
+};
 
 const CONTACT_SCHEMA: JsonRecord = {
   template_key: "contacts",
@@ -321,7 +344,8 @@ const CONTACT_SCHEMA: JsonRecord = {
       key: "handle",
       type: "string",
       label: "Handle",
-      description: "Primary social handle or username, without @, used to match signals.",
+      description:
+        "Primary social handle or username, without @, used to match signals.",
     },
     {
       key: "profile_url",
@@ -335,7 +359,8 @@ const CONTACT_SCHEMA: JsonRecord = {
       type: "url",
       label: "LinkedIn URL",
       contact_platform: "linkedin",
-      description: "LinkedIn profile URL used for inbox pairing and campaign targets.",
+      description:
+        "LinkedIn profile URL used for inbox pairing and campaign targets.",
     },
     {
       key: "email",
@@ -367,7 +392,15 @@ const CONTACT_SCHEMA: JsonRecord = {
       role: "category",
       type: "enum",
       label: "Channel",
-      options: ["LINE", "Email", "Instagram", "X", "Threads", "LinkedIn", "WhatsApp"],
+      options: [
+        "LINE",
+        "Email",
+        "Instagram",
+        "X",
+        "Threads",
+        "LinkedIn",
+        "WhatsApp",
+      ],
       description: "Primary communication channel.",
     },
     {
@@ -399,7 +432,7 @@ const CONTACT_SCHEMA: JsonRecord = {
   primary_field: "name",
   subtitle_field: "company",
   link_field: "profile_url",
-}
+};
 
 const CONTACT_VIEW_CONFIGS: JsonRecord = {
   default_view: "table",
@@ -414,9 +447,12 @@ const CONTACT_VIEW_CONFIGS: JsonRecord = {
     { id: "board", name: "By Channel", viewType: "board" },
   ],
   board: { group_field: "channel" },
-}
+};
 
-const TABLE_TEMPLATES: Record<PublicTableTemplate, PublicTableTemplateDefinition> = {
+const TABLE_TEMPLATES: Record<
+  PublicTableTemplate,
+  PublicTableTemplateDefinition
+> = {
   outbound_accounts: {
     description:
       "Company account list for outbound: ICP, qualification, tiering, and account lifecycle.",
@@ -426,66 +462,71 @@ const TABLE_TEMPLATES: Record<PublicTableTemplate, PublicTableTemplateDefinition
     viewConfigs: OUTBOUND_ACCOUNT_VIEW_CONFIGS,
   },
   contacts: {
-    description: "Conversations with people: email, history, and AI-drafted replies.",
+    description:
+      "Conversations with people: email, history, and AI-drafted replies.",
     color: "#F59E0B",
     itemType: "contact",
     schema: CONTACT_SCHEMA,
     viewConfigs: CONTACT_VIEW_CONFIGS,
   },
-}
+};
 
 function recordValue(value: unknown): JsonRecord | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : null
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as JsonRecord)
+    : null;
 }
 
 function mergeFields(templateSchema: JsonRecord, customSchema?: JsonRecord) {
-  const templateFields = Array.isArray(templateSchema.fields) ? templateSchema.fields : []
+  const templateFields = Array.isArray(templateSchema.fields)
+    ? templateSchema.fields
+    : [];
   const templateKeys = new Set(
     templateFields
       .map((field) => recordValue(field)?.key)
-      .filter((key): key is string => typeof key === "string"),
-  )
+      .filter((key): key is string => typeof key === "string")
+  );
   const additiveFields = Array.isArray(customSchema?.fields)
     ? customSchema.fields.filter((field) => {
-        const key = recordValue(field)?.key
-        return typeof key !== "string" || !templateKeys.has(key)
+        const key = recordValue(field)?.key;
+        return typeof key !== "string" || !templateKeys.has(key);
       })
-    : []
-  return [...templateFields, ...additiveFields]
+    : [];
+  return [...templateFields, ...additiveFields];
 }
 
 function mergeViewConfigs(
   templateViewConfigs: JsonRecord,
-  customViewConfigs?: JsonRecord,
+  customViewConfigs?: JsonRecord
 ): JsonRecord {
   const templateViews = Array.isArray(templateViewConfigs.saved_views)
     ? templateViewConfigs.saved_views
-    : []
+    : [];
   const templateViewIds = new Set(
     templateViews
       .map((view) => recordValue(view)?.id)
-      .filter((id): id is string => typeof id === "string"),
-  )
+      .filter((id): id is string => typeof id === "string")
+  );
   const additiveViews = Array.isArray(customViewConfigs?.saved_views)
     ? customViewConfigs.saved_views.filter((view) => {
-        const id = recordValue(view)?.id
-        return typeof id !== "string" || !templateViewIds.has(id)
+        const id = recordValue(view)?.id;
+        return typeof id !== "string" || !templateViewIds.has(id);
       })
-    : []
+    : [];
 
   return {
     ...customViewConfigs,
     ...templateViewConfigs,
     saved_views: [...templateViews, ...additiveViews],
-  }
+  };
 }
 
 export function applyPublicTableTemplate(
   template: PublicTableTemplate,
   customSchema?: JsonRecord,
-  customViewConfigs?: JsonRecord,
+  customViewConfigs?: JsonRecord
 ) {
-  const definition = TABLE_TEMPLATES[template]
+  const definition = TABLE_TEMPLATES[template];
   return {
     description: definition.description,
     color: definition.color,
@@ -496,5 +537,5 @@ export function applyPublicTableTemplate(
       fields: mergeFields(definition.schema, customSchema),
     },
     viewConfigs: mergeViewConfigs(definition.viewConfigs, customViewConfigs),
-  }
+  };
 }
