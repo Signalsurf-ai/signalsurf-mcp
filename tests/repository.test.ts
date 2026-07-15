@@ -2134,7 +2134,16 @@ describe("SignalSurfRepository", () => {
         ],
       },
       viewConfigs: {
-        saved_views: [{ id: "default", name: "All accounts" }],
+        saved_views: [
+          { id: "default", name: "All accounts" },
+          {
+            id: "tiering",
+            name: "Tiering",
+            viewType: "board",
+            groupByKey: "tier",
+          },
+        ],
+        table_hidden_columns: [],
       },
       displayOrder: 8,
     })
@@ -2159,6 +2168,17 @@ describe("SignalSurfRepository", () => {
         fields: [
           { key: "name", type: "text", label: "Company Name" },
           { key: "priority", type: "enum", options: ["P0", "P1"] },
+          {
+            key: "tier",
+            type: "enum",
+            options: ["tier_1", "tier_2", "tier_3"],
+            quick_surf: true,
+            ai_enabled: true,
+            sources: [{ id: "legacy-tier-source" }],
+          },
+          { key: "employee_count", type: "number" },
+          { key: "active_job_count", type: "number" },
+          { key: "review_reason", type: "string" },
         ],
       },
     })
@@ -2171,6 +2191,10 @@ describe("SignalSurfRepository", () => {
           fields: [
             { key: "name", label: "Company Name" },
             { key: "priority", type: "enum" },
+            { key: "tier", type: "enum" },
+            { key: "employee_count", type: "number" },
+            { key: "active_job_count", type: "number" },
+            { key: "review_reason", type: "string" },
           ],
         },
       },
@@ -2196,7 +2220,32 @@ describe("SignalSurfRepository", () => {
         expect.objectContaining({ key: "company", type: "string" }),
         expect.objectContaining({ key: "tech_stack", type: "array" }),
         expect.objectContaining({ key: "priority", type: "enum" }),
+        expect.objectContaining({
+          key: "tier",
+          type: "enum",
+          quick_surf: false,
+          ai_enabled: false,
+          sources: [],
+        }),
+        expect.objectContaining({ key: "employee_count", type: "number" }),
+        expect.objectContaining({ key: "active_job_count", type: "number" }),
+        expect.objectContaining({ key: "review_reason", type: "string" }),
       ])
+    )
+    expect(upgraded.database.viewConfigs.table_hidden_columns).toEqual(
+      expect.arrayContaining([
+        "output.tier",
+        "output.employee_count",
+        "output.active_job_count",
+        "output.review_reason",
+      ])
+    )
+    expect(upgraded.database.viewConfigs.saved_views).toContainEqual(
+      expect.objectContaining({
+        id: "tiering",
+        viewType: "board",
+        groupByKey: "tier",
+      })
     )
   })
 
@@ -2218,6 +2267,7 @@ describe("SignalSurfRepository", () => {
       template_key?: string
       database_kind?: string
       required_fields?: string[]
+      report_fields?: string[]
       fields?: Array<Record<string, unknown>>
     }
     const accountFields = new Map(
@@ -2240,17 +2290,83 @@ describe("SignalSurfRepository", () => {
     })
     expect(accountSchema).toMatchObject({ schema_version: 3 })
     expect(accountFields.get("tech_stack")).toMatchObject({ type: "array" })
-    expect(accountFields.get("active_job_count")).toMatchObject({
-      type: "number",
-    })
-    expect(accountFields.get("hiring_signal")).toMatchObject({
-      type: "string",
-    })
+    expect(
+      accountSchema.fields
+        ?.map((field) => field.key)
+        .filter((key) => key !== "is_yc")
+    ).toEqual([
+      "company",
+      "domain",
+      "website",
+      "linkedin_url",
+      "location",
+      "industry",
+      "company_size",
+      "funding_stage",
+      "tech_stack",
+      "latest_round_date",
+      "fit_score",
+      "fit_reason",
+      "status",
+    ])
+    expect(accountSchema.report_fields).toEqual([
+      "company",
+      "website",
+      "linkedin_url",
+      "location",
+      "industry",
+      "company_size",
+      "funding_stage",
+      "latest_round_date",
+      "tech_stack",
+      "fit_score",
+      "status",
+      "fit_reason",
+    ])
     expect(accountFields.get("is_yc")).toMatchObject({
       type: "boolean",
       label: "YC",
     })
+    expect(accountFields.has("tier")).toBe(false)
+    expect(accountFields.has("employee_count")).toBe(false)
+    expect(accountFields.has("active_job_count")).toBe(false)
+    expect(accountFields.has("review_reason")).toBe(false)
     expect(accountFields.has("campaign_ready")).toBe(false)
+    expect(
+      (accounts.database.viewConfigs.saved_views as Array<{ id?: string }>).map(
+        (view) => view.id
+      )
+    ).not.toContain("tiering")
+    expect(accounts.database.viewConfigs).toMatchObject({
+      table_column_visibility_mode: "auto_provider_facts",
+      sort_key: "fit_score",
+      sort_direction: "desc",
+      table_column_order: [
+        "output.company",
+        "output.domain",
+        "output.website",
+        "output.linkedin_url",
+        "output.location",
+        "output.industry",
+        "output.company_size",
+        "output.funding_stage",
+        "output.latest_round_date",
+        "output.tech_stack",
+        "output.fit_score",
+        "output.fit_reason",
+        "output.status",
+      ],
+      table_hidden_columns: [
+        "output.domain",
+        "output.linkedin_url",
+        "output.location",
+        "output.industry",
+        "output.company_size",
+        "output.funding_stage",
+        "output.latest_round_date",
+        "output.tech_stack",
+      ],
+    })
 
     const contacts = await repo.createTable(context, {
       name: "Outbound Contacts",

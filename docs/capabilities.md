@@ -67,8 +67,8 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `cancel_surf_job`           | `surf_points.execute` | No          | Cancels a pending Surf Point execution job                                                                            |
 | `delete_surf_point`         | `surf_points.delete`  | Yes         | Soft-deletes Surf Points and cancels pending jobs                                                                     |
 | `list_tables`               | `tables.read`         | No          | Lists product tables                                                                                                  |
-| `create_table`              | `schemas.write`       | No          | Creates a product table from an outbound/contact template or custom schema, with saved-view config                    |
-| `update_table`              | `schemas.write`       | No          | Updates metadata or applies a canonical template upgrade while preserving additive custom fields                      |
+| `create_table`              | `schemas.write`       | No          | Creates a table from the provider-first 13-field Accounts baseline, Contacts baseline, or custom schema               |
+| `update_table`              | `schemas.write`       | No          | Applies template upgrades while preserving additive fields/data and hiding known legacy Accounts fields               |
 | `delete_table`              | `tables.delete`       | Yes         | Deletes user-facing tables and unlinks them from active Surf Points after product-scope verification                  |
 | `list_table_views`          | `tables.read`         | No          | Lists saved table views from view configuration                                                                       |
 | `read_table`                | `tables.read`         | No          | Reads rows with pagination, containment filters, and UI-style filters/sorts                                           |
