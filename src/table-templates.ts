@@ -514,15 +514,50 @@ export function applyPublicTableTemplate(
   customViewConfigs?: JsonRecord
 ) {
   const definition = TABLE_TEMPLATES[template]
+  const schema = {
+    ...customSchema,
+    ...definition.schema,
+    fields: mergeFields(definition.schema, customSchema),
+  }
+  const viewConfigs = mergeViewConfigs(definition.viewConfigs, customViewConfigs)
+
+  if (template === "outbound_accounts") {
+    const hasLegacyTier = Array.isArray(schema.fields)
+      ? schema.fields.some((field) => recordValue(field)?.key === "tier")
+      : false
+    const hiddenColumns = Array.isArray(viewConfigs.table_hidden_columns)
+      ? viewConfigs.table_hidden_columns
+      : []
+    const savedViews = Array.isArray(viewConfigs.saved_views)
+      ? viewConfigs.saved_views.filter(
+          (view) => recordValue(view)?.id !== "tiering"
+        )
+      : []
+
+    return {
+      description: definition.description,
+      color: definition.color,
+      itemType: definition.itemType,
+      schema,
+      viewConfigs: {
+        ...viewConfigs,
+        saved_views: savedViews,
+        ...(hasLegacyTier
+          ? {
+              table_hidden_columns: Array.from(
+                new Set([...hiddenColumns, "output.tier"])
+              ),
+            }
+          : {}),
+      },
+    }
+  }
+
   return {
     description: definition.description,
     color: definition.color,
     itemType: definition.itemType,
-    schema: {
-      ...customSchema,
-      ...definition.schema,
-      fields: mergeFields(definition.schema, customSchema),
-    },
-    viewConfigs: mergeViewConfigs(definition.viewConfigs, customViewConfigs),
+    schema,
+    viewConfigs,
   }
 }

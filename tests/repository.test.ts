@@ -2134,7 +2134,16 @@ describe("SignalSurfRepository", () => {
         ],
       },
       viewConfigs: {
-        saved_views: [{ id: "default", name: "All accounts" }],
+        saved_views: [
+          { id: "default", name: "All accounts" },
+          {
+            id: "tiering",
+            name: "Tiering",
+            viewType: "board",
+            groupByKey: "tier",
+          },
+        ],
+        table_hidden_columns: [],
       },
       displayOrder: 8,
     })
@@ -2205,6 +2214,14 @@ describe("SignalSurfRepository", () => {
         expect.objectContaining({ key: "tier", type: "enum" }),
       ])
     )
+    expect(upgraded.database.viewConfigs.table_hidden_columns).toContain(
+      "output.tier"
+    )
+    expect(
+      (
+        upgraded.database.viewConfigs.saved_views as Array<{ id?: string }>
+      ).map((view) => view.id)
+    ).not.toContain("tiering")
   })
 
   it("creates outbound account and contact tables from additive templates", async () => {
