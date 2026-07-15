@@ -21,19 +21,19 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
   report_fields: [
     "company",
     "website",
+    "linkedin_url",
+    "location",
     "industry",
-    "employee_count",
+    "company_size",
     "funding_stage",
     "latest_round_date",
     "tech_stack",
-    "active_job_count",
-    "hiring_signal",
     "fit_score",
     "status",
     "fit_reason",
   ],
   migration_note:
-    "Schema v3 is the company/account baseline for outbound: identify accounts, preserve structured technology and hiring data, enrich buying context, score ICP fit, and hand human-qualified rows to people/contact discovery. New templates omit tier; pre-existing legacy tier fields remain additive and are not an eligibility source. Contact readiness, campaign state, replies, and meetings belong to contact or campaign tables.",
+    "Schema v3 is the provider-first account baseline: preserve returned identity, firmographic, funding, and explicitly requested technology facts; use fit_score as the only automated account-fit judgment and status as the directly editable eligibility decision. New templates omit tier; legacy Tier remains hidden and non-automatable. Provider provenance remains outside the default table schema.",
   fields: [
     {
       key: "company",
@@ -73,58 +73,6 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
       description: "Headquarters or primary target geography.",
     },
     {
-      key: "source",
-      type: "string",
-      label: "Source",
-      description:
-        "Human-readable source that introduced this company, such as YC, a portfolio, imported list, or provider result.",
-    },
-    {
-      key: "source_url",
-      type: "url",
-      label: "Source URL",
-      description:
-        "Source page, search result, directory row, portfolio page, or provider record URL that introduced this account.",
-    },
-    {
-      key: "evidence_url",
-      type: "url",
-      label: "Evidence URL",
-      description:
-        "Best proof URL supporting a fit, stage, signal, or qualification claim.",
-    },
-    {
-      key: "evidence",
-      role: "summary",
-      type: "string",
-      label: "Evidence",
-      description:
-        "Short explanation of the proof behind this row and any qualification signals.",
-    },
-    {
-      key: "observed_at",
-      role: "timestamp",
-      type: "date",
-      label: "Observed At",
-      description: "When the account or supporting evidence was observed.",
-    },
-    {
-      key: "confidence",
-      role: "score",
-      type: "number",
-      label: "Confidence",
-      description:
-        "0-1 confidence in the row based on source quality and evidence completeness.",
-    },
-    {
-      key: "segment",
-      role: "category",
-      type: "string",
-      label: "Segment",
-      description:
-        "ICP segment this account belongs to, copied from the interpreted ICP or row-level evidence.",
-    },
-    {
       key: "industry",
       type: "string",
       label: "Industry",
@@ -135,12 +83,6 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
       type: "string",
       label: "Company Size",
       description: "Employee, revenue, or customer size band.",
-    },
-    {
-      key: "employee_count",
-      type: "number",
-      label: "Employees",
-      description: "Latest defensible employee count used for qualification.",
     },
     {
       key: "funding_stage",
@@ -177,34 +119,6 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
         "Announcement or close date of the latest known funding round.",
     },
     {
-      key: "active_job_count",
-      type: "number",
-      label: "Active Jobs",
-      description:
-        "Current open-job count returned by the licensed company-data provider.",
-    },
-    {
-      key: "hiring_signal",
-      type: "string",
-      label: "Hiring Signal",
-      description:
-        "Hiring, team-building, or role-opening evidence relevant to the ICP.",
-    },
-    {
-      key: "target_buyer",
-      type: "string",
-      label: "Target Buyer",
-      description:
-        "Likely buyer persona or department to find after the account is qualified.",
-    },
-    {
-      key: "offer_angle",
-      type: "string",
-      label: "Offer Angle",
-      description:
-        "Reason this account should care about the offer being sold.",
-    },
-    {
       key: "fit_score",
       role: "score",
       type: "number",
@@ -219,13 +133,6 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
       description: "Concise evidence-based explanation for the fit score.",
     },
     {
-      key: "risk_reason",
-      type: "string",
-      label: "Risk Reason",
-      description:
-        "Known risk, disqualification concern, stale evidence, or missing information.",
-    },
-    {
       key: "status",
       role: "status",
       type: "enum",
@@ -234,47 +141,10 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
       description:
         "Account qualification state. People discovery, contact readiness, campaign replies, and meetings belong to contact or campaign records after the account is qualified.",
     },
-    {
-      key: "reviewed_by",
-      type: "string",
-      label: "Reviewed By",
-      description: "User id of the reviewer who approved or rejected this row.",
-    },
-    {
-      key: "reviewed_at",
-      role: "timestamp",
-      type: "datetime",
-      label: "Reviewed At",
-      description: "When the latest approval or rejection was recorded.",
-    },
-    {
-      key: "review_reason",
-      type: "string",
-      label: "Review Reason",
-      description: "Human reason for the latest approval or rejection.",
-    },
-    {
-      key: "owner",
-      type: "string",
-      label: "Owner",
-      description: "Person or team responsible for this account.",
-    },
-    {
-      key: "notes",
-      type: "string",
-      label: "Notes",
-      description: "Free-form human notes for account review.",
-    },
-    {
-      key: "rejection_reason",
-      type: "string",
-      label: "Rejection Reason",
-      description: "Why this account was rejected or disqualified.",
-    },
   ],
   primary_field: "company",
   subtitle_field: "fit_reason",
-  time_field: "observed_at",
+  time_field: "latest_round_date",
   link_field: "website",
 }
 
@@ -289,33 +159,60 @@ const OUTBOUND_ACCOUNT_VIEW_CONFIGS: JsonRecord = {
       groupByKey: "status",
     },
   ],
+  table_column_order: [
+    "output.company",
+    "output.domain",
+    "output.website",
+    "output.linkedin_url",
+    "output.location",
+    "output.industry",
+    "output.company_size",
+    "output.funding_stage",
+    "output.latest_round_date",
+    "output.tech_stack",
+    "output.fit_score",
+    "output.fit_reason",
+    "output.status",
+  ],
+  table_column_visibility_mode: "auto_provider_facts",
   table_hidden_columns: [
     "output.domain",
-    "output.location",
-    "output.company_size",
     "output.linkedin_url",
-    "output.source",
-    "output.source_url",
-    "output.evidence_url",
-    "output.evidence",
-    "output.observed_at",
-    "output.confidence",
-    "output.segment",
-    "output.hiring_signal",
-    "output.target_buyer",
-    "output.offer_angle",
-    "output.risk_reason",
-    "output.owner",
-    "output.notes",
-    "output.rejection_reason",
-    "output.reviewed_by",
-    "output.reviewed_at",
-    "output.review_reason",
+    "output.location",
+    "output.industry",
+    "output.company_size",
+    "output.funding_stage",
+    "output.latest_round_date",
+    "output.tech_stack",
   ],
   sort_key: "fit_score",
   sort_direction: "desc",
   board: { group_field: "status" },
 }
+
+const LEGACY_OUTBOUND_ACCOUNT_FIELD_KEYS = new Set([
+  "source",
+  "source_url",
+  "evidence_url",
+  "evidence",
+  "observed_at",
+  "confidence",
+  "segment",
+  "employee_count",
+  "active_job_count",
+  "hiring_signal",
+  "target_buyer",
+  "offer_angle",
+  "tier",
+  "risk_reason",
+  "reviewed_by",
+  "reviewed_at",
+  "review_reason",
+  "owner",
+  "notes",
+  "rejection_reason",
+  "template_email",
+])
 
 const CONTACT_SCHEMA: JsonRecord = {
   template_key: "contacts",
@@ -442,7 +339,7 @@ const TABLE_TEMPLATES: Record<
 > = {
   outbound_accounts: {
     description:
-      "Company account list for outbound: ICP scoring, human qualification, and account lifecycle.",
+      "Provider-first company account list for outbound: ICP scoring, directly editable eligibility status, and account lifecycle.",
     color: "#0F766E",
     itemType: "outbound_account",
     schema: OUTBOUND_ACCOUNT_SCHEMA,
@@ -482,6 +379,29 @@ function mergeFields(templateSchema: JsonRecord, customSchema?: JsonRecord) {
   return [...templateFields, ...additiveFields]
 }
 
+function normalizeLegacyOutboundAccountFields(fields: unknown[]) {
+  return fields.map((field) => {
+    const record = recordValue(field)
+    if (record?.key !== "tier") return field
+    return {
+      ...record,
+      quick_surf: false,
+      ai_enabled: false,
+      sources: [],
+    }
+  })
+}
+
+function isCanonicalLegacyTieringView(view: unknown): boolean {
+  const record = recordValue(view)
+  return (
+    record?.id === "tiering" &&
+    record.name === "Tiering" &&
+    record.viewType === "chart" &&
+    record.groupByKey == null
+  )
+}
+
 function mergeViewConfigs(
   templateViewConfigs: JsonRecord,
   customViewConfigs?: JsonRecord
@@ -517,20 +437,34 @@ export function applyPublicTableTemplate(
   const schema = {
     ...customSchema,
     ...definition.schema,
-    fields: mergeFields(definition.schema, customSchema),
+    fields:
+      template === "outbound_accounts"
+        ? normalizeLegacyOutboundAccountFields(
+            mergeFields(definition.schema, customSchema)
+          )
+        : mergeFields(definition.schema, customSchema),
   }
-  const viewConfigs = mergeViewConfigs(definition.viewConfigs, customViewConfigs)
+  const viewConfigs = mergeViewConfigs(
+    definition.viewConfigs,
+    customViewConfigs
+  )
 
   if (template === "outbound_accounts") {
-    const hasLegacyTier = Array.isArray(schema.fields)
-      ? schema.fields.some((field) => recordValue(field)?.key === "tier")
-      : false
+    const legacyFieldKeys = Array.isArray(schema.fields)
+      ? schema.fields.flatMap((field) => {
+          const key = recordValue(field)?.key
+          return typeof key === "string" &&
+            LEGACY_OUTBOUND_ACCOUNT_FIELD_KEYS.has(key)
+            ? [key]
+            : []
+        })
+      : []
     const hiddenColumns = Array.isArray(viewConfigs.table_hidden_columns)
       ? viewConfigs.table_hidden_columns
       : []
     const savedViews = Array.isArray(viewConfigs.saved_views)
       ? viewConfigs.saved_views.filter(
-          (view) => recordValue(view)?.id !== "tiering"
+          (view) => !isCanonicalLegacyTieringView(view)
         )
       : []
 
@@ -542,13 +476,12 @@ export function applyPublicTableTemplate(
       viewConfigs: {
         ...viewConfigs,
         saved_views: savedViews,
-        ...(hasLegacyTier
-          ? {
-              table_hidden_columns: Array.from(
-                new Set([...hiddenColumns, "output.tier"])
-              ),
-            }
-          : {}),
+        table_hidden_columns: Array.from(
+          new Set([
+            ...hiddenColumns,
+            ...legacyFieldKeys.map((key) => `output.${key}`),
+          ])
+        ),
       },
     }
   }

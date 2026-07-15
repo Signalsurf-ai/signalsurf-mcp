@@ -196,8 +196,14 @@ that cannot be handled by those RPCs.
 Table lifecycle tools mutate `databases` after product-scope validation.
 `create_table` can also apply the canonical `outbound_accounts` or `contacts`
 template before additive custom fields. Template-owned fields retain their
-semantic types during creation. Later explicit schema tools remain available
-for user-directed customization. `create_table` and `update_table` otherwise
+semantic types during creation. The Accounts template mirrors the Web
+provider-first 13-field contract, keeps Fit Score visible and sorted descending,
+and omits Active Jobs, Employees, Tier, review metadata, and provenance/planning
+fields. Applying it to an existing Accounts table preserves additive fields and
+row data, hides known legacy fields, disables legacy Tier automation, and removes
+only the exact canonical legacy Tiering chart; custom saved views are preserved.
+Later explicit schema tools remain available for user-directed customization.
+`create_table` and `update_table` otherwise
 accept a full custom schema or shallow `schemaPatch`; field definitions are validated and
 `item_ref`/relation targets must belong to the same authorized product. `delete_table` hard-deletes
 user-facing tables, refuses system tables, and removes deleted table ids from

@@ -21,13 +21,14 @@ const COMPANY_FIELDS = [
   "basic_info.year_founded",
   "basic_info.employee_count_range",
   "basic_info.markets",
+  "locations.country",
+  "locations.headquarters",
   "funding.total_investment_usd",
   "funding.last_round_amount_usd",
   "funding.last_fundraise_date",
   "funding.last_round_type",
   "funding.investors",
   "headcount.total",
-  "hiring.openings_count",
   "taxonomy.professional_network_industry",
   "taxonomy.categories",
 ] as const
@@ -428,7 +429,12 @@ function crustdataCompanyPayload(filters: JsonRecord, limit: number) {
 
   return clean({
     filters: filtersGroup,
-    fields: [...COMPANY_FIELDS],
+    fields: [
+      ...COMPANY_FIELDS,
+      ...(activeJobCount.some((range) => range.min != null || range.max != null)
+        ? ["hiring.openings_count"]
+        : []),
+    ],
     sorts: [{ column: "headcount.total", order: "desc" }],
     limit,
   })

@@ -318,8 +318,15 @@ Tables:
   Pass `template="outbound_accounts"` or `template="contacts"` to start from
   the canonical outbound account or contact baseline. Extra schema fields are
   additive; same-key fields in that create call cannot downgrade the baseline.
+  The Accounts baseline contains only Company, Domain, Website, LinkedIn,
+  Location, Industry, Company Size, Funding Stage, Latest Round, Tech Stack,
+  Fit Score, Fit Reason, and Status. Fit Score is visible and sorted descending;
+  provider facts auto-reveal when populated. Active Jobs, Employees, Tier, and
+  review/provenance/planning fields are not created by default.
 - `update_table`: updates table metadata, custom schema, saved view config,
-  item type, display order, or folder placement.
+  item type, display order, or folder placement. Applying the Accounts template
+  to an existing table preserves additive legacy/custom fields; known legacy
+  fields remain hidden, and legacy Tier is made non-automatable.
 - `delete_table`: hard-deletes one or more user-facing tables after product
   scope validation, then removes those table ids from active Surf Points'
   `databaseIds`. System tables cannot be deleted through MCP.

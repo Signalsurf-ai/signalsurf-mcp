@@ -41,8 +41,8 @@ describe("Deepline managed search routing", () => {
       { column: "headcount.total", order: "desc" },
     ])
     expect(payload.fields).toContain("hiring.openings_count")
-    expect(payload.fields).not.toContain("locations.country")
-    expect(payload.fields).not.toContain("locations.headquarters")
+    expect(payload.fields).toContain("locations.country")
+    expect(payload.fields).toContain("locations.headquarters")
     expect(leafConditions(payload.filters)).toEqual(
       expect.arrayContaining([
         { field: "locations.country", type: "in", value: ["USA"] },
@@ -62,6 +62,24 @@ describe("Deepline managed search routing", () => {
         },
       ])
     )
+  })
+
+  it("requests hiring counts only for an explicit active-job filter", () => {
+    const defaultPayload = buildDeeplineSearchPayload(
+      "crustdata_v3_company_search",
+      "companies",
+      { industries: ["Software Development"] },
+      3
+    )
+    const hiringPayload = buildDeeplineSearchPayload(
+      "crustdata_v3_company_search",
+      "companies",
+      { activeJobCount: { min: 1 } },
+      3
+    )
+
+    expect(defaultPayload.fields).not.toContain("hiring.openings_count")
+    expect(hiringPayload.fields).toContain("hiring.openings_count")
   })
 
   it("rejects people constraints on company search instead of silently broadening", () => {
