@@ -29,12 +29,11 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
     "active_job_count",
     "hiring_signal",
     "fit_score",
-    "tier",
     "status",
     "fit_reason",
   ],
   migration_note:
-    "Schema v3 is the company/account baseline for outbound: identify accounts, preserve structured technology and hiring data, enrich buying context, qualify ICP fit with human review, tier them, and then hand qualified rows to people/contact discovery. Contact readiness, campaign state, replies, and meetings belong to contact or campaign tables.",
+    "Schema v3 is the company/account baseline for outbound: identify accounts, preserve structured technology and hiring data, enrich buying context, score ICP fit, and hand human-qualified rows to people/contact discovery. New templates omit tier; pre-existing legacy tier fields remain additive and are not an eligibility source. Contact readiness, campaign state, replies, and meetings belong to contact or campaign tables.",
   fields: [
     {
       key: "company",
@@ -214,18 +213,10 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
         "1-10 ICP fit score. Prefer Quick Surf for reusable scoring across rows.",
     },
     {
-      key: "tier",
-      type: "enum",
-      label: "Tier",
-      options: ["tier_1", "tier_2", "tier_3", "disqualified"],
-      description:
-        "Human or agent-assigned account tier used to choose manual versus automated follow-up.",
-    },
-    {
       key: "fit_reason",
       type: "string",
       label: "Fit Reason",
-      description: "Concise explanation for the fit score and tier.",
+      description: "Concise evidence-based explanation for the fit score.",
     },
     {
       key: "risk_reason",
@@ -297,7 +288,6 @@ const OUTBOUND_ACCOUNT_VIEW_CONFIGS: JsonRecord = {
       viewType: "board",
       groupByKey: "status",
     },
-    { id: "tiering", name: "Tiering", viewType: "chart" },
   ],
   table_hidden_columns: [
     "output.domain",
@@ -452,7 +442,7 @@ const TABLE_TEMPLATES: Record<
 > = {
   outbound_accounts: {
     description:
-      "Company account list for outbound: ICP, qualification, tiering, and account lifecycle.",
+      "Company account list for outbound: ICP scoring, human qualification, and account lifecycle.",
     color: "#0F766E",
     itemType: "outbound_account",
     schema: OUTBOUND_ACCOUNT_SCHEMA,

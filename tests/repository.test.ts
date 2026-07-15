@@ -2159,6 +2159,11 @@ describe("SignalSurfRepository", () => {
         fields: [
           { key: "name", type: "text", label: "Company Name" },
           { key: "priority", type: "enum", options: ["P0", "P1"] },
+          {
+            key: "tier",
+            type: "enum",
+            options: ["tier_1", "tier_2", "tier_3"],
+          },
         ],
       },
     })
@@ -2171,6 +2176,7 @@ describe("SignalSurfRepository", () => {
           fields: [
             { key: "name", label: "Company Name" },
             { key: "priority", type: "enum" },
+            { key: "tier", type: "enum" },
           ],
         },
       },
@@ -2196,6 +2202,7 @@ describe("SignalSurfRepository", () => {
         expect.objectContaining({ key: "company", type: "string" }),
         expect.objectContaining({ key: "tech_stack", type: "array" }),
         expect.objectContaining({ key: "priority", type: "enum" }),
+        expect.objectContaining({ key: "tier", type: "enum" }),
       ])
     )
   })
@@ -2250,7 +2257,13 @@ describe("SignalSurfRepository", () => {
       type: "boolean",
       label: "YC",
     })
+    expect(accountFields.has("tier")).toBe(false)
     expect(accountFields.has("campaign_ready")).toBe(false)
+    expect(
+      (
+        accounts.database.viewConfigs.saved_views as Array<{ id?: string }>
+      ).map((view) => view.id)
+    ).not.toContain("tiering")
 
     const contacts = await repo.createTable(context, {
       name: "Outbound Contacts",
