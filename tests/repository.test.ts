@@ -1,39 +1,39 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest";
 
-import { sha256Hex } from "../src/auth.js"
-import { SignalSurfRepository } from "../src/repository.js"
-import type { SignalSurfContext } from "../src/types.js"
-import { FakeSupabase } from "./fake-supabase.js"
+import { sha256Hex } from "../src/auth.js";
+import { SignalSurfRepository } from "../src/repository.js";
+import type { SignalSurfContext } from "../src/types.js";
+import { FakeSupabase } from "./fake-supabase.js";
 
 const context: SignalSurfContext = {
   productId: "00000000-0000-4000-8000-000000000001",
   userId: "00000000-0000-4000-8000-000000000010",
   role: "editor",
   tokenName: "test-agent",
-}
+};
 
-const secondProductId = "00000000-0000-4000-8000-000000000002"
-const org1 = "00000000-0000-4000-8000-000000000701"
-const org2 = "00000000-0000-4000-8000-000000000702"
-const db1 = "00000000-0000-4000-8000-000000000201"
-const db2 = "00000000-0000-4000-8000-000000000202"
-const otherProductDb = "00000000-0000-4000-8000-000000000299"
-const surfPoint1 = "00000000-0000-4000-8000-000000000101"
-const surfPoint2 = "00000000-0000-4000-8000-000000000104"
-const otherProductSurfPoint = "00000000-0000-4000-8000-000000000103"
-const row1 = "00000000-0000-4000-8000-000000000301"
-const row2 = "00000000-0000-4000-8000-000000000302"
-const otherProductRow = "00000000-0000-4000-8000-000000000399"
-const source1 = "00000000-0000-4000-8000-000000000801"
-const otherProductSource = "00000000-0000-4000-8000-000000000802"
-const tool1 = "00000000-0000-4000-8000-000000000901"
-const tool2 = "00000000-0000-4000-8000-000000000902"
-const accountListProfile1 = "00000000-0000-4000-8000-000000000a01"
-const archivedAccountListProfile = "00000000-0000-4000-8000-000000000a02"
-const otherProductAccountListProfile = "00000000-0000-4000-8000-000000000a99"
-const pendingJob = "00000000-0000-4000-8000-000000000401"
-const otherProductJob = "00000000-0000-4000-8000-000000000402"
-const completedJob = "00000000-0000-4000-8000-000000000403"
+const secondProductId = "00000000-0000-4000-8000-000000000002";
+const org1 = "00000000-0000-4000-8000-000000000701";
+const org2 = "00000000-0000-4000-8000-000000000702";
+const db1 = "00000000-0000-4000-8000-000000000201";
+const db2 = "00000000-0000-4000-8000-000000000202";
+const otherProductDb = "00000000-0000-4000-8000-000000000299";
+const surfPoint1 = "00000000-0000-4000-8000-000000000101";
+const surfPoint2 = "00000000-0000-4000-8000-000000000104";
+const otherProductSurfPoint = "00000000-0000-4000-8000-000000000103";
+const row1 = "00000000-0000-4000-8000-000000000301";
+const row2 = "00000000-0000-4000-8000-000000000302";
+const otherProductRow = "00000000-0000-4000-8000-000000000399";
+const source1 = "00000000-0000-4000-8000-000000000801";
+const otherProductSource = "00000000-0000-4000-8000-000000000802";
+const tool1 = "00000000-0000-4000-8000-000000000901";
+const tool2 = "00000000-0000-4000-8000-000000000902";
+const accountListProfile1 = "00000000-0000-4000-8000-000000000a01";
+const archivedAccountListProfile = "00000000-0000-4000-8000-000000000a02";
+const otherProductAccountListProfile = "00000000-0000-4000-8000-000000000a99";
+const pendingJob = "00000000-0000-4000-8000-000000000401";
+const otherProductJob = "00000000-0000-4000-8000-000000000402";
+const completedJob = "00000000-0000-4000-8000-000000000403";
 
 function makeDb() {
   return new FakeSupabase({
@@ -431,24 +431,24 @@ function makeDb() {
         updated_at: "2026-06-04T00:00:00Z",
       },
     ],
-  })
+  });
 }
 
 describe("SignalSurfRepository", () => {
   it("lists only active surf points in the current product", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
-    const result = await repo.listSurfPoints(context)
+    const result = await repo.listSurfPoints(context);
 
     expect(
-      result.surfPoints.map((point: { name: string }) => point.name)
-    ).toEqual(["Active", "Second"])
-  })
+      result.surfPoints.map((point: { name: string }) => point.name),
+    ).toEqual(["Active", "Second"]);
+  });
 
   it("reads one product-scoped surf point", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(repo.getSurfPoint(context, surfPoint1)).resolves.toMatchObject(
       {
@@ -456,19 +456,19 @@ describe("SignalSurfRepository", () => {
           surfPointId: surfPoint1,
           name: "Active",
         },
-      }
-    )
+      },
+    );
 
     await expect(
-      repo.getSurfPoint(context, otherProductSurfPoint)
-    ).rejects.toMatchObject({ code: "NOT_FOUND" })
-  })
+      repo.getSurfPoint(context, otherProductSurfPoint),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
 
   it("reads product-scoped brand context without leaking other goal fields", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
-    const { brandContext } = await repo.getBrandContext(context)
+    const { brandContext } = await repo.getBrandContext(context);
 
     expect(brandContext).toEqual({
       productId: context.productId,
@@ -481,17 +481,17 @@ describe("SignalSurfRepository", () => {
       competitors: ["Globex", "Initech"],
       officialWebsite: "https://acme.example",
       updatedAt: "2026-06-02T00:00:00Z",
-    })
-  })
+    });
+  });
 
   it("returns empty brand context when the product has no goals row", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const { brandContext } = await repo.getBrandContext({
       ...context,
       productId: secondProductId,
-    })
+    });
 
     expect(brandContext).toEqual({
       productId: secondProductId,
@@ -504,32 +504,32 @@ describe("SignalSurfRepository", () => {
       competitors: [],
       officialWebsite: null,
       updatedAt: null,
-    })
-  })
+    });
+  });
 
   it("soft-deletes surf points and cancels pending jobs", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
-    await repo.deleteSurfPoints(context, [surfPoint1])
+    await repo.deleteSurfPoints(context, [surfPoint1]);
 
     const row = db.tables.playbooks.find(
-      (playbook) => playbook.id === surfPoint1
-    )
-    expect(row).toBeTruthy()
-    expect(row?.deleted_at).toEqual(expect.any(String))
-    expect(db.tables.surf_jobs[0].status).toBe("failed")
-    expect(db.tables.user_preferences[0].current_playbook_id).toBe(surfPoint2)
-  })
+      (playbook) => playbook.id === surfPoint1,
+    );
+    expect(row).toBeTruthy();
+    expect(row?.deleted_at).toEqual(expect.any(String));
+    expect(db.tables.surf_jobs[0].status).toBe("failed");
+    expect(db.tables.user_preferences[0].current_playbook_id).toBe(surfPoint2);
+  });
 
   it("queues an active surf point run", async () => {
-    const db = makeDb()
-    db.tables.surf_jobs = []
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    db.tables.surf_jobs = [];
+    const repo = new SignalSurfRepository(db as any);
 
     const result = await repo.runSurfPoint(context, {
       surfPointId: surfPoint1,
-    })
+    });
 
     expect(result).toMatchObject({
       enqueued: true,
@@ -542,8 +542,8 @@ describe("SignalSurfRepository", () => {
         jobType: "extract",
         status: "pending",
       },
-    })
-    expect(db.tables.surf_jobs).toHaveLength(1)
+    });
+    expect(db.tables.surf_jobs).toHaveLength(1);
     expect(db.tables.surf_jobs[0]).toMatchObject({
       product_id: context.productId,
       user_id: context.userId,
@@ -556,17 +556,17 @@ describe("SignalSurfRepository", () => {
         source_id: source1,
         triggered_by: "mcp",
       },
-    })
-    expect(db.tables.surf_jobs[0].id).toEqual(expect.any(String))
-  })
+    });
+    expect(db.tables.surf_jobs[0].id).toEqual(expect.any(String));
+  });
 
   it("deduplicates pending surf point runs by default", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const result = await repo.runSurfPoint(context, {
       surfPointId: surfPoint1,
-    })
+    });
 
     expect(result).toMatchObject({
       enqueued: false,
@@ -580,63 +580,63 @@ describe("SignalSurfRepository", () => {
         jobType: "extract",
         status: "pending",
       },
-    })
-    expect(db.tables.surf_jobs).toHaveLength(1)
-  })
+    });
+    expect(db.tables.surf_jobs).toHaveLength(1);
+  });
 
   it("requires an explicit override to run inactive surf points", async () => {
-    const db = makeDb()
-    db.tables.surf_jobs = []
+    const db = makeDb();
+    db.tables.surf_jobs = [];
     const surfPoint = db.tables.playbooks.find(
-      (playbook) => playbook.id === surfPoint1
-    )
-    surfPoint!.is_active = false
-    const repo = new SignalSurfRepository(db as any)
+      (playbook) => playbook.id === surfPoint1,
+    );
+    surfPoint!.is_active = false;
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
-      repo.runSurfPoint(context, { surfPointId: surfPoint1 })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" })
+      repo.runSurfPoint(context, { surfPointId: surfPoint1 }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
     await expect(
       repo.runSurfPoint(context, {
         surfPointId: surfPoint1,
         allowInactive: true,
-      })
+      }),
     ).resolves.toMatchObject({
       enqueued: true,
       job: {
         surfPointId: surfPoint1,
         status: "pending",
       },
-    })
-  })
+    });
+  });
 
   it("uses idempotency keys to avoid duplicate surf point runs", async () => {
-    const db = makeDb()
-    db.tables.surf_jobs = []
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    db.tables.surf_jobs = [];
+    const repo = new SignalSurfRepository(db as any);
 
     const first = await repo.runSurfPoint(context, {
       surfPointId: surfPoint1,
       idempotencyKey: "daily-digest-2026-06-04",
-    })
+    });
     const second = await repo.runSurfPoint(context, {
       surfPointId: surfPoint1,
       idempotencyKey: "daily-digest-2026-06-04",
       dedupePending: false,
-    })
+    });
 
-    expect(first).toMatchObject({ enqueued: true })
+    expect(first).toMatchObject({ enqueued: true });
     expect(second).toMatchObject({
       enqueued: false,
       reason: "idempotency_or_active_jobs_exist",
-    })
-    expect(second.job.jobId).toBe(first.job.jobId)
-    expect(db.tables.surf_jobs).toHaveLength(1)
-  })
+    });
+    expect(second.job.jobId).toBe(first.job.jobId);
+    expect(db.tables.surf_jobs).toHaveLength(1);
+  });
 
   it("reads, lists, and cancels product-scoped surf jobs", async () => {
-    const db = makeDb()
+    const db = makeDb();
     db.tables.surf_jobs.push({
       id: otherProductJob,
       product_id: "00000000-0000-4000-8000-000000000099",
@@ -646,8 +646,8 @@ describe("SignalSurfRepository", () => {
       job_type: "extract",
       status: "pending",
       created_at: "2026-06-02T00:00:00Z",
-    })
-    const repo = new SignalSurfRepository(db as any)
+    });
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(repo.getSurfJob(context, pendingJob)).resolves.toMatchObject({
       job: {
@@ -655,20 +655,20 @@ describe("SignalSurfRepository", () => {
         surfPointId: surfPoint1,
         status: "pending",
       },
-    })
+    });
 
-    const list = await repo.listSurfJobs(context)
+    const list = await repo.listSurfJobs(context);
     expect(list.jobs.map((job: { jobId: string }) => job.jobId)).toEqual([
       pendingJob,
-    ])
+    ]);
 
     await expect(
-      repo.getSurfJob(context, otherProductJob)
+      repo.getSurfJob(context, otherProductJob),
     ).rejects.toMatchObject({
       code: "NOT_FOUND",
-    })
+    });
 
-    const cancelled = await repo.cancelSurfJob(context, pendingJob)
+    const cancelled = await repo.cancelSurfJob(context, pendingJob);
     expect(cancelled).toMatchObject({
       cancelled: true,
       job: {
@@ -676,16 +676,16 @@ describe("SignalSurfRepository", () => {
         status: "failed",
         lastError: "Cancelled by MCP",
       },
-    })
+    });
     expect(db.tables.surf_jobs[0]).toMatchObject({
       status: "failed",
       last_error: "Cancelled by MCP",
       completed_at: expect.any(String),
-    })
-  })
+    });
+  });
 
   it("waits for surf jobs and returns timeout state for active jobs", async () => {
-    const db = makeDb()
+    const db = makeDb();
     db.tables.surf_jobs.push({
       id: completedJob,
       product_id: context.productId,
@@ -695,14 +695,14 @@ describe("SignalSurfRepository", () => {
       job_type: "extract",
       status: "completed",
       created_at: "2026-06-02T00:00:00Z",
-    })
-    const repo = new SignalSurfRepository(db as any)
+    });
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.waitForSurfJob(context, {
         jobId: completedJob,
         timeoutMs: 0,
-      })
+      }),
     ).resolves.toMatchObject({
       terminal: true,
       timedOut: false,
@@ -711,13 +711,13 @@ describe("SignalSurfRepository", () => {
         jobId: completedJob,
         status: "completed",
       },
-    })
+    });
 
     await expect(
       repo.waitForSurfJob(context, {
         jobId: pendingJob,
         timeoutMs: 0,
-      })
+      }),
     ).resolves.toMatchObject({
       terminal: false,
       timedOut: true,
@@ -726,14 +726,14 @@ describe("SignalSurfRepository", () => {
         jobId: pendingJob,
         status: "pending",
       },
-    })
-  })
+    });
+  });
 
   it("lists and toggles safe surf point source metadata", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
-    const result = await repo.listSurfPointSources(context, surfPoint1)
+    const result = await repo.listSurfPointSources(context, surfPoint1);
 
     expect(result).toMatchObject({
       surfPointId: surfPoint1,
@@ -751,36 +751,36 @@ describe("SignalSurfRepository", () => {
           updatedAt: "2026-06-01T00:00:00Z",
         },
       ],
-    })
-    expect(result.sources[0]).not.toHaveProperty("config")
-    expect(result.sources[0]).not.toHaveProperty("credentials")
+    });
+    expect(result.sources[0]).not.toHaveProperty("config");
+    expect(result.sources[0]).not.toHaveProperty("credentials");
 
     const updated = await repo.setSurfPointSourceActive(context, {
       sourceId: source1,
       isActive: false,
-    })
+    });
 
     expect(updated.source).toMatchObject({
       sourceId: source1,
       isActive: false,
-    })
+    });
     expect(db.tables.sources[0]).toMatchObject({
       id: source1,
       is_active: false,
       updated_at: expect.any(String),
-    })
+    });
 
     await expect(
       repo.setSurfPointSourceActive(context, {
         sourceId: otherProductSource,
         isActive: false,
-      })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" })
-  })
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
 
   it("creates and updates typed surf point source config without leaking secrets", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const created = await repo.createSurfPointSource(context, {
       surfPointId: surfPoint1,
@@ -794,7 +794,7 @@ describe("SignalSurfRepository", () => {
         body: { limit: 100 },
         responsePath: "$.items",
       },
-    })
+    });
 
     expect(created).toMatchObject({
       replacedCount: 0,
@@ -805,12 +805,12 @@ describe("SignalSurfRepository", () => {
         url: "https://example.com/api/leads",
         schedule: "0 */2 * * *",
       },
-    })
-    expect(created.source).not.toHaveProperty("headers")
-    expect(created.source).not.toHaveProperty("auth")
+    });
+    expect(created.source).not.toHaveProperty("headers");
+    expect(created.source).not.toHaveProperty("auth");
     const inserted = db.tables.sources.find(
-      (source) => source.id === created.source.sourceId
-    )
+      (source) => source.id === created.source.sourceId,
+    );
     expect(inserted).toMatchObject({
       user_id: context.userId,
       playbook_id: surfPoint1,
@@ -819,14 +819,14 @@ describe("SignalSurfRepository", () => {
         response_path: "$.items",
         headers: { Authorization: "Bearer secret" },
       },
-    })
+    });
 
     const updated = await repo.updateSurfPointSource(context, {
       sourceId: created.source.sourceId,
       pullConfigPatch: { schedule: "0 9 * * *" },
       metadataPatch: { provider: "partner-api" },
       isActive: false,
-    })
+    });
 
     expect(updated).toMatchObject({
       changedFields: ["is_active", "pull_config", "metadata"],
@@ -836,23 +836,23 @@ describe("SignalSurfRepository", () => {
         schedule: "0 9 * * *",
         isActive: false,
       },
-    })
-  })
+    });
+  });
 
   it("returns the callable SignalSurf URL for custom webhook sources", async () => {
-    const previousUrl = process.env.SIGNALSURF_SUPABASE_URL
-    process.env.SIGNALSURF_SUPABASE_URL = "https://example.supabase.co"
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const previousUrl = process.env.SIGNALSURF_SUPABASE_URL;
+    process.env.SIGNALSURF_SUPABASE_URL = "https://example.supabase.co";
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     try {
       const created = await repo.createSurfPointSource(context, {
         surfPointId: surfPoint1,
         sourceType: "webhook",
         name: "BlockRun intake",
-      })
-      const sourceId = created.source.sourceId
-      const webhookUrl = `https://example.supabase.co/functions/v1/webhook-signal?source_id=${sourceId}`
+      });
+      const sourceId = created.source.sourceId;
+      const webhookUrl = `https://example.supabase.co/functions/v1/webhook-signal?source_id=${sourceId}`;
 
       expect(created).toMatchObject({
         webhookUrl,
@@ -864,26 +864,26 @@ describe("SignalSurfRepository", () => {
           webhookUrl,
           webhookSecretConfigured: false,
         },
-      })
+      });
       expect(
-        db.tables.sources.find((source) => source.id === sourceId)
+        db.tables.sources.find((source) => source.id === sourceId),
       ).toMatchObject({
         user_id: context.userId,
         playbook_id: surfPoint1,
         type: "webhook",
-      })
+      });
     } finally {
       if (previousUrl === undefined) {
-        delete process.env.SIGNALSURF_SUPABASE_URL
+        delete process.env.SIGNALSURF_SUPABASE_URL;
       } else {
-        process.env.SIGNALSURF_SUPABASE_URL = previousUrl
+        process.env.SIGNALSURF_SUPABASE_URL = previousUrl;
       }
     }
-  })
+  });
 
   it("creates webhook import mappings and previews/replays captured payloads", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
     const importMapping = {
       version: "signalsurf.import_mapping.v1" as const,
       mappings: [
@@ -915,7 +915,7 @@ describe("SignalSurfRepository", () => {
           ],
         },
       ],
-    }
+    };
 
     const created = await repo.createSurfPointSource(context, {
       surfPointId: surfPoint1,
@@ -924,8 +924,8 @@ describe("SignalSurfRepository", () => {
       config: {
         importMapping,
       },
-    })
-    const sourceId = created.source.sourceId as string
+    });
+    const sourceId = created.source.sourceId as string;
 
     expect(created.source).toMatchObject({
       sourceType: "webhook",
@@ -935,13 +935,13 @@ describe("SignalSurfRepository", () => {
         targetDatabaseIds: [db1],
         mappedFieldCount: 3,
       },
-    })
+    });
     expect(
-      db.tables.sources.find((source) => source.id === sourceId)?.data_schema
+      db.tables.sources.find((source) => source.id === sourceId)?.data_schema,
     ).toMatchObject({
       fields: [],
       import_mapping: importMapping,
-    })
+    });
 
     const updatedMapping = {
       ...importMapping,
@@ -951,22 +951,22 @@ describe("SignalSurfRepository", () => {
           name: "Reach candidates",
         },
       ],
-    }
+    };
     const updated = await repo.updateSurfPointSource(context, {
       sourceId,
       sourceType: "webhook",
       config: {
         importMapping: updatedMapping,
       },
-    })
+    });
     expect(updated.source).toMatchObject({
       importMapping: {
         mappingNames: ["Reach candidates"],
         mappedFieldCount: 3,
       },
-    })
+    });
 
-    const payloadId = "00000000-0000-4000-8000-000000000b01"
+    const payloadId = "00000000-0000-4000-8000-000000000b01";
     db.tables.raw_signals = [
       {
         id: payloadId,
@@ -984,10 +984,10 @@ describe("SignalSurfRepository", () => {
           ],
         },
       },
-    ]
+    ];
 
     await expect(
-      repo.listWebhookPayloadSamples(context, { sourceId })
+      repo.listWebhookPayloadSamples(context, { sourceId }),
     ).resolves.toMatchObject({
       sourceId,
       totalCount: 1,
@@ -1004,7 +1004,7 @@ describe("SignalSurfRepository", () => {
           },
         },
       ],
-    })
+    });
 
     await expect(
       repo.previewImportMapping(context, {
@@ -1019,7 +1019,7 @@ describe("SignalSurfRepository", () => {
             },
           ],
         },
-      })
+      }),
     ).resolves.toMatchObject({
       rowCount: 1,
       rows: [
@@ -1033,12 +1033,12 @@ describe("SignalSurfRepository", () => {
           },
         },
       ],
-    })
+    });
 
     const capturedPreview = await repo.previewImportMapping(context, {
       sourceId,
       payloadId,
-    })
+    });
     expect(capturedPreview).toMatchObject({
       rowCount: 1,
       rows: [
@@ -1050,12 +1050,12 @@ describe("SignalSurfRepository", () => {
           },
         },
       ],
-    })
+    });
 
     const replayed = await repo.replayWebhookPayload(context, {
       sourceId,
       payloadId,
-    })
+    });
     expect(replayed).toMatchObject({
       importedRows: 1,
       rows: [
@@ -1072,11 +1072,11 @@ describe("SignalSurfRepository", () => {
         },
       ],
       warnings: [],
-    })
+    });
 
     const inserted = db.tables.entries.find(
-      (entry) => entry.entry_key_hash === "github:agenticnick"
-    )
+      (entry) => entry.entry_key_hash === "github:agenticnick",
+    );
     expect(inserted).toMatchObject({
       database_id: db1,
       playbook_id: surfPoint1,
@@ -1085,31 +1085,31 @@ describe("SignalSurfRepository", () => {
       data: {
         name: "Nick",
       },
-    })
+    });
 
-    db.tables.raw_signals[0].data.contacts[0].name = "Nick Updated"
+    db.tables.raw_signals[0].data.contacts[0].name = "Nick Updated";
     await repo.replayWebhookPayload(context, {
       sourceId,
       payloadId,
-    })
+    });
     expect(
       db.tables.entries.filter(
-        (entry) => entry.entry_key_hash === "github:agenticnick"
-      )
-    ).toHaveLength(1)
+        (entry) => entry.entry_key_hash === "github:agenticnick",
+      ),
+    ).toHaveLength(1);
     expect(
       db.tables.entries.find(
-        (entry) => entry.entry_key_hash === "github:agenticnick"
-      )?.data
+        (entry) => entry.entry_key_hash === "github:agenticnick",
+      )?.data,
     ).toMatchObject({
       name: "Nick Updated",
       email: "nick@example.com",
-    })
-  })
+    });
+  });
 
   it("rejects webhook import mappings with unsupported transform options", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
     const baseMapping = {
       version: "signalsurf.import_mapping.v1" as const,
       mappings: [
@@ -1131,7 +1131,7 @@ describe("SignalSurfRepository", () => {
           ],
         },
       ],
-    }
+    };
 
     await expect(
       repo.createSurfPointSource(context, {
@@ -1155,8 +1155,8 @@ describe("SignalSurfRepository", () => {
             ],
           },
         },
-      })
-    ).rejects.toThrow("config.importMapping must match")
+      }),
+    ).rejects.toThrow("config.importMapping must match");
 
     await expect(
       repo.createSurfPointSource(context, {
@@ -1177,13 +1177,13 @@ describe("SignalSurfRepository", () => {
             ],
           },
         },
-      })
-    ).rejects.toThrow("config.importMapping must match")
-  })
+      }),
+    ).rejects.toThrow("config.importMapping must match");
+  });
 
   it("writes platform source search config", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const created = await repo.createSurfPointSource(context, {
       surfPointId: surfPoint1,
@@ -1193,17 +1193,17 @@ describe("SignalSurfRepository", () => {
         keywords: ["x402", "MCP"],
         trackedAccounts: ["@blockrun"],
       },
-    })
+    });
 
     expect(created.source).toMatchObject({
       sourceId: source1,
       sourceType: "platform",
       endpointId: "threads-keyword-search",
-    })
-    expect(created).toMatchObject({ updatedExisting: true })
+    });
+    expect(created).toMatchObject({ updatedExisting: true });
     expect(
-      db.tables.sources.filter((source) => source.playbook_id === surfPoint1)
-    ).toHaveLength(1)
+      db.tables.sources.filter((source) => source.playbook_id === surfPoint1),
+    ).toHaveLength(1);
     expect(db.tables.platform_search_config).toMatchObject([
       {
         product_id: context.productId,
@@ -1211,7 +1211,7 @@ describe("SignalSurfRepository", () => {
         platform: "threads-keyword-search",
         keywords: ["x402", "MCP"],
       },
-    ])
+    ]);
     expect(db.tables.tracked_accounts).toMatchObject([
       {
         product_id: context.productId,
@@ -1219,11 +1219,11 @@ describe("SignalSurfRepository", () => {
         platform: "threads-keyword-search",
         username: "blockrun",
       },
-    ])
-  })
+    ]);
+  });
 
   it("disables orphaned platform config when source endpoints change", async () => {
-    const db = makeDb()
+    const db = makeDb();
     db.tables.platform_search_config = [
       {
         product_id: context.productId,
@@ -1232,7 +1232,7 @@ describe("SignalSurfRepository", () => {
         is_enabled: true,
         keywords: ["old"],
       },
-    ]
+    ];
     db.tables.tracked_accounts = [
       {
         product_id: context.productId,
@@ -1241,8 +1241,8 @@ describe("SignalSurfRepository", () => {
         username: "old-account",
         is_enabled: true,
       },
-    ]
-    const repo = new SignalSurfRepository(db as any)
+    ];
+    const repo = new SignalSurfRepository(db as any);
 
     await repo.updateSurfPointSource(context, {
       sourceId: source1,
@@ -1252,7 +1252,7 @@ describe("SignalSurfRepository", () => {
         keywords: ["x402"],
         trackedAccounts: ["@blockrun"],
       },
-    })
+    });
 
     expect(db.tables.platform_search_config).toEqual(
       expect.arrayContaining([
@@ -1265,8 +1265,8 @@ describe("SignalSurfRepository", () => {
           is_enabled: true,
           keywords: ["x402"],
         }),
-      ])
-    )
+      ]),
+    );
     expect(db.tables.tracked_accounts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1279,12 +1279,12 @@ describe("SignalSurfRepository", () => {
           username: "blockrun",
           is_enabled: true,
         }),
-      ])
-    )
-  })
+      ]),
+    );
+  });
 
   it("enforces internal trigger exclusivity and supports explicit replacement", async () => {
-    const db = makeDb()
+    const db = makeDb();
     db.tables.surf_jobs.push({
       id: completedJob,
       product_id: context.productId,
@@ -1294,8 +1294,8 @@ describe("SignalSurfRepository", () => {
       job_type: "extract",
       status: "completed",
       created_at: "2026-06-02T00:00:00Z",
-    })
-    const repo = new SignalSurfRepository(db as any)
+    });
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.createSurfPointSource(context, {
@@ -1307,8 +1307,8 @@ describe("SignalSurfRepository", () => {
           triggerColumn: "stage",
           triggerValue: "qualified",
         },
-      })
-    ).rejects.toMatchObject({ code: "CONFLICT" })
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
 
     const created = await repo.createSurfPointSource(context, {
       surfPointId: surfPoint1,
@@ -1320,7 +1320,7 @@ describe("SignalSurfRepository", () => {
         triggerValue: "qualified",
       },
       replaceExisting: true,
-    })
+    });
 
     expect(created).toMatchObject({
       replacedCount: 1,
@@ -1330,22 +1330,22 @@ describe("SignalSurfRepository", () => {
         eventType: "item_updated",
         databaseId: db1,
       },
-    })
+    });
     expect(
-      db.tables.sources.find((source) => source.id === source1)
-    ).toBeFalsy()
+      db.tables.sources.find((source) => source.id === source1),
+    ).toBeFalsy();
     expect(db.tables.surf_jobs).toEqual([
       expect.objectContaining({
         id: completedJob,
         status: "completed",
       }),
-    ])
+    ]);
     expect(
-      db.tables.sources.find((source) => source.id === otherProductSource)
-    ).toBeTruthy()
+      db.tables.sources.find((source) => source.id === otherProductSource),
+    ).toBeTruthy();
     expect(
       db.tables.sources.find((source) => source.id === created.source.sourceId)
-        ?.metadata
+        ?.metadata,
     ).toMatchObject({
       source_database_name: "Companies",
       column_updates: [
@@ -1355,11 +1355,11 @@ describe("SignalSurfRepository", () => {
           value: "qualified",
         },
       ],
-    })
-  })
+    });
+  });
 
   it("deletes surf point sources after product-scope validation", async () => {
-    const db = makeDb()
+    const db = makeDb();
     db.tables.platform_search_config = [
       {
         product_id: context.productId,
@@ -1368,7 +1368,7 @@ describe("SignalSurfRepository", () => {
         is_enabled: true,
         keywords: ["old"],
       },
-    ]
+    ];
     db.tables.tracked_accounts = [
       {
         product_id: context.productId,
@@ -1377,7 +1377,7 @@ describe("SignalSurfRepository", () => {
         username: "old-account",
         is_enabled: true,
       },
-    ]
+    ];
     db.tables.surf_jobs.push({
       id: completedJob,
       product_id: context.productId,
@@ -1387,48 +1387,48 @@ describe("SignalSurfRepository", () => {
       job_type: "extract",
       status: "completed",
       created_at: "2026-06-02T00:00:00Z",
-    })
-    const repo = new SignalSurfRepository(db as any)
+    });
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.deleteSurfPointSource(context, {
         sourceId: otherProductSource,
-      })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" })
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     const deleted = await repo.deleteSurfPointSource(context, {
       sourceId: source1,
-    })
+    });
 
     expect(deleted).toEqual({
       sourceIds: [source1],
       deletedCount: 1,
-    })
+    });
     expect(
-      db.tables.sources.find((source) => source.id === source1)
-    ).toBeFalsy()
+      db.tables.sources.find((source) => source.id === source1),
+    ).toBeFalsy();
     expect(db.tables.surf_jobs).toEqual([
       expect.objectContaining({
         id: completedJob,
         status: "completed",
       }),
-    ])
+    ]);
     expect(db.tables.platform_search_config[0]).toMatchObject({
       platform: "threads-keyword-search",
       is_enabled: false,
-    })
+    });
     expect(db.tables.tracked_accounts[0]).toMatchObject({
       platform: "threads-keyword-search",
       username: "old-account",
       is_enabled: false,
-    })
-  })
+    });
+  });
 
   it("lists safe product tool metadata without leaking config secrets", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
-    const result = await repo.listProductTools(context)
+    const result = await repo.listProductTools(context);
 
     expect(result).toMatchObject({
       totalCount: 2,
@@ -1446,28 +1446,28 @@ describe("SignalSurfRepository", () => {
           isEnabled: true,
         },
       ],
-    })
-    expect(result.tools[0]).not.toHaveProperty("config")
-    expect(result.tools[0]).not.toHaveProperty("token")
-  })
+    });
+    expect(result.tools[0]).not.toHaveProperty("config");
+    expect(result.tools[0]).not.toHaveProperty("token");
+  });
 
   it("manages surf point tool ids idempotently", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(repo.listSurfPointTools(context, surfPoint1)).resolves.toEqual(
       {
         surfPointId: surfPoint1,
         toolIds: [],
         totalCount: 0,
-      }
-    )
+      },
+    );
 
     await expect(
       repo.attachSurfPointTool(context, {
         surfPointId: surfPoint1,
         toolId: tool1,
-      })
+      }),
     ).resolves.toMatchObject({
       changed: true,
       toolIds: [tool1],
@@ -1477,65 +1477,65 @@ describe("SignalSurfRepository", () => {
           auto_tool_ids: [tool1],
         },
       },
-    })
+    });
 
     await expect(
       repo.attachSurfPointTool(context, {
         surfPointId: surfPoint1,
         toolId: tool1,
-      })
+      }),
     ).resolves.toMatchObject({
       changed: false,
       toolIds: [tool1],
-    })
+    });
 
     await repo.attachSurfPointTool(context, {
       surfPointId: surfPoint1,
       toolId: tool2,
-    })
+    });
 
     await expect(
       repo.detachSurfPointTool(context, {
         surfPointId: surfPoint1,
         toolId: tool1,
-      })
+      }),
     ).resolves.toMatchObject({
       changed: true,
       toolIds: [tool2],
-    })
+    });
 
     expect(
       db.tables.playbooks.find((playbook) => playbook.id === surfPoint1)
-        ?.tool_config
+        ?.tool_config,
     ).toMatchObject({
       auto_tool_ids: [tool2],
-    })
+    });
 
     await expect(
       repo.attachSurfPointTool(context, {
         surfPointId: otherProductSurfPoint,
         toolId: tool1,
-      })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" })
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     await expect(
       repo.attachSurfPointTool(context, {
         surfPointId: surfPoint1,
         toolId: "00000000-0000-4000-8000-000000000903",
-      })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" })
-  })
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
 
   it("validates auto_tool_ids ownership when update_surf_point writes tool config", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.updateSurfPoint(context, {
         surfPointId: surfPoint1,
         toolConfigPatch: { auto_tool_ids: [tool1] },
-      })
-    ).resolves.toBeDefined()
+      }),
+    ).resolves.toBeDefined();
 
     await expect(
       repo.updateSurfPoint(context, {
@@ -1543,15 +1543,15 @@ describe("SignalSurfRepository", () => {
         toolConfigPatch: {
           auto_tool_ids: ["00000000-0000-4000-8000-000000000903"],
         },
-      })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" })
-  })
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
 
   it("lists product-scoped account list profiles", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
-    const active = await repo.listAccountListProfiles(context)
+    const active = await repo.listAccountListProfiles(context);
 
     expect(active).toMatchObject({
       totalCount: 1,
@@ -1573,19 +1573,19 @@ describe("SignalSurfRepository", () => {
           rejectAccounts: ["Agencies"],
         },
       ],
-    })
+    });
 
     const all = await repo.listAccountListProfiles(context, {
       includeArchived: true,
-    })
+    });
     expect(
-      all.profiles.map((profile: { profileId: string }) => profile.profileId)
-    ).toEqual([accountListProfile1, archivedAccountListProfile])
-  })
+      all.profiles.map((profile: { profileId: string }) => profile.profileId),
+    ).toEqual([accountListProfile1, archivedAccountListProfile]);
+  });
 
   it("creates account list profiles with structured ICP config", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const result = await repo.saveAccountListProfile(context, {
       name: "Enterprise RevOps",
@@ -1611,7 +1611,7 @@ describe("SignalSurfRepository", () => {
       },
       sampleAccounts: ["Linear"],
       rejectAccounts: ["Agencies"],
-    })
+    });
 
     expect(result).toMatchObject({
       created: true,
@@ -1631,7 +1631,7 @@ describe("SignalSurfRepository", () => {
         },
         createdBy: context.userId,
       },
-    })
+    });
     expect(db.tables.account_list_profiles.at(-1)).toMatchObject({
       id: result.profileId,
       product_id: context.productId,
@@ -1645,12 +1645,12 @@ describe("SignalSurfRepository", () => {
           includeJobBoards: true,
         },
       },
-    })
-  })
+    });
+  });
 
   it("updates and archives account list profiles without crossing product scope", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const updated = await repo.saveAccountListProfile(context, {
       id: accountListProfile1,
@@ -1666,7 +1666,7 @@ describe("SignalSurfRepository", () => {
       },
       aiPrompt: "focus on revenue operations",
       aiSummary: "Tighter RevOps ICP",
-    })
+    });
 
     expect(updated).toMatchObject({
       created: false,
@@ -1681,46 +1681,46 @@ describe("SignalSurfRepository", () => {
         },
         aiPrompt: "focus on revenue operations",
       },
-    })
+    });
 
     const stored = db.tables.account_list_profiles.find(
-      (profile) => profile.id === accountListProfile1
-    )
+      (profile) => profile.id === accountListProfile1,
+    );
     expect(stored).toMatchObject({
       created_by: context.userId,
       profile_version: 3,
       config: {
         providers: ["pdl"],
       },
-    })
+    });
 
     const archived = await repo.archiveAccountListProfile(
       context,
-      accountListProfile1
-    )
+      accountListProfile1,
+    );
     expect(archived).toMatchObject({
       archived: true,
       profile: {
         profileId: accountListProfile1,
         status: "archived",
       },
-    })
+    });
 
     await expect(
       repo.saveAccountListProfile(context, {
         id: otherProductAccountListProfile,
         name: "Denied",
         accountList: {},
-      })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" })
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     await expect(
-      repo.archiveAccountListProfile(context, otherProductAccountListProfile)
-    ).rejects.toMatchObject({ code: "NOT_FOUND" })
-  })
+      repo.archiveAccountListProfile(context, otherProductAccountListProfile),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
 
   it("does not expose hosted token creators as interactive user context", async () => {
-    const db = makeDb()
+    const db = makeDb();
     db.tables.mcp_tokens = [
       {
         id: "00000000-0000-4000-8000-000000000501",
@@ -1731,10 +1731,10 @@ describe("SignalSurfRepository", () => {
         token_sha256: sha256Hex("hosted-token"),
         revoked_at: null,
       },
-    ]
-    const repo = new SignalSurfRepository(db as any)
+    ];
+    const repo = new SignalSurfRepository(db as any);
 
-    const hostedContext = await repo.resolveMcpToken("hosted-token")
+    const hostedContext = await repo.resolveMcpToken("hosted-token");
 
     expect(hostedContext).toMatchObject({
       productId: context.productId,
@@ -1748,24 +1748,24 @@ describe("SignalSurfRepository", () => {
       ],
       role: "editor",
       tokenName: "hosted-agent",
-    })
-    expect(hostedContext?.userId).toBeUndefined()
+    });
+    expect(hostedContext?.userId).toBeUndefined();
 
-    await repo.deleteSurfPoints(hostedContext!, [surfPoint1])
+    await repo.deleteSurfPoints(hostedContext!, [surfPoint1]);
 
-    expect(db.tables.user_preferences[0].current_playbook_id).toBe(surfPoint1)
-  })
+    expect(db.tables.user_preferences[0].current_playbook_id).toBe(surfPoint1);
+  });
 
   it("resolves OAuth tokens with every authorized product id", async () => {
-    const db = makeDb()
-    db.tables.mcp_tokens = []
+    const db = makeDb();
+    db.tables.mcp_tokens = [];
     db.tables.mcp_oauth_clients = [
       {
         client_id: "ssmcp_client_multi",
         client_name: "Typeless",
         revoked_at: null,
       },
-    ]
+    ];
     db.tables.mcp_oauth_tokens = [
       {
         id: "00000000-0000-4000-8000-000000000601",
@@ -1779,12 +1779,12 @@ describe("SignalSurfRepository", () => {
         access_token_expires_at: "2999-01-01T00:00:00Z",
         revoked_at: null,
       },
-    ]
-    const repo = new SignalSurfRepository(db as any)
+    ];
+    const repo = new SignalSurfRepository(db as any);
 
     const oauthContext = await repo.resolveMcpToken("oauth-token", {
       resource: "https://mcp.signalsurf.ai/mcp",
-    })
+    });
 
     expect(oauthContext).toMatchObject({
       productId: context.productId,
@@ -1803,19 +1803,19 @@ describe("SignalSurfRepository", () => {
       ],
       role: "viewer",
       tokenName: "OAuth: Typeless",
-    })
-  })
+    });
+  });
 
   it("creates products through hosted OAuth and expands the active grant", async () => {
-    const db = makeDb()
-    const oauthTokenId = "00000000-0000-4000-8000-000000000601"
+    const db = makeDb();
+    const oauthTokenId = "00000000-0000-4000-8000-000000000601";
     db.tables.mcp_oauth_tokens = [
       {
         id: oauthTokenId,
         product_id: context.productId,
         product_ids: [context.productId],
       },
-    ]
+    ];
     const oauthContext: SignalSurfContext = {
       ...context,
       productIds: [context.productId],
@@ -1830,13 +1830,13 @@ describe("SignalSurfRepository", () => {
       scopes: ["mcp:products.write"],
       authKind: "oauth",
       oauthTokenId,
-    }
-    const repo = new SignalSurfRepository(db as any)
+    };
+    const repo = new SignalSurfRepository(db as any);
 
     const result = await repo.createProduct(oauthContext, {
       name: "Agent-created Product",
       displayOrder: 3,
-    })
+    });
 
     expect(result.product).toMatchObject({
       productId: expect.any(String),
@@ -1844,13 +1844,13 @@ describe("SignalSurfRepository", () => {
       organizationId: org1,
       organizationName: "Primary Workspace",
       ownerId: context.userId,
-    })
+    });
     expect(db.tables.products.at(-1)).toMatchObject({
       id: result.productId,
       organization_id: org1,
       owner_id: context.userId,
       name: "Agent-created Product",
-    })
+    });
     expect(db.tables.product_members).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1859,78 +1859,78 @@ describe("SignalSurfRepository", () => {
           role: "owner",
           display_order: 3,
         }),
-      ])
-    )
+      ]),
+    );
     expect(db.tables.product_goals).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           product_id: result.productId,
           user_id: context.userId,
         }),
-      ])
-    )
+      ]),
+    );
     expect(db.tables.mcp_oauth_tokens[0].product_ids).toEqual([
       context.productId,
       result.productId,
-    ])
+    ]);
     expect(oauthContext.productIds).toEqual([
       context.productId,
       result.productId,
-    ])
+    ]);
     expect(oauthContext.products?.at(-1)).toMatchObject({
       productId: result.productId,
       name: "Agent-created Product",
-    })
-  })
+    });
+  });
 
   it("rejects product creation outside hosted OAuth grants", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
-      repo.createProduct(context, { name: "Manual token product" })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" })
-  })
+      repo.createProduct(context, { name: "Manual token product" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
 
   it("creates prompt templates from scoring rubric and surf prompt", async () => {
-    const db = makeDb()
-    db.tables.databases = db.tables.databases.filter((row) => row.id === db1)
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    db.tables.databases = db.tables.databases.filter((row) => row.id === db1);
+    const repo = new SignalSurfRepository(db as any);
 
     await repo.createSurfPoint(context, {
       name: "New point",
       scoringRubric: "Score qualified leads highly.",
       surfPrompt: "Find recent funding events.",
-    })
+    });
 
-    const inserted = db.tables.playbooks.at(-1)
+    const inserted = db.tables.playbooks.at(-1);
     expect(inserted).toMatchObject({
       name: "New point",
       database_ids: [db1],
       prompt_template:
         "## Scoring Rubric\n\nScore qualified leads highly.\n\nFind recent funding events.",
-    })
-  })
+    });
+  });
 
   it("uses explicit prompt templates instead of synthesized prompt sections", async () => {
-    const db = makeDb()
-    db.tables.databases = db.tables.databases.filter((row) => row.id === db1)
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    db.tables.databases = db.tables.databases.filter((row) => row.id === db1);
+    const repo = new SignalSurfRepository(db as any);
 
     await repo.createSurfPoint(context, {
       name: "Explicit point",
       promptTemplate: "Use this exact prompt.",
       scoringRubric: "Ignored for prompt_template.",
       surfPrompt: "Also ignored for prompt_template.",
-    })
+    });
 
-    const inserted = db.tables.playbooks.at(-1)
-    expect(inserted?.prompt_template).toBe("Use this exact prompt.")
-  })
+    const inserted = db.tables.playbooks.at(-1);
+    expect(inserted?.prompt_template).toBe("Use this exact prompt.");
+  });
 
   it("shallow-merges surf point patches and recomputes prompt templates", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const result = await repo.updateSurfPoint(context, {
       surfPointId: surfPoint1,
@@ -1938,55 +1938,55 @@ describe("SignalSurfRepository", () => {
       toolConfigPatch: { maxResults: 10 },
       configPatch: { cadence: "daily" },
       scoringRubric: "Prefer new accounts.",
-    })
+    });
 
-    expect(result.surfPoint.variables).toMatchObject({ region: "US" })
-    expect(result.surfPoint.toolConfig).toMatchObject({ maxResults: 10 })
-    expect(result.surfPoint.config).toMatchObject({ cadence: "daily" })
-    expect(result.surfPoint.promptTemplate).toContain("Prefer new accounts.")
-  })
+    expect(result.surfPoint.variables).toMatchObject({ region: "US" });
+    expect(result.surfPoint.toolConfig).toMatchObject({ maxResults: 10 });
+    expect(result.surfPoint.config).toMatchObject({ cadence: "daily" });
+    expect(result.surfPoint.promptTemplate).toContain("Prefer new accounts.");
+  });
 
   it("rejects conflicting full and patch updates", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.updateSurfPoint(context, {
         surfPointId: surfPoint1,
         variables: { region: "US" },
         variablesPatch: { segment: "enterprise" },
-      })
-    ).rejects.toThrow("Pass either variables or variablesPatch")
-  })
+      }),
+    ).rejects.toThrow("Pass either variables or variablesPatch");
+  });
 
   it("rejects table reads outside the token product", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.readTable(context, {
         databaseId: otherProductDb,
-      })
-    ).rejects.toThrow("Database not found or access denied")
-  })
+      }),
+    ).rejects.toThrow("Database not found or access denied");
+  });
 
   it("preserves exact pre-pagination counts when reading tables", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const result = await repo.readTable(context, {
       databaseId: db1,
       limit: 1,
       offset: 0,
-    })
+    });
 
-    expect(result.rows).toHaveLength(1)
-    expect(result.totalCount).toBe(2)
-  })
+    expect(result.rows).toHaveLength(1);
+    expect(result.totalCount).toBe(2);
+  });
 
   it("filters and sorts table rows with UI-style data operators", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const result = await repo.readTable(context, {
       databaseId: db1,
@@ -1995,21 +1995,21 @@ describe("SignalSurfRepository", () => {
         { field: "tags", op: "array_contains", value: "AI" },
       ],
       sorts: [{ field: "event_date", direction: "desc" }],
-    })
+    });
 
     expect(result.rows.map((row: { data: any }) => row.data.name)).toEqual([
       "Acme",
-    ])
+    ]);
     expect(result).toMatchObject({
       totalCount: 1,
       scannedCount: 2,
       hasMoreToScan: false,
-    })
-  })
+    });
+  });
 
   it("supports OR table filters and data-field sorting", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const result = await repo.readTable(context, {
       databaseId: db1,
@@ -2019,18 +2019,18 @@ describe("SignalSurfRepository", () => {
         { field: "stage", op: "eq", value: "qualified" },
       ],
       sorts: [{ field: "score", direction: "asc" }],
-    })
+    });
 
     expect(result.rows.map((row: { data: any }) => row.data.name)).toEqual([
       "Beta",
       "Acme",
-    ])
-    expect(result.totalCount).toBe(2)
-  })
+    ]);
+    expect(result.totalCount).toBe(2);
+  });
 
   it("lists and reads database saved views", async () => {
-    const db = makeDb()
-    const database = db.tables.databases.find((row) => row.id === db1)
+    const db = makeDb();
+    const database = db.tables.databases.find((row) => row.id === db1);
     database!.view_configs = {
       saved_views: [
         {
@@ -2048,31 +2048,31 @@ describe("SignalSurfRepository", () => {
           ],
         },
       ],
-    }
-    const repo = new SignalSurfRepository(db as any)
+    };
+    const repo = new SignalSurfRepository(db as any);
 
-    const views = await repo.listDatabaseViews(context, db1)
+    const views = await repo.listDatabaseViews(context, db1);
     expect(views.views).toMatchObject([
       {
         id: "hot",
         name: "Hot Leads",
         filters: [{ field: "score", op: "gte", value: 5 }],
       },
-    ])
+    ]);
 
     const result = await repo.readTableView(context, {
       databaseId: db1,
       viewId: "hot",
-    })
-    expect(result.view).toMatchObject({ id: "hot", name: "Hot Leads" })
+    });
+    expect(result.view).toMatchObject({ id: "hot", name: "Hot Leads" });
     expect(result.rows.map((row: { data: any }) => row.data.name)).toEqual([
       "Acme",
-    ])
-  })
+    ]);
+  });
 
   it("adds, updates, and removes database schema fields", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.addDatabaseField(context, {
@@ -2083,38 +2083,38 @@ describe("SignalSurfRepository", () => {
           label: "Priority",
           options: ["P0", "P1"],
         },
-      })
+      }),
     ).resolves.toMatchObject({
       fields: [
         { key: "parent" },
         { key: "priority", type: "enum", label: "Priority" },
       ],
-    })
+    });
 
     await expect(
       repo.updateDatabaseField(context, {
         databaseId: db1,
         fieldKey: "priority",
         patch: { label: "Deal Priority" },
-      })
+      }),
     ).resolves.toMatchObject({
       fields: [{ key: "parent" }, { key: "priority", label: "Deal Priority" }],
-    })
+    });
 
     await expect(
       repo.removeDatabaseField(context, {
         databaseId: db1,
         fieldKey: "priority",
-      })
+      }),
     ).resolves.toMatchObject({
       removesRowData: false,
       fields: [{ key: "parent" }],
-    })
-  })
+    });
+  });
 
   it("creates and updates tables with custom schema", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const created = await repo.createTable(context, {
       name: "Agent Accounts",
@@ -2134,10 +2134,19 @@ describe("SignalSurfRepository", () => {
         ],
       },
       viewConfigs: {
-        saved_views: [{ id: "default", name: "All accounts" }],
+        saved_views: [
+          { id: "default", name: "All accounts" },
+          {
+            id: "tiering",
+            name: "Tiering",
+            viewType: "board",
+            groupByKey: "tier",
+          },
+        ],
+        table_hidden_columns: [],
       },
       displayOrder: 8,
-    })
+    });
 
     expect(created.database).toMatchObject({
       databaseId: expect.any(String),
@@ -2150,7 +2159,7 @@ describe("SignalSurfRepository", () => {
           { key: "owner", target_database_id: db2 },
         ],
       },
-    })
+    });
 
     const updated = await repo.updateTable(context, {
       databaseId: created.database.databaseId,
@@ -2166,7 +2175,7 @@ describe("SignalSurfRepository", () => {
           },
         ],
       },
-    })
+    });
 
     expect(updated).toMatchObject({
       changedFields: ["name", "schema"],
@@ -2180,36 +2189,44 @@ describe("SignalSurfRepository", () => {
           ],
         },
       },
-    })
+    });
 
     const upgraded = await repo.updateTable(context, {
       databaseId: created.database.databaseId,
       template: "outbound_accounts",
-    })
+    });
     const upgradedFields = upgraded.database.schema.fields as Array<{
-      key: string
-      type?: string
-    }>
+      key: string;
+      type?: string;
+    }>;
     expect(upgraded.database).toMatchObject({
       itemType: "outbound_account",
       schema: {
         template_key: "outbound_accounts",
         schema_version: 3,
       },
-    })
+    });
     expect(upgradedFields).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ key: "company", type: "string" }),
         expect.objectContaining({ key: "tech_stack", type: "array" }),
         expect.objectContaining({ key: "priority", type: "enum" }),
         expect.objectContaining({ key: "tier", type: "enum" }),
-      ])
-    )
-  })
+      ]),
+    );
+    expect(upgraded.database.viewConfigs.table_hidden_columns).toContain(
+      "output.tier",
+    );
+    expect(
+      (upgraded.database.viewConfigs.saved_views as Array<{ id?: string }>).map(
+        (view) => view.id,
+      ),
+    ).not.toContain("tiering");
+  });
 
   it("creates outbound account and contact tables from additive templates", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const accounts = await repo.createTable(context, {
       name: "Outbound Accounts",
@@ -2220,50 +2237,50 @@ describe("SignalSurfRepository", () => {
           { key: "is_yc", type: "boolean", label: "YC" },
         ],
       },
-    })
+    });
     const accountSchema = accounts.database.schema as {
-      template_key?: string
-      database_kind?: string
-      required_fields?: string[]
-      fields?: Array<Record<string, unknown>>
-    }
+      template_key?: string;
+      database_kind?: string;
+      required_fields?: string[];
+      fields?: Array<Record<string, unknown>>;
+    };
     const accountFields = new Map(
-      accountSchema.fields?.map((field) => [field.key, field]) ?? []
-    )
+      accountSchema.fields?.map((field) => [field.key, field]) ?? [],
+    );
 
-    expect(accounts.database).toMatchObject({ itemType: "outbound_account" })
+    expect(accounts.database).toMatchObject({ itemType: "outbound_account" });
     expect(accountSchema).toMatchObject({
       template_key: "outbound_accounts",
       database_kind: "outbound.account_list",
       required_fields: ["company", "status"],
-    })
+    });
     expect(accountFields.get("website")).toMatchObject({
       type: "url",
       label: "Website",
-    })
+    });
     expect(accountFields.get("status")).toMatchObject({
       type: "enum",
       options: ["new", "researching", "qualified", "rejected"],
-    })
-    expect(accountSchema).toMatchObject({ schema_version: 3 })
-    expect(accountFields.get("tech_stack")).toMatchObject({ type: "array" })
+    });
+    expect(accountSchema).toMatchObject({ schema_version: 3 });
+    expect(accountFields.get("tech_stack")).toMatchObject({ type: "array" });
     expect(accountFields.get("active_job_count")).toMatchObject({
       type: "number",
-    })
+    });
     expect(accountFields.get("hiring_signal")).toMatchObject({
       type: "string",
-    })
+    });
     expect(accountFields.get("is_yc")).toMatchObject({
       type: "boolean",
       label: "YC",
-    })
-    expect(accountFields.has("tier")).toBe(false)
-    expect(accountFields.has("campaign_ready")).toBe(false)
+    });
+    expect(accountFields.has("tier")).toBe(false);
+    expect(accountFields.has("campaign_ready")).toBe(false);
     expect(
-      (
-        accounts.database.viewConfigs.saved_views as Array<{ id?: string }>
-      ).map((view) => view.id)
-    ).not.toContain("tiering")
+      (accounts.database.viewConfigs.saved_views as Array<{ id?: string }>).map(
+        (view) => view.id,
+      ),
+    ).not.toContain("tiering");
 
     const contacts = await repo.createTable(context, {
       name: "Outbound Contacts",
@@ -2279,43 +2296,43 @@ describe("SignalSurfRepository", () => {
           },
         ],
       },
-    })
+    });
     const contactSchema = contacts.database.schema as {
-      template_key?: string
-      fields?: Array<Record<string, unknown>>
-    }
+      template_key?: string;
+      fields?: Array<Record<string, unknown>>;
+    };
     const contactFields = new Map(
-      contactSchema.fields?.map((field) => [field.key, field]) ?? []
-    )
+      contactSchema.fields?.map((field) => [field.key, field]) ?? [],
+    );
 
-    expect(contacts.database).toMatchObject({ itemType: "contact" })
-    expect(contactSchema.template_key).toBe("contacts")
-    expect(contactFields.get("email")).toMatchObject({ type: "email" })
+    expect(contacts.database).toMatchObject({ itemType: "contact" });
+    expect(contactSchema.template_key).toBe("contacts");
+    expect(contactFields.get("email")).toMatchObject({ type: "email" });
     expect(contactFields.get("linkedin_url")).toMatchObject({
       type: "url",
       contact_platform: "linkedin",
-    })
+    });
     expect(contactFields.get("account")).toMatchObject({
       type: "item_ref",
       target_database_id: accounts.database.databaseId,
-    })
-  })
+    });
+  });
 
   it("refuses to apply an outbound template to an unclassified table", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.updateTable(context, {
         databaseId: db1,
         template: "outbound_accounts",
-      })
-    ).rejects.toThrow(/already classified as outbound\.account_list/i)
-  })
+      }),
+    ).rejects.toThrow(/already classified as outbound\.account_list/i);
+  });
 
   it("rejects table schemas that reference another product", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.createTable(context, {
@@ -2329,68 +2346,68 @@ describe("SignalSurfRepository", () => {
             },
           ],
         },
-      })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" })
-  })
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
 
   it("deletes product tables and unlinks them from active surf points", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
     const secondSurfPoint = db.tables.playbooks.find(
-      (row) => row.id === surfPoint2
-    )!
-    secondSurfPoint.database_ids = [db1, db2]
+      (row) => row.id === surfPoint2,
+    )!;
+    secondSurfPoint.database_ids = [db1, db2];
 
-    const result = await repo.deleteTables(context, [db1, db1])
+    const result = await repo.deleteTables(context, [db1, db1]);
 
     expect(result).toMatchObject({
       deletedDatabaseIds: [db1],
       count: 1,
       deletedTables: [{ databaseId: db1, name: "Companies" }],
-    })
+    });
     expect(result.unlinkedSurfPoints).toEqual(
       expect.arrayContaining([
         { id: surfPoint1, databaseIds: [] },
         { id: surfPoint2, databaseIds: [db2] },
-      ])
-    )
+      ]),
+    );
     expect(db.tables.databases.some((database) => database.id === db1)).toBe(
-      false
-    )
+      false,
+    );
     expect(db.tables.databases.some((database) => database.id === db2)).toBe(
-      true
-    )
+      true,
+    );
     expect(
-      db.tables.databases.some((database) => database.id === otherProductDb)
-    ).toBe(true)
+      db.tables.databases.some((database) => database.id === otherProductDb),
+    ).toBe(true);
     expect(
-      db.tables.playbooks.find((row) => row.id === surfPoint1)?.database_ids
-    ).toEqual([])
+      db.tables.playbooks.find((row) => row.id === surfPoint1)?.database_ids,
+    ).toEqual([]);
     expect(
-      db.tables.playbooks.find((row) => row.id === surfPoint2)?.database_ids
-    ).toEqual([db2])
-  })
+      db.tables.playbooks.find((row) => row.id === surfPoint2)?.database_ids,
+    ).toEqual([db2]);
+  });
 
   it("rejects partial table deletes without deleting the valid subset", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
-      repo.deleteTables(context, [db1, otherProductDb])
-    ).rejects.toThrow("Database not found or access denied")
+      repo.deleteTables(context, [db1, otherProductDb]),
+    ).rejects.toThrow("Database not found or access denied");
 
     expect(db.tables.databases.some((database) => database.id === db1)).toBe(
-      true
-    )
+      true,
+    );
     expect(
-      db.tables.databases.some((database) => database.id === otherProductDb)
-    ).toBe(true)
-  })
+      db.tables.databases.some((database) => database.id === otherProductDb),
+    ).toBe(true);
+  });
 
   it("refuses to delete system tables through MCP", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
-    const systemDb = "00000000-0000-4000-8000-000000000298"
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
+    const systemDb = "00000000-0000-4000-8000-000000000298";
     db.tables.databases.push({
       id: systemDb,
       product_id: context.productId,
@@ -2405,20 +2422,20 @@ describe("SignalSurfRepository", () => {
       display_order: 10,
       created_at: "2026-06-01T00:00:00Z",
       updated_at: "2026-06-01T00:00:00Z",
-    })
+    });
 
     await expect(repo.deleteTables(context, [systemDb])).rejects.toThrow(
-      "System tables cannot be deleted through MCP"
-    )
+      "System tables cannot be deleted through MCP",
+    );
 
     expect(
-      db.tables.databases.some((database) => database.id === systemDb)
-    ).toBe(true)
-  })
+      db.tables.databases.some((database) => database.id === systemDb),
+    ).toBe(true);
+  });
 
   it("creates relation fields only to product-owned databases", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.createRelationField(context, {
@@ -2427,7 +2444,7 @@ describe("SignalSurfRepository", () => {
         label: "Person",
         targetDatabaseId: db2,
         displayField: "name",
-      })
+      }),
     ).resolves.toMatchObject({
       fields: [
         { key: "parent" },
@@ -2438,41 +2455,41 @@ describe("SignalSurfRepository", () => {
           display_field: "name",
         },
       ],
-    })
+    });
 
     await expect(
       repo.createRelationField(context, {
         databaseId: db1,
         key: "bad_relation",
         targetDatabaseId: otherProductDb,
-      })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" })
-  })
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
 
   it("updates row data through the batch changelog RPC (single-edit call)", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const result = await repo.updateTableRows(context, {
       edits: [{ rowId: row1, dataPatch: { stage: "contacted" } }],
-    })
+    });
 
     expect(result.rows[0]?.data).toMatchObject({
       name: "Acme",
       stage: "contacted",
-    })
+    });
     expect(db.rpcCalls[0]).toMatchObject({
       name: "update_entries_with_source_batch",
       args: {
         p_source: "mcp",
         p_source_ref: "test-agent",
       },
-    })
-  })
+    });
+  });
 
   it("validates item references before creating or updating row data", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.createTableRow(context, {
@@ -2484,8 +2501,8 @@ describe("SignalSurfRepository", () => {
             entry_id: otherProductRow,
           },
         },
-      })
-    ).rejects.toThrow("Referenced entry not found or access denied")
+      }),
+    ).rejects.toThrow("Referenced entry not found or access denied");
 
     await expect(
       repo.updateTableRows(context, {
@@ -2500,20 +2517,20 @@ describe("SignalSurfRepository", () => {
             },
           },
         ],
-      })
-    ).rejects.toThrow("Referenced entry not found or access denied")
-  })
+      }),
+    ).rejects.toThrow("Referenced entry not found or access denied");
+  });
 
   it("stamps MCP provenance when creating rows", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await repo.createTableRow(context, {
       databaseId: db1,
       data: { name: "Created" },
       playbookId: surfPoint1,
       note: "created by test",
-    })
+    });
 
     expect(db.tables.entries.at(-1)).toMatchObject({
       database_id: db1,
@@ -2521,37 +2538,37 @@ describe("SignalSurfRepository", () => {
       origin: "mcp",
       origin_ref: "test-agent",
       triggered: false,
-    })
-  })
+    });
+  });
 
   it("rejects row attribution to surf points that do not target the row database", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.createTableRow(context, {
         databaseId: db1,
         data: { name: "Wrong attribution" },
         playbookId: surfPoint2,
-      })
-    ).rejects.toThrow("is not configured to write to database")
+      }),
+    ).rejects.toThrow("is not configured to write to database");
 
     await expect(
       repo.updateTableRows(context, {
         edits: [{ rowId: row1, playbookId: surfPoint2 }],
-      })
-    ).rejects.toThrow("is not configured to write to database")
-  })
+      }),
+    ).rejects.toThrow("is not configured to write to database");
+  });
 
   it("updates row notes through the entry note RPC", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const result = await repo.updateTableRows(context, {
       edits: [{ rowId: row1, note: "Follow up next week." }],
-    })
+    });
 
-    expect(result.rows[0]?.note).toBe("Follow up next week.")
+    expect(result.rows[0]?.note).toBe("Follow up next week.");
     expect(db.rpcCalls[0]).toMatchObject({
       name: "update_entry_note_with_source",
       args: {
@@ -2559,52 +2576,52 @@ describe("SignalSurfRepository", () => {
         p_note: "Follow up next week.",
         p_source_ref: "test-agent",
       },
-    })
-  })
+    });
+  });
 
   it("checks a per-edit databaseId against the row's actual database", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.updateTableRows(context, {
         edits: [{ rowId: row1, databaseId: db2, dataPatch: { stage: "x" } }],
-      })
-    ).rejects.toThrow(`belongs to database ${db1}`)
+      }),
+    ).rejects.toThrow(`belongs to database ${db1}`);
 
-    expect(db.rpcCalls).toHaveLength(0)
-  })
+    expect(db.rpcCalls).toHaveLength(0);
+  });
 
   it("batch-updates distinct data across rows in a single atomic RPC call", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const result = await repo.updateTableRows(context, {
       edits: [
         { rowId: row1, dataPatch: { stage: "contacted" } },
         { rowId: row2, data: { name: "Beta Corp" } },
       ],
-    })
+    });
 
-    expect(result.rows).toHaveLength(2)
+    expect(result.rows).toHaveLength(2);
     expect(result.rows.find((row) => row.id === row1)?.data).toMatchObject({
       name: "Acme",
       stage: "contacted",
-    })
+    });
     expect(result.rows.find((row) => row.id === row2)?.data).toEqual({
       name: "Beta Corp",
-    })
-    expect(db.rpcCalls).toHaveLength(1)
+    });
+    expect(db.rpcCalls).toHaveLength(1);
     expect(db.rpcCalls[0]).toMatchObject({
       name: "update_entries_with_source_batch",
       args: { p_source: "mcp", p_source_ref: "test-agent" },
-    })
-    expect(db.rpcCalls[0].args.p_entries).toHaveLength(2)
-  })
+    });
+    expect(db.rpcCalls[0].args.p_entries).toHaveLength(2);
+  });
 
   it("rejects a batch with a duplicate rowId without writing anything", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.updateTableRows(context, {
@@ -2612,16 +2629,18 @@ describe("SignalSurfRepository", () => {
           { rowId: row1, dataPatch: { stage: "a" } },
           { rowId: row1, dataPatch: { stage: "b" } },
         ],
-      })
-    ).rejects.toThrow("unique rowId")
+      }),
+    ).rejects.toThrow("unique rowId");
 
-    expect(db.rpcCalls).toHaveLength(0)
-    expect(db.tables.entries.find((e) => e.id === row1)?.data.stage).toBe("new")
-  })
+    expect(db.rpcCalls).toHaveLength(0);
+    expect(db.tables.entries.find((e) => e.id === row1)?.data.stage).toBe(
+      "new",
+    );
+  });
 
   it("rejects the whole batch when any row is not found or unauthorized", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.updateTableRows(context, {
@@ -2629,58 +2648,60 @@ describe("SignalSurfRepository", () => {
           { rowId: row1, dataPatch: { stage: "contacted" } },
           { rowId: otherProductRow, dataPatch: { stage: "contacted" } },
         ],
-      })
-    ).rejects.toThrow("Row not found or access denied")
+      }),
+    ).rejects.toThrow("Row not found or access denied");
 
-    expect(db.rpcCalls).toHaveLength(0)
-    expect(db.tables.entries.find((e) => e.id === row1)?.data.stage).toBe("new")
-  })
+    expect(db.rpcCalls).toHaveLength(0);
+    expect(db.tables.entries.find((e) => e.id === row1)?.data.stage).toBe(
+      "new",
+    );
+  });
 
   it("rejects a no-op edit with none of data, dataPatch, note, or playbookId", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.updateTableRows(context, {
         edits: [{ rowId: row1 }],
-      })
+      }),
     ).rejects.toThrow(
-      "must include at least one of data, dataPatch, note, or playbookId"
-    )
-  })
+      "must include at least one of data, dataPatch, note, or playbookId",
+    );
+  });
 
   it("accepts a note-only edit with no data change", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     const result = await repo.updateTableRows(context, {
       edits: [{ rowId: row1, note: "Note only, no data change." }],
-    })
+    });
 
-    expect(result.rows[0]?.note).toBe("Note only, no data change.")
+    expect(result.rows[0]?.note).toBe("Note only, no data change.");
     expect(
       db.rpcCalls.some(
-        (call) => call.name === "update_entries_with_source_batch"
-      )
-    ).toBe(false)
-  })
+        (call) => call.name === "update_entries_with_source_batch",
+      ),
+    ).toBe(false);
+  });
 
   it("rejects an edit with both data and dataPatch", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.updateTableRows(context, {
         edits: [
           { rowId: row1, data: { name: "X" }, dataPatch: { stage: "y" } },
         ],
-      })
-    ).rejects.toThrow("pass either data or dataPatch, not both")
-  })
+      }),
+    ).rejects.toThrow("pass either data or dataPatch, not both");
+  });
 
   it("validates item references for every edit before writing the batch", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
       repo.updateTableRows(context, {
@@ -2695,23 +2716,23 @@ describe("SignalSurfRepository", () => {
             },
           },
         ],
-      })
-    ).rejects.toThrow("Referenced entry not found or access denied")
+      }),
+    ).rejects.toThrow("Referenced entry not found or access denied");
 
-    expect(db.rpcCalls).toHaveLength(0)
-  })
+    expect(db.rpcCalls).toHaveLength(0);
+  });
 
   it("rejects partial row deletes without deleting the valid subset", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
+    const db = makeDb();
+    const repo = new SignalSurfRepository(db as any);
 
     await expect(
-      repo.deleteTableRows(context, [row1, otherProductRow, row1])
-    ).rejects.toThrow("Row not found or access denied")
+      repo.deleteTableRows(context, [row1, otherProductRow, row1]),
+    ).rejects.toThrow("Row not found or access denied");
 
-    expect(db.tables.entries.some((entry) => entry.id === row1)).toBe(true)
+    expect(db.tables.entries.some((entry) => entry.id === row1)).toBe(true);
     expect(
-      db.tables.entries.some((entry) => entry.id === otherProductRow)
-    ).toBe(true)
-  })
-})
+      db.tables.entries.some((entry) => entry.id === otherProductRow),
+    ).toBe(true);
+  });
+});
