@@ -42,6 +42,13 @@ import {
 } from "./deepline-search.js"
 import { UserFacingError } from "./errors.js"
 import { canonicalJson, canonicalSha256 } from "./canonical-json.js"
+import {
+  AmbiguousInstagramContentDispatchError,
+  buildInstagramContentSearchPlan,
+  dispatchInstagramContentSearch,
+  isInstagramContentSearchDisabled,
+  normalizeInstagramContentSearch,
+} from "./instagram-content.js"
 import { FIELD_CONVENTIONS } from "./conventions.js"
 import { aggregatePopularValues } from "./popular-values.js"
 import {
@@ -105,6 +112,11 @@ const APPROVAL_PREVIEW_SAFE_KEY = new Set([
   "url",
   "urls",
 ])
+const PLAN_CREDIT_LIMITS: Record<string, number> = {
+  individual: 5_000,
+  team: 20_000,
+  enterprise: 80_000,
+}
 
 type DeeplineSearchInput = {
   productId?: string
@@ -134,6 +146,28 @@ type DeeplineExecuteToolInput = {
     | "deepline_search_people"
     | "deepline_search_companies"
     | "deepline_enrich_contact"
+}
+type InstagramContentSearchInput = {
+  productId?: string
+  query: string
+  pages?: number
+  approvalRequestId?: string
+}
+
+type ExternalActionApprovalInput = {
+  storageToolName: string
+  mcpToolName: string
+  providerToolId: string
+  payload: JsonRecord
+  approvalRequestId?: string
+  externalAction: string
+  previewValues?: JsonRecord
+}
+type CreditAccountingContext = {
+  userId: string
+  organizationId: string | null
+  monthlyQuota: number
+  periodStart: string
 }
 
 type ListSurfPointsInput = {
@@ -2007,15 +2041,12 @@ export class SignalSurfRepository {
     return { tools, count: tools.length }
   }
 
-  async deeplineExecuteTool(
+  private async consumeExternalActionApproval(
     context: SignalSurfContext,
-    input: DeeplineExecuteToolInput
+    input: ExternalActionApprovalInput
   ) {
-    const payload = input.payload ?? {}
-    const payloadSha256 = mcpActionPayloadSha256(payload)
+    const payloadSha256 = mcpActionPayloadSha256(input.payload)
     const approvalRequestId = readTrimmedString(input.approvalRequestId)
-    const mcpToolName = input.approvalMcpToolName ?? "deepline_execute_tool"
-    const externalAction = `deepline:${input.toolId}`
 
     if (
       context.authKind !== "oauth" ||
@@ -2025,13 +2056,13 @@ export class SignalSurfRepository {
       !context.oauthClientId
     ) {
       throw new UserFacingError(
-        `${mcpToolName} requires a hosted OAuth connection and an approved, unexpired one-time action request from SignalSurf Web.`,
+        `${input.mcpToolName} requires a hosted OAuth connection and an approved, unexpired one-time action request from SignalSurf Web.`,
         {
           code: "APPROVAL_REQUIRED",
           status: 409,
           details: {
-            mcpToolName,
-            externalAction,
+            mcpToolName: input.mcpToolName,
+            externalAction: input.externalAction,
             payloadSha256,
           },
         }
@@ -2052,8 +2083,8 @@ export class SignalSurfRepository {
           .eq("user_id", context.userId)
           .eq("client_id", context.oauthClientId)
           .eq("product_id", context.productId)
-          .eq("tool_name", "deepline_execute_tool")
-          .eq("provider_tool_id", input.toolId)
+          .eq("tool_name", input.storageToolName)
+          .eq("provider_tool_id", input.providerToolId)
           .eq("payload_sha256", payloadSha256)
           .eq("status", "pending")
           .gt("expires_at", nowIso)
@@ -2077,8 +2108,8 @@ export class SignalSurfRepository {
           .eq("user_id", context.userId)
           .eq("client_id", context.oauthClientId)
           .eq("product_id", context.productId)
-          .eq("tool_name", "deepline_execute_tool")
-          .eq("provider_tool_id", input.toolId)
+          .eq("tool_name", input.storageToolName)
+          .eq("provider_tool_id", input.providerToolId)
           .eq("payload_sha256", payloadSha256)
           .eq("status", "pending")
           .lte("expires_at", nowIso)
@@ -2090,7 +2121,7 @@ export class SignalSurfRepository {
         }
 
         const requestId = randomUUID()
-        const payloadKeys = Object.keys(payload).sort()
+        const payloadKeys = Object.keys(input.payload).sort()
         const { data: inserted, error: insertError } = await this.db
           .from("mcp_action_approvals")
           .insert({
@@ -2100,16 +2131,21 @@ export class SignalSurfRepository {
             oauth_token_id: context.oauthTokenId,
             oauth_grant_id: context.oauthGrantId,
             client_id: context.oauthClientId,
-            tool_name: "deepline_execute_tool",
-            provider_tool_id: input.toolId,
+            tool_name: input.storageToolName,
+            provider_tool_id: input.providerToolId,
             payload_sha256: payloadSha256,
             preview: {
-              toolName: mcpToolName,
-              providerToolId: input.toolId,
+              toolName: input.mcpToolName,
+              providerToolId: input.providerToolId,
               payload: {
-                values: redactApprovalPreviewValue(payload),
+                values:
+                  input.previewValues ??
+                  redactApprovalPreviewValue(input.payload),
                 fieldCount: payloadKeys.length,
-                byteLength: Buffer.byteLength(canonicalJson(payload), "utf8"),
+                byteLength: Buffer.byteLength(
+                  canonicalJson(input.payload),
+                  "utf8"
+                ),
               },
             },
             status: "pending",
@@ -2121,8 +2157,6 @@ export class SignalSurfRepository {
           .single()
 
         if (insertError || !inserted) {
-          // A concurrent identical request may have won the Web-side partial
-          // unique index. Re-read it instead of returning a second request.
           const retry = await findActivePending()
           if (retry.error || !retry.data) {
             throw new UserFacingError(
@@ -2138,7 +2172,7 @@ export class SignalSurfRepository {
 
       const requestId = String(pending.id)
       throw new UserFacingError(
-        `${mcpToolName} requires approval in SignalSurf Web. Approve the request, then repeat the exact ${mcpToolName} call with approvalRequestId; no external action was attempted.`,
+        `${input.mcpToolName} requires approval in SignalSurf Web. Approve the request, then repeat the exact ${input.mcpToolName} call with approvalRequestId; no external action was attempted.`,
         {
           code: "APPROVAL_REQUIRED",
           status: 409,
@@ -2147,8 +2181,8 @@ export class SignalSurfRepository {
             approvalUrl: mcpActionApprovalUrl(requestId),
             status: "pending",
             expiresAt: pending.expires_at,
-            mcpToolName,
-            externalAction,
+            mcpToolName: input.mcpToolName,
+            externalAction: input.externalAction,
             payloadSha256,
           },
         }
@@ -2169,8 +2203,8 @@ export class SignalSurfRepository {
       .eq("user_id", context.userId)
       .eq("client_id", context.oauthClientId)
       .eq("product_id", context.productId)
-      .eq("tool_name", "deepline_execute_tool")
-      .eq("provider_tool_id", input.toolId)
+      .eq("tool_name", input.storageToolName)
+      .eq("provider_tool_id", input.providerToolId)
       .eq("payload_sha256", payloadSha256)
       .eq("status", "approved")
       .gt("expires_at", executionStartedAt)
@@ -2184,21 +2218,21 @@ export class SignalSurfRepository {
     }
     if (!consumed) {
       throw new UserFacingError(
-        `The ${mcpToolName} approval is missing, pending, expired, mismatched, denied, or already consumed; no external action was attempted.`,
+        `The ${input.mcpToolName} approval is missing, pending, expired, mismatched, denied, or already consumed; no external action was attempted.`,
         {
           code: "APPROVAL_REQUIRED",
           status: 409,
           details: {
             approvalRequestId,
-            mcpToolName,
-            externalAction,
+            mcpToolName: input.mcpToolName,
+            externalAction: input.externalAction,
             payloadSha256,
           },
         }
       )
     }
 
-    const finalizeApproval = async (
+    const finalize = async (
       status: "executed" | "failed" | "ambiguous",
       error: string | null = null
     ) => {
@@ -2225,11 +2259,299 @@ export class SignalSurfRepository {
           {
             code: "APPROVAL_FINALIZATION_FAILED",
             status: 502,
-            details: { approvalRequestId, externalAction },
+            details: {
+              approvalRequestId,
+              externalAction: input.externalAction,
+            },
           }
         )
       }
     }
+
+    return { approvalRequestId, finalize }
+  }
+
+  private resolveInstagramContentApiKey(): string {
+    if (isInstagramContentSearchDisabled()) {
+      throw new UserFacingError(
+        "Instagram Content Search is temporarily disabled.",
+        { code: "CREATOR_DISCOVERY_DISABLED", status: 503 }
+      )
+    }
+    const apiKey = readTrimmedString(process.env.BYCRAWL_API_KEY)
+    if (!apiKey) {
+      throw new UserFacingError(
+        "Instagram Content Search is not configured for this deployment.",
+        { code: "NOT_FOUND", status: 404 }
+      )
+    }
+    return apiKey
+  }
+
+  private async resolveCreditAccounting(
+    context: SignalSurfContext
+  ): Promise<CreditAccountingContext> {
+    if (!context.userId) {
+      throw new UserFacingError(
+        "Instagram Content Search requires an authenticated user for credit accounting.",
+        { code: "UNAUTHORIZED", status: 401 }
+      )
+    }
+    const { data: product, error: productError } = await this.db
+      .from("products")
+      .select("owner_id, organization_id")
+      .eq("id", context.productId)
+      .maybeSingle()
+    requireNoDbError(productError, "Failed to resolve credit product")
+    if (!product) {
+      throw new UserFacingError("The selected product no longer exists.", {
+        code: "NOT_FOUND",
+        status: 404,
+      })
+    }
+
+    const organizationId = readTrimmedString(product.organization_id)
+    let ownerId = readTrimmedString(product.owner_id) ?? context.userId
+    if (organizationId) {
+      const { data: organization, error: organizationError } = await this.db
+        .from("organizations")
+        .select("owner_id")
+        .eq("id", organizationId)
+        .maybeSingle()
+      requireNoDbError(
+        organizationError,
+        "Failed to resolve credit organization"
+      )
+      ownerId = readTrimmedString(organization?.owner_id) ?? ownerId
+    }
+
+    const { data: subscriptions, error: subscriptionError } = await this.db
+      .from("subscriptions")
+      .select("plan_name, current_period_start, current_period_end")
+      .eq("user_id", ownerId)
+      .in("status", ["active", "trialing"])
+      .order("created_at", { ascending: false })
+    requireNoDbError(subscriptionError, "Failed to resolve credit plan")
+    const now = Date.now()
+    const subscription = (
+      Array.isArray(subscriptions) ? subscriptions : []
+    ).find((row) => {
+      const periodEnd = readTrimmedString(row.current_period_end)
+      return !periodEnd || new Date(periodEnd).getTime() >= now
+    })
+    const planName = readTrimmedString(subscription?.plan_name) ?? "individual"
+    const monthlyQuota = PLAN_CREDIT_LIMITS[planName] ?? 5_000
+    const periodStart =
+      readTrimmedString(subscription?.current_period_start) ??
+      new Date(
+        Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)
+      ).toISOString()
+    return {
+      userId: context.userId,
+      organizationId,
+      monthlyQuota,
+      periodStart,
+    }
+  }
+
+  async searchInstagramContent(
+    context: SignalSurfContext,
+    input: InstagramContentSearchInput
+  ) {
+    const plan = buildInstagramContentSearchPlan({
+      query: input.query,
+      pages: input.pages,
+    })
+    if (!input.approvalRequestId) this.resolveInstagramContentApiKey()
+    const payload: JsonRecord = {
+      query: plan.input.query,
+      pages: plan.input.pages,
+      approved_credit_ceiling: plan.credits,
+    }
+    const externalAction = "creator_discovery:instagram_content"
+    const { approvalRequestId, finalize } =
+      await this.consumeExternalActionApproval(context, {
+        storageToolName: "search_instagram_content",
+        mcpToolName: "search_instagram_content",
+        providerToolId: "instagram_content_search",
+        payload,
+        approvalRequestId: input.approvalRequestId,
+        externalAction,
+        previewValues: payload,
+      })
+
+    let apiKey: string
+    let accounting: CreditAccountingContext
+    try {
+      apiKey = this.resolveInstagramContentApiKey()
+      accounting = await this.resolveCreditAccounting(context)
+    } catch (error) {
+      await finalize("failed", "Creator discovery preflight failed.")
+      throw error
+    }
+
+    const unbookedIdempotencyKey = `bycrawl:hosted_mcp:search_instagram_content:${approvalRequestId}`
+    const metadata = {
+      source: "hosted_mcp",
+      tool_name: "search_instagram_content",
+      operation_hash: mcpActionPayloadSha256(payload),
+      product_id: context.productId,
+      approved_credit_ceiling: plan.credits,
+      pages: plan.input.pages,
+      provider: "bycrawl",
+    }
+    const unbookedResult = await this.db.rpc("reserve_credit_spend", {
+      p_user_id: accounting.userId,
+      p_action_type: "bycrawl",
+      p_credits: plan.credits,
+      p_monthly_quota: accounting.monthlyQuota,
+      p_period_start: accounting.periodStart,
+      p_metadata: { ...metadata, attempt_state: "dispatch_pending" },
+      p_organization_id: accounting.organizationId,
+      p_product_id: context.productId,
+      p_error_message: "External dispatch pending",
+      p_idempotency_key: unbookedIdempotencyKey,
+    })
+    if (unbookedResult.error) {
+      await finalize("failed", "Credit reservation failed before dispatch.")
+      if (/credit limit reached/i.test(unbookedResult.error.message)) {
+        throw new UserFacingError(unbookedResult.error.message, {
+          code: "CREDIT_LIMIT_REACHED",
+          status: 403,
+        })
+      }
+      requireNoDbError(unbookedResult.error, "Failed to reserve credit spend")
+    }
+
+    let dispatched: Awaited<ReturnType<typeof dispatchInstagramContentSearch>>
+    try {
+      dispatched = await dispatchInstagramContentSearch(plan, apiKey)
+    } catch (error) {
+      await finalize(
+        "ambiguous",
+        "Provider request failed or timed out after dispatch."
+      )
+      if (error instanceof AmbiguousInstagramContentDispatchError) {
+        throw new UserFacingError(
+          "The Instagram Content Search outcome is ambiguous. It will not be replayed without a new approval.",
+          {
+            code: "EXTERNAL_ACTION_AMBIGUOUS",
+            status: 502,
+            details: { approvalRequestId, externalAction },
+          }
+        )
+      }
+      throw error
+    }
+
+    const booking = await this.db.rpc("record_credit_usage", {
+      p_user_id: accounting.userId,
+      p_action_type: "bycrawl",
+      p_credits: plan.credits,
+      p_monthly_quota: accounting.monthlyQuota,
+      p_period_start: accounting.periodStart,
+      p_metadata: { ...metadata, provider_status: dispatched.response.status },
+      p_organization_id: accounting.organizationId,
+      p_unbooked_idempotency_key: unbookedIdempotencyKey,
+    })
+    if (booking.error) {
+      const bookingError = `record_credit_usage failed: ${booking.error.message}`
+      const deterministicCreditDeficit = /insufficient bonus credits/i.test(
+        booking.error.message
+      )
+      const reconciliation = await this.db.rpc("record_unbooked_credit_spend", {
+        p_user_id: accounting.userId,
+        p_action_type: "bycrawl",
+        p_credits: plan.credits,
+        p_metadata: {
+          ...metadata,
+          provider_status: dispatched.response.status,
+        },
+        p_organization_id: accounting.organizationId,
+        p_product_id: context.productId,
+        p_error_message: bookingError,
+        p_idempotency_key: unbookedIdempotencyKey,
+      })
+      if (reconciliation.error) {
+        const reconciliationError = `${bookingError}; reconciliation write failed: ${reconciliation.error.message}`
+        await finalize("ambiguous", reconciliationError)
+        throw new UserFacingError(
+          "The Instagram Content Search completed upstream, but its credit record and reconciliation state are ambiguous. Do not retry without a new approval.",
+          {
+            code: "EXTERNAL_ACTION_AMBIGUOUS",
+            status: 502,
+            details: { approvalRequestId, externalAction },
+          }
+        )
+      }
+      await finalize(
+        deterministicCreditDeficit ? "failed" : "ambiguous",
+        bookingError
+      )
+      if (deterministicCreditDeficit) {
+        throw new UserFacingError(
+          "Credit limit changed before booking completed; the provider spend was recorded for reconciliation.",
+          { code: "CREDIT_LIMIT_REACHED", status: 403 }
+        )
+      }
+      throw new UserFacingError(
+        "The Instagram Content Search completed upstream, but its credit record is still being reconciled. Do not retry without a new approval.",
+        {
+          code: "EXTERNAL_ACTION_AMBIGUOUS",
+          status: 502,
+          details: { approvalRequestId, externalAction },
+        }
+      )
+    }
+    if (!dispatched.response.ok) {
+      await finalize(
+        "failed",
+        `Instagram Content Search returned HTTP ${dispatched.response.status}.`
+      )
+      throw new UserFacingError(
+        `Instagram Content Search returned HTTP ${dispatched.response.status}.`,
+        { code: "UPSTREAM_ERROR", status: 502 }
+      )
+    }
+
+    let normalized: ReturnType<typeof normalizeInstagramContentSearch>
+    try {
+      normalized = normalizeInstagramContentSearch(dispatched.raw)
+    } catch (error) {
+      await finalize(
+        "failed",
+        "Provider returned malformed or incomplete data."
+      )
+      throw new UserFacingError(
+        error instanceof Error ? error.message : "Invalid provider response.",
+        { code: "UPSTREAM_ERROR", status: 502 }
+      )
+    }
+    await finalize("executed")
+    return {
+      success: true,
+      status: "succeeded" as const,
+      creditsConsumed: plan.credits,
+      ...normalized,
+    }
+  }
+
+  async deeplineExecuteTool(
+    context: SignalSurfContext,
+    input: DeeplineExecuteToolInput
+  ) {
+    const payload = input.payload ?? {}
+    const mcpToolName = input.approvalMcpToolName ?? "deepline_execute_tool"
+    const externalAction = `deepline:${input.toolId}`
+    const { approvalRequestId, finalize: finalizeApproval } =
+      await this.consumeExternalActionApproval(context, {
+        storageToolName: "deepline_execute_tool",
+        mcpToolName,
+        providerToolId: input.toolId,
+        payload,
+        approvalRequestId: input.approvalRequestId,
+        externalAction,
+      })
 
     let apiKey: string
     try {

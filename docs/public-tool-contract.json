@@ -46,6 +46,7 @@
     "remove_table_field": "113b03a1ad01ac9b3b467b79ea37388d0bf39ba1cf78896af4ca1d77694ef066",
     "run_quick_surf": "28602e016977ee96d989ad142615e8256a4ba94bfd2fc6ddb98215e21067fa4d",
     "run_surf_point": "800a3c8bfa52045238ced038a1f5538578681be21e249a2a7e7e60aec8350370",
+    "search_instagram_content": "188f8857f184a6b505f3a8cb29321c66367fd0c6b2d1fbd02605f20c5ef14e07",
     "test_surf_point_node": "745edec507f3408916196bf3ea368cfcc739776d4aa2e2cc4baaedb2b823faeb",
     "update_signal": "240d95324ff776f807d375c05a9f05d556ff8b288067e7a3eb0d807f93efd2b8",
     "update_surf_point": "44b139cdc5f2dfd7e738e1ab3d5900bc0e87a306c0a4456b9d5d176ce6b946b9",
@@ -456,6 +457,19 @@
         }
       ],
       "invalid": [{ "surfPointId": "not-a-uuid" }]
+    },
+    "search_instagram_content": {
+      "valid": [
+        {
+          "query": "KATSEYE fan fashion",
+          "pages": 2,
+          "approvalRequestId": "00000000-0000-4000-8000-000000000001"
+        }
+      ],
+      "invalid": [
+        { "query": "", "pages": 1 },
+        { "query": "KATSEYE", "pages": 11 }
+      ]
     },
     "test_surf_point_node": {
       "valid": [

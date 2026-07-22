@@ -162,9 +162,9 @@ describe("auth", () => {
     expect(() =>
       assertCanUseCapability(context, "account_lists.write")
     ).toThrow("Token scope does not allow")
-    expect(() =>
-      assertCanUseCapability(context, "deepline.execute")
-    ).toThrow("Token scope does not allow")
+    expect(() => assertCanUseCapability(context, "deepline.execute")).toThrow(
+      "Token scope does not allow"
+    )
     expect(listContextCapabilities(context)).toEqual([
       "context.read",
       "tables.read",
@@ -216,6 +216,24 @@ describe("auth", () => {
     ).not.toThrow()
   })
 
+  it("keeps creator discovery provider-neutral and read-only", () => {
+    const context = {
+      productId: "00000000-0000-4000-8000-000000000001",
+      role: "viewer" as const,
+      scopes: ["mcp:creator_discovery.read"],
+    }
+    expect(listContextCapabilities(context)).toEqual([
+      "context.read",
+      "creator_discovery.read",
+    ])
+    expect(() =>
+      assertCanUseCapability(context, "creator_discovery.read")
+    ).not.toThrow()
+    expect(() => assertCanUseCapability(context, "deepline.read")).toThrow(
+      "Token scope does not allow"
+    )
+  })
+
   it("accepts the legacy Deepline write alias without advertising it as the new scope hint", () => {
     const legacyContext = {
       productId: "00000000-0000-4000-8000-000000000001",
@@ -265,6 +283,7 @@ describe("auth", () => {
       "sources.write",
       "account_lists.read",
       "account_lists.write",
+      "creator_discovery.read",
       "deepline.read",
       "deepline.enrich",
       "deepline.execute",

@@ -51,6 +51,7 @@
     "remove_table_field",
     "run_quick_surf",
     "run_surf_point",
+    "search_instagram_content",
     "test_surf_point_node",
     "update_signal",
     "update_surf_point",
@@ -119,6 +120,7 @@
     "apply_flow_edits": ["apply_flow_edits"],
     "get_node_upstream_context": ["get_node_upstream_context"],
     "create_campaign": ["create_campaign"],
+    "search_instagram_content": ["search_instagram_content"],
     "test_surf_point_node": ["test_surf_point_node"]
   },
   "standaloneMappings": {},

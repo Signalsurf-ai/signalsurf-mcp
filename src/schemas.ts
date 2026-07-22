@@ -48,6 +48,13 @@ export const deeplineExecuteToolSchema = {
   payload: jsonObjectSchema.default({}).optional(),
 }
 
+export const instagramContentSearchSchema = {
+  ...productTargetSchema,
+  query: z.string().trim().min(1).max(500),
+  pages: z.number().int().min(1).max(10).default(1).optional(),
+  approvalRequestId: uuidSchema.optional(),
+}
+
 export const sourceTypeSchema = z.enum([
   "platform",
   "custom-pull",
@@ -749,6 +756,7 @@ export const PUBLIC_MCP_TOOL_SCHEMAS = {
   run_quick_surf: runQuickSurfSchema,
   list_product_tools: listProductToolsSchema,
   list_surf_point_tools: listSurfPointToolsSchema,
+  search_instagram_content: instagramContentSearchSchema,
   deepline_search_people: deeplineSearchPeopleSchema,
   deepline_search_companies: deeplineSearchCompaniesSchema,
   deepline_enrich_contact: deeplineEnrichContactSchema,

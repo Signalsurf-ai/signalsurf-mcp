@@ -15,6 +15,7 @@ export const MCP_GRANULAR_SCOPES = [
   "mcp:schemas.write",
   "mcp:sources.read",
   "mcp:sources.write",
+  "mcp:creator_discovery.read",
   "mcp:deepline.read",
   "mcp:deepline.enrich",
   "mcp:deepline.execute",
@@ -73,6 +74,7 @@ export type McpCapability =
   | "sources.write"
   | "account_lists.read"
   | "account_lists.write"
+  | "creator_discovery.read"
   | "deepline.read"
   | "deepline.enrich"
   | "deepline.execute"
@@ -125,6 +127,7 @@ export type PublicMcpToolName =
   | "run_quick_surf"
   | "list_product_tools"
   | "list_surf_point_tools"
+  | "search_instagram_content"
   | "deepline_search_people"
   | "deepline_search_companies"
   | "deepline_enrich_contact"
@@ -580,6 +583,15 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: EXTERNAL_READ_ANNOTATIONS,
   },
+  search_instagram_content: {
+    title: "Search Instagram Public Content",
+    description:
+      "Search the broader public Instagram post corpus for an authorized product after consuming an exact, unexpired one-time Web approval. Returns post evidence plus deduplicated creator accounts. Costs three SignalSurf credits per requested page. This is a separate discovery lane and is never used as a fallback for Instagram Reels Search.",
+    requiredCapability: "creator_discovery.read",
+    surferSurface: "creator_discovery",
+    publicStatus: "supported",
+    annotations: EXTERNAL_READ_ANNOTATIONS,
+  },
   deepline_search_companies: {
     title: "Search Companies via Deepline",
     description:
@@ -673,6 +685,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "schemas.read",
     "sources.read",
     "account_lists.read",
+    "creator_discovery.read",
     "deepline.read",
   ],
   [MCP_LEGACY_WRITE_SCOPE]: [
@@ -691,6 +704,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "sources.write",
     "account_lists.read",
     "account_lists.write",
+    "creator_discovery.read",
     "deepline.read",
     "deepline.enrich",
     "deepline.execute",
@@ -726,6 +740,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "account_lists.read",
     "account_lists.write",
   ],
+  "mcp:creator_discovery.read": ["context.read", "creator_discovery.read"],
   "mcp:deepline.read": ["context.read", "deepline.read"],
   "mcp:deepline.enrich": ["context.read", "deepline.read", "deepline.enrich"],
   "mcp:deepline.execute": ["context.read", "deepline.read", "deepline.execute"],
@@ -753,6 +768,7 @@ const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "sources.write": ["mcp:sources.write"],
   "account_lists.read": ["mcp:account_lists.read"],
   "account_lists.write": ["mcp:account_lists.write"],
+  "creator_discovery.read": ["mcp:creator_discovery.read"],
   "deepline.read": ["mcp:deepline.read"],
   "deepline.enrich": ["mcp:deepline.enrich"],
   "deepline.execute": ["mcp:deepline.execute"],
