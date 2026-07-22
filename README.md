@@ -189,6 +189,7 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - `list_signals`, `create_signal`, `update_signal`, `delete_signal`
 - `enable_quick_surf`, `disable_quick_surf`, `list_quick_surf`, `run_quick_surf`
 - `list_product_tools`, `list_surf_point_tools` (attach/detach tools via `update_surf_point` `toolConfigPatch.auto_tool_ids`)
+- `search_instagram_content`
 - `deepline_search_people`, `deepline_search_companies`, `deepline_enrich_contact`, `deepline_search_catalog`, `deepline_execute_tool`
 - Resources for context; single-product tokens also expose surf point, database,
   surf job, and database-row resources
@@ -200,7 +201,7 @@ internally, so every operation explicitly validates product ownership before
 touching rows. Surf point deletion is a soft delete (`deleted_at`), matching the
 web app behavior.
 
-Chargeable Deepline calls use a two-step approval flow. This includes curated
+Chargeable creator discovery and Deepline calls use a two-step approval flow. This includes Instagram Content Search, curated
 company/people search, contact enrichment, and generic tool execution. Omit
 `approvalRequestId` to create or reuse a redacted pending request, approve it in
 SignalSurf Web, then repeat the exact tool call with the returned request id.
@@ -223,6 +224,7 @@ capability instead of hiding them behind broad write access:
 - `mcp:schemas.write`
 - `mcp:sources.read`
 - `mcp:sources.write`
+- `mcp:creator_discovery.read`
 - `mcp:deepline.read`
 - `mcp:deepline.enrich`
 - `mcp:deepline.execute`

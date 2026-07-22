@@ -62,6 +62,7 @@ import {
   deeplineEnrichContactSchema,
   deeplineSearchCatalogSchema,
   deeplineExecuteToolSchema,
+  instagramContentSearchSchema,
   enableQuickSurfSchema,
   disableQuickSurfSchema,
   listQuickSurfSchema,
@@ -652,11 +653,14 @@ function registerTools(
       })
   )
 
-  registerPublicTool("list_quick_surf", listQuickSurfSchema, async (args: any) =>
-    runJsonTool(async () => {
-      assertToolAllowed("list_quick_surf")
-      return repository.listQuickSurf(toolContext(args), args)
-    })
+  registerPublicTool(
+    "list_quick_surf",
+    listQuickSurfSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("list_quick_surf")
+        return repository.listQuickSurf(toolContext(args), args)
+      })
   )
 
   registerPublicTool("run_quick_surf", runQuickSurfSchema, async (args: any) =>
@@ -686,6 +690,16 @@ function registerTools(
           toolContext(args),
           args.surfPointId
         )
+      })
+  )
+
+  registerPublicTool(
+    "search_instagram_content",
+    instagramContentSearchSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("search_instagram_content")
+        return repository.searchInstagramContent(toolContext(args), args)
       })
   )
 
@@ -744,7 +758,9 @@ function registerTools(
   )
   if (missingTools.length > 0) {
     throw new Error(
-      `Public MCP registry is missing executable handlers: ${missingTools.join(", ")}`
+      `Public MCP registry is missing executable handlers: ${missingTools.join(
+        ", "
+      )}`
     )
   }
 }
