@@ -10,7 +10,7 @@ describe("SERVER_INSTRUCTIONS", () => {
 
   it("points at every guided prompt and the enrichment context tool", () => {
     expect(SERVER_INSTRUCTIONS).toMatch(/enrich_table/)
-    expect(SERVER_INSTRUCTIONS).toMatch(/set_up_surf_point/)
+    expect(SERVER_INSTRUCTIONS).toMatch(/set_up_workflow/)
     expect(SERVER_INSTRUCTIONS).toMatch(/build_lead_list/)
     expect(SERVER_INSTRUCTIONS).toMatch(/get_enrichment_context/)
   })

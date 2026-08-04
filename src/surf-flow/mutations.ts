@@ -7,11 +7,11 @@ import {
   type FlowEdge,
   type FlowEdgeCondition,
   type FlowNode,
-  type SurfPointFlowV2,
+  type WorkflowFlowV2,
 } from "./index.js"
 
 /**
- * Pure, in-place-free graph mutations for SurfPointFlow V2.
+ * Pure, in-place-free graph mutations for WorkflowFlow V2.
  *
  * These are the granular building blocks the Surfer agent uses to edit an open
  * node graph incrementally (instead of re-emitting the whole `config.flow`).
@@ -25,7 +25,7 @@ import {
  * endpoint, illegal condition, target-is-trigger, duplicate/missing id). GLOBAL
  * properties that depend on the whole graph (cycles, reachability) are NOT
  * checked here — the caller runs `validateFlow` on the result and decides
- * persistence. See docs/surf-point-flow-v2.md and
+ * persistence. See docs/workflow-flow-v2.md and
  * docs/superpowers/specs/2026-06-22-surfer-open-graph-build-tools-design.md.
  */
 
@@ -70,7 +70,7 @@ export type FlowNodeInput = DistributiveOmit<FlowNode, "id" | "typeVersion"> & {
   typeVersion?: 1
 }
 
-function nodeById(flow: SurfPointFlowV2, id: string): FlowNode | undefined {
+function nodeById(flow: WorkflowFlowV2, id: string): FlowNode | undefined {
   return flow.nodes.find((n) => n.id === id)
 }
 
@@ -161,10 +161,10 @@ export function legalConditionForSource(
 
 /** Append a new node (id supplied by caller). Validates the node shape. */
 export function addNode(
-  flow: SurfPointFlowV2,
+  flow: WorkflowFlowV2,
   nodeInput: FlowNodeInput,
   id: string
-): SurfPointFlowV2 {
+): WorkflowFlowV2 {
   if (nodeById(flow, id)) {
     throw new FlowMutationError(
       "duplicate_id",
@@ -185,10 +185,10 @@ export function addNode(
 
 /** Connect two nodes. Hard-rejects local boundary violations. */
 export function connectNodes(
-  flow: SurfPointFlowV2,
+  flow: WorkflowFlowV2,
   link: { source: string; target: string; condition?: FlowEdgeCondition },
   edgeId: string
-): SurfPointFlowV2 {
+): WorkflowFlowV2 {
   const condition = link.condition ?? "always"
   if (flow.edges.some((e) => e.id === edgeId)) {
     throw new FlowMutationError(
@@ -234,10 +234,10 @@ export function connectNodes(
 
 /** Patch an existing node. Type is immutable; the merged node is re-validated. */
 export function updateNode(
-  flow: SurfPointFlowV2,
+  flow: WorkflowFlowV2,
   nodeId: string,
   patch: Record<string, unknown>
-): SurfPointFlowV2 {
+): WorkflowFlowV2 {
   const node = nodeById(flow, nodeId)
   if (!node) {
     throw new FlowMutationError(
@@ -272,9 +272,9 @@ export function updateNode(
 
 /** Remove a node and every edge touching it. */
 export function removeNode(
-  flow: SurfPointFlowV2,
+  flow: WorkflowFlowV2,
   nodeId: string
-): SurfPointFlowV2 {
+): WorkflowFlowV2 {
   if (!nodeById(flow, nodeId)) {
     throw new FlowMutationError(
       "node_not_found",
@@ -290,9 +290,9 @@ export function removeNode(
 
 /** Remove a single edge by id. */
 export function removeEdge(
-  flow: SurfPointFlowV2,
+  flow: WorkflowFlowV2,
   edgeId: string
-): SurfPointFlowV2 {
+): WorkflowFlowV2 {
   if (!flow.edges.some((e) => e.id === edgeId)) {
     throw new FlowMutationError(
       "edge_not_found",
@@ -339,12 +339,12 @@ export interface FlowEditResult {
  * flagged) so a partial graph never lands. Returns the ref→minted-id map.
  */
 export function applyFlowEdits(
-  flow: SurfPointFlowV2,
+  flow: WorkflowFlowV2,
   edits: FlowEditOp[],
   mintId: (kind: "node" | "edge") => string
 ): {
   ok: boolean
-  flow: SurfPointFlowV2
+  flow: WorkflowFlowV2
   results: FlowEditResult[]
   refs: Record<string, string>
 } {
@@ -433,7 +433,7 @@ export function describeNodeTypes() {
           "Entry node; binds the signal source(s). Has NO inbound edges.",
         fields: {
           sourceIds:
-            "optional string[] — source ids this trigger listens to; omitted = the Surf Point's sources",
+            "optional string[] — source ids this trigger listens to; omitted = the Workflow's sources",
         },
         outboundConditions: ["always"],
       },

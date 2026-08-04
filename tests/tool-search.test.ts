@@ -100,7 +100,7 @@ describe("find_capabilities tool over MCP", () => {
     expect(data.prompts.map((p: any) => p.name)).toContain("enrich_table")
     const toolNames = data.tools.map((t: any) => t.name)
     expect(toolNames).toContain("get_enrichment_context")
-    // run_quick_surf needs surf_points.execute — a viewer token must not see it.
+    // run_quick_surf needs workflows.execute — a viewer token must not see it.
     expect(toolNames).not.toContain("run_quick_surf")
   })
 })

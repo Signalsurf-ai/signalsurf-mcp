@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import {
   buildBuildLeadListPrompt,
   buildEnrichTablePrompt,
-  buildSetUpSurfPointPrompt,
+  buildSetUpWorkflowPrompt,
 } from "../src/prompts.js"
 import { createSignalSurfMcpServer } from "../src/server.js"
 import type { SignalSurfContext } from "../src/types.js"
@@ -25,12 +25,12 @@ describe("buildEnrichTablePrompt", () => {
   })
 })
 
-describe("buildSetUpSurfPointPrompt", () => {
-  it("scripts surf point creation, signal, and a first run", () => {
-    const text = buildSetUpSurfPointPrompt({})
-    expect(text).toMatch(/create_surf_point/)
+describe("buildSetUpWorkflowPrompt", () => {
+  it("scripts Workflow creation, signal, and a first run", () => {
+    const text = buildSetUpWorkflowPrompt({})
+    expect(text).toMatch(/create_workflow/)
     expect(text).toMatch(/create_signal/)
-    expect(text).toMatch(/run_surf_point/)
+    expect(text).toMatch(/run_workflow/)
     expect(text).toMatch(/wait_for_surf_job/)
   })
 })
@@ -97,7 +97,7 @@ describe("enrich_table prompt over MCP", () => {
     const prompts = await client.listPrompts()
     const names = prompts.prompts.map((p) => p.name)
     expect(names).toContain("enrich_table")
-    expect(names).toContain("set_up_surf_point")
+    expect(names).toContain("set_up_workflow")
     expect(names).toContain("build_lead_list")
 
     const got = await client.getPrompt({

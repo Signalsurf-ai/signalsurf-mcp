@@ -226,7 +226,7 @@ export function listContextCapabilities(
   return context.role === "viewer"
     ? [
         "context.read",
-        "surf_points.read",
+        "workflows.read",
         "tables.read",
         "schemas.read",
         "sources.read",
@@ -237,10 +237,10 @@ export function listContextCapabilities(
     : [
         "context.read",
         "products.write",
-        "surf_points.read",
-        "surf_points.write",
-        "surf_points.execute",
-        "surf_points.delete",
+        "workflows.read",
+        "workflows.write",
+        "workflows.execute",
+        "workflows.delete",
         "tables.read",
         "tables.write",
         "tables.delete",

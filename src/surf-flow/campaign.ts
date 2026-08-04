@@ -2,7 +2,7 @@ import {
   FLOW_VERSION,
   stepCondition,
   type SequenceStep,
-  type SurfPointFlowV2,
+  type WorkflowFlowV2,
 } from "./index.js"
 import { addNode, connectNodes } from "./mutations.js"
 
@@ -51,7 +51,7 @@ export interface BuildCampaignFlowParams {
 }
 
 export interface BuildCampaignFlowResult {
-  flow: SurfPointFlowV2
+  flow: WorkflowFlowV2
   sequenceNodeId: string
   stepAgentIds: string[]
 }
@@ -73,7 +73,7 @@ export function buildCampaignFlow(
   // Read FLOW_VERSION at call time (not module-load) — campaign.ts and
   // surf-flow/index.ts are mutually imported, so a module-level constant could
   // capture FLOW_VERSION before the barrel finishes initializing it.
-  const empty: SurfPointFlowV2 = { version: FLOW_VERSION, nodes: [], edges: [] }
+  const empty: WorkflowFlowV2 = { version: FLOW_VERSION, nodes: [], edges: [] }
   const sequenceNodeId = mintId("node")
   let flow = addNode(
     empty,

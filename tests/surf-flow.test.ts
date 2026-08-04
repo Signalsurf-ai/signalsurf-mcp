@@ -3,21 +3,21 @@ import {
   applyFlowEdits,
   buildCampaignFlow,
   describeNodeTypes,
-  surfPointFlowV2Schema,
+  workflowFlowV2Schema,
   validateFlow,
-  type SurfPointFlowV2,
+  type WorkflowFlowV2,
 } from "../src/surf-flow/index.js"
 
 function flow(
-  nodes: SurfPointFlowV2["nodes"],
-  edges: SurfPointFlowV2["edges"]
-): SurfPointFlowV2 {
+  nodes: WorkflowFlowV2["nodes"],
+  edges: WorkflowFlowV2["edges"]
+): WorkflowFlowV2 {
   return { version: 2, nodes, edges }
 }
 
-describe("surfPointFlowV2Schema", () => {
+describe("workflowFlowV2Schema", () => {
   it("parses a valid trigger -> agent flow", () => {
-    const parsed = surfPointFlowV2Schema.safeParse({
+    const parsed = workflowFlowV2Schema.safeParse({
       version: 2,
       nodes: [
         { id: "t1", type: "trigger" },
@@ -90,7 +90,7 @@ describe("applyFlowEdits", () => {
   })
 
   it("is atomic: a bad op rolls back the whole batch", () => {
-    const start = { version: 2, nodes: [], edges: [] } as SurfPointFlowV2
+    const start = { version: 2, nodes: [], edges: [] } as WorkflowFlowV2
     let n = 0
     const result = applyFlowEdits(
       start,

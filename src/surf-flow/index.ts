@@ -1,8 +1,8 @@
 import { z } from "zod"
 
 /**
- * SurfPoint Flow V2 — a persisted multi-step graph (DAG) stored at
- * `playbooks.config.flow`. See docs/surf-point-flow-v2.md.
+ * Workflow Flow V2 — a persisted multi-step graph (DAG) stored at
+ * `workflows.config.flow`. See docs/workflow-flow-v2.md.
  *
  * This is the single source of truth for the flow shape. It is shared between
  * the Next.js app (editor + tRPC validation) and the Deno edge worker
@@ -69,7 +69,7 @@ const baseNodeFields = {
 export const triggerNodeSchema = z.object({
   ...baseNodeFields,
   type: z.literal("trigger"),
-  /** Source ids this trigger listens to; empty/omitted = the playbook's sources. */
+  /** Source ids this trigger listens to; empty/omitted = the workflow's sources. */
   sourceIds: z.array(z.string()).optional(),
 })
 
@@ -101,20 +101,20 @@ export const agentNodeSchema = z.object({
   ...baseNodeFields,
   type: z.literal("agent"),
   prompt: z.string(),
-  /** Narrows the playbook database_ids for this node; omitted = inherit all. */
+  /** Narrows the workflow database_ids for this node; omitted = inherit all. */
   databaseIds: z.array(z.string()).optional(),
-  /** Narrows the playbook tool pool for this node; omitted = inherit all. */
+  /** Narrows the workflow tool pool for this node; omitted = inherit all. */
   allowedToolIds: z.array(z.string()).optional(),
   /** Per-node run mode (SIG-974): "standard" = one-shot phase-split,
    * "thinking" = multi-step agent loop with tools. Auto-inferred from the
-   * instruction. Omitted = inherit the playbook's agent_loop_enabled flag. */
+   * instruction. Omitted = inherit the workflow's agent_loop_enabled flag. */
   agentMode: z.enum(["standard", "thinking"]).optional(),
 })
 
 /** Deterministic action kinds whose config lives inline on the node (no agent,
  * no backing product_tools row): POST a payload to a webhook, call an HTTP
- * endpoint, insert a new row into one of the Surf Point's databases, or
- * "object_sink" — the editor surface for `playbooks.config.object_sink`: a
+ * endpoint, insert a new row into one of the Workflow's databases, or
+ * "object_sink" — the editor surface for `workflows.config.object_sink`: a
  * webhook's whole payload lands as one object column on a table. The object_sink
  * node is declarative (the webhook receiver does the write; see SIG-971); it is a
  * no-op if a signal reaches it during a flow run. */
@@ -154,7 +154,7 @@ export const actionNodeSchema = z.object({
  * for conditional cadence. The runtime implements the pause by enqueuing the
  * downstream flow_node job with `locked_until = now + delaySeconds`; the queue
  * claimer (`claim_next_surf_job`) skips that job until it is due, so no scheduler
- * or per-run pointer is needed. See docs/surf-point-flow-v2.md.
+ * or per-run pointer is needed. See docs/workflow-flow-v2.md.
  */
 export const waitNodeSchema = z.object({
   ...baseNodeFields,
@@ -242,22 +242,22 @@ export type FlowEdge = z.infer<typeof flowEdgeSchema>
  * The versioned envelope. Future versions extend this as a
  * `z.discriminatedUnion("version", [...])` so old saved specs keep parsing.
  */
-export const surfPointFlowV2Schema = z.object({
+export const workflowFlowV2Schema = z.object({
   version: z.literal(FLOW_VERSION),
   nodes: z.array(flowNodeSchema),
   edges: z.array(flowEdgeSchema),
 })
-export type SurfPointFlowV2 = z.infer<typeof surfPointFlowV2Schema>
+export type WorkflowFlowV2 = z.infer<typeof workflowFlowV2Schema>
 
 // ─── Graph helpers (pure; safe in both Node and Deno) ────────────────────────
 
-function liveEdges(flow: SurfPointFlowV2): FlowEdge[] {
+function liveEdges(flow: WorkflowFlowV2): FlowEdge[] {
   const ids = new Set(flow.nodes.map((n) => n.id))
   return flow.edges.filter((e) => ids.has(e.source) && ids.has(e.target))
 }
 
 /** Entry nodes = nodes with no inbound edge. Computed, never stored. */
-export function flowEntryNodeIds(flow: SurfPointFlowV2): string[] {
+export function flowEntryNodeIds(flow: WorkflowFlowV2): string[] {
   const targets = new Set(liveEdges(flow).map((e) => e.target))
   return flow.nodes.filter((n) => !targets.has(n.id)).map((n) => n.id)
 }
@@ -273,7 +273,7 @@ export function flowEntryNodeIds(flow: SurfPointFlowV2): string[] {
  * relevant per-source trigger node(s).
  */
 export function entryTriggersForSource(
-  flow: SurfPointFlowV2,
+  flow: WorkflowFlowV2,
   sourceId: string
 ): string[] {
   const entries = flowEntryNodeIds(flow)
@@ -287,7 +287,7 @@ export function entryTriggersForSource(
 
 /** First node of a type in declared order (used by the legacy dual-write). */
 export function firstNodeOfType<T extends FlowNodeType>(
-  flow: SurfPointFlowV2,
+  flow: WorkflowFlowV2,
   type: T
 ): Extract<FlowNode, { type: T }> | undefined {
   return flow.nodes.find((n) => n.type === type) as
@@ -297,7 +297,7 @@ export function firstNodeOfType<T extends FlowNodeType>(
 
 /** Outbound edges of a node whose condition matches the node's branch result. */
 export function nextEdges(
-  flow: SurfPointFlowV2,
+  flow: WorkflowFlowV2,
   nodeId: string,
   branch: FlowEdgeCondition
 ): FlowEdge[] {
@@ -310,9 +310,9 @@ export function nextEdges(
 
 /**
  * Narrow a default id list by a node override. Returns the intersection so a
- * node can only ever shrink the playbook's authorized set, never widen it.
+ * node can only ever shrink the workflow's authorized set, never widen it.
  * An absent override inherits the defaults. This is the node-scoping security
- * boundary the executor relies on. See docs/surf-point-flow-v2.md.
+ * boundary the executor relies on. See docs/workflow-flow-v2.md.
  */
 export function narrowIds(defaults: string[], override?: string[]): string[] {
   if (!override) return defaults
@@ -339,7 +339,7 @@ export interface FlowProblem {
  * Structural validation for the executor: DAG-only; fan-in/joins are allowed.
  * Returns an empty array when the flow is structurally runnable.
  */
-export function validateFlow(flow: SurfPointFlowV2): FlowProblem[] {
+export function validateFlow(flow: WorkflowFlowV2): FlowProblem[] {
   const problems: FlowProblem[] = []
   const nodeIds = new Set(flow.nodes.map((n) => n.id))
 
@@ -427,7 +427,7 @@ export function validateFlow(flow: SurfPointFlowV2): FlowProblem[] {
   // Action nodes need their target configured or they fail at runtime for
   // every signal (executeInlineAction returns "Missing url" / "No target
   // table"). Surface it as a non-blocking problem so the editor warns before
-  // the Surf Point goes live, without blocking auto-save mid-edit.
+  // the Workflow goes live, without blocking auto-save mid-edit.
   for (const n of flow.nodes) {
     if (n.type !== "action") continue
     const label = n.label ?? n.id
@@ -494,7 +494,7 @@ export function validateFlow(flow: SurfPointFlowV2): FlowProblem[] {
  * surfaced as warnings so the agent can self-repair without blocking the save.
  */
 export function validateFieldReferences(
-  flow: SurfPointFlowV2,
+  flow: WorkflowFlowV2,
   columnsByDatabaseId: Record<string, string[]>
 ): FlowProblem[] {
   const problems: FlowProblem[] = []

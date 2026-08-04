@@ -9,7 +9,7 @@ import type {
   SignalSurfContext,
   SignalSurfProductContext,
   SupabaseLike,
-  SurfPointRow,
+  WorkflowRow,
 } from "./types.js"
 import {
   buildImportMappingPreview,
@@ -58,11 +58,11 @@ import {
   buildUpstreamContext,
   describeNodeTypes as describeFlowNodeTypes,
   flowEntryNodeIds,
-  surfPointFlowV2Schema,
+  workflowFlowV2Schema,
   validateFieldReferences,
   validateFlow,
   type FlowEditOp,
-  type SurfPointFlowV2,
+  type WorkflowFlowV2,
 } from "./surf-flow/index.js"
 import {
   evaluateRunCondition,
@@ -170,7 +170,7 @@ type CreditAccountingContext = {
   periodStart: string
 }
 
-type ListSurfPointsInput = {
+type ListWorkflowsInput = {
   includeInactive?: boolean
   limit?: number
 }
@@ -181,12 +181,12 @@ type CreateProductInput = {
   displayOrder?: number
 }
 
-type CreateSurfPointInput = {
+type CreateWorkflowInput = {
   name: string
   description?: string
   color?: string
   icon?: string
-  folderId?: string | null
+  projectId?: string | null
   databaseIds?: string[]
   promptTemplate?: string
   scoringRubric?: string
@@ -200,13 +200,13 @@ type CreateSurfPointInput = {
   config?: JsonRecord
 }
 
-type UpdateSurfPointInput = {
-  surfPointId: string
+type UpdateWorkflowInput = {
+  workflowId: string
   name?: string
   description?: string | null
   color?: string
   icon?: string
-  folderId?: string | null
+  projectId?: string | null
   databaseIds?: string[]
   promptTemplate?: string | null
   scoringRubric?: string | null
@@ -223,8 +223,8 @@ type UpdateSurfPointInput = {
   configPatch?: JsonRecord
 }
 
-type RunSurfPointInput = {
-  surfPointId: string
+type RunWorkflowInput = {
+  workflowId: string
   idempotencyKey?: string
   allowInactive?: boolean
   dedupePending?: boolean
@@ -338,7 +338,7 @@ type SaveAccountListProfileInput = {
 }
 
 type ListSurfJobsInput = {
-  surfPointId?: string
+  workflowId?: string
   status?: string
   limit?: number
   offset?: number
@@ -462,7 +462,7 @@ type CreateRelationFieldInput = {
   displayField?: string
 }
 
-type SetSurfPointSourceActiveInput = {
+type SetWorkflowSourceActiveInput = {
   sourceId: string
   isActive: boolean
 }
@@ -500,8 +500,8 @@ type SourceTypeInput =
   | "manual-trigger"
   | "on-schedule"
 
-type CreateSurfPointSourceInput = {
-  surfPointId: string
+type CreateWorkflowSourceInput = {
+  workflowId: string
   sourceType: SourceTypeInput
   name?: string
   config?: JsonRecord
@@ -510,7 +510,7 @@ type CreateSurfPointSourceInput = {
   replaceExisting?: boolean
 }
 
-type UpdateSurfPointSourceInput = {
+type UpdateWorkflowSourceInput = {
   sourceId: string
   sourceType?: SourceTypeInput
   name?: string | null
@@ -524,13 +524,13 @@ type UpdateSurfPointSourceInput = {
   replaceExisting?: boolean
 }
 
-type DeleteSurfPointSourceInput = {
+type DeleteWorkflowSourceInput = {
   sourceId?: string
   sourceIds?: string[]
 }
 
-type SurfPointToolInput = {
-  surfPointId: string
+type WorkflowToolInput = {
+  workflowId: string
   toolId: string
 }
 
@@ -604,7 +604,7 @@ type SurfJobRow = {
   product_id?: string | null
   user_id?: string | null
   run_id?: string | null
-  playbook_id: string
+  workflow_id: string
   source_id?: string | null
   job_type?: string | null
   status: string
@@ -624,7 +624,7 @@ type SurfJobRow = {
 
 type SourceRow = {
   id: string
-  playbook_id: string
+  workflow_id: string
   user_id?: string | null
   name?: string | null
   type?: string | null
@@ -649,7 +649,7 @@ type RawSignalRow = {
 type ProductToolRow = {
   id: string
   product_id: string
-  playbook_id?: string | null
+  workflow_id?: string | null
   tool_type: string
   config?: JsonRecord | null
   is_enabled?: boolean | null
@@ -678,7 +678,7 @@ type AccountListProfileRow = {
 type CreateTableRowInput = {
   databaseId: string
   data: JsonRecord
-  playbookId?: string | null
+  workflowId?: string | null
   note?: string | null
 }
 
@@ -689,11 +689,11 @@ type UpdateTableRowsInput = {
     data?: JsonRecord
     dataPatch?: JsonRecord
     note?: string | null
-    playbookId?: string | null
+    workflowId?: string | null
   }>
 }
 
-const SURF_POINT_COLUMNS = [
+const WORKFLOW_COLUMNS = [
   "id",
   "product_id",
   "name",
@@ -711,7 +711,7 @@ const SURF_POINT_COLUMNS = [
   "tool_config",
   "variables",
   "config",
-  "folder_id",
+  "project_id",
   "display_order",
   "created_at",
   "updated_at",
@@ -737,7 +737,7 @@ const DATABASE_COLUMNS = [
 
 const ENTRY_COLUMNS = [
   "id",
-  "playbook_id",
+  "workflow_id",
   "database_id",
   "data",
   "data_cached",
@@ -753,7 +753,7 @@ const ENTRY_COLUMNS = [
 
 const SOURCE_COLUMNS = [
   "id",
-  "playbook_id",
+  "workflow_id",
   "user_id",
   "name",
   "type",
@@ -769,7 +769,7 @@ const SOURCE_COLUMNS = [
 const PRODUCT_TOOL_COLUMNS = [
   "id",
   "product_id",
-  "playbook_id",
+  "workflow_id",
   "tool_type",
   "config",
   "is_enabled",
@@ -849,14 +849,14 @@ function oauthTokenProductIds(row: McpOAuthTokenRow): string[] {
 
 function idempotentSurfJobId(
   context: SignalSurfContext,
-  surfPointId: string,
+  workflowId: string,
   sourceId: string,
   idempotencyKey: string
 ): string {
   const bytes = Buffer.from(
     createHash("sha256")
       .update(
-        `${context.productId}:${surfPointId}:${sourceId}:${idempotencyKey}`
+        `${context.productId}:${workflowId}:${sourceId}:${idempotencyKey}`
       )
       .digest("hex")
       .slice(0, 32),
@@ -1717,13 +1717,13 @@ export class SignalSurfRepository {
     }
   }
 
-  async listSurfPoints(
+  async listWorkflows(
     context: SignalSurfContext,
-    input: ListSurfPointsInput = {}
+    input: ListWorkflowsInput = {}
   ) {
     let query = this.db
-      .from("playbooks")
-      .select(SURF_POINT_COLUMNS)
+      .from("workflows")
+      .select(WORKFLOW_COLUMNS)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
 
@@ -1736,16 +1736,16 @@ export class SignalSurfRepository {
       .order("created_at", { ascending: true })
       .limit(input.limit ?? 100)
 
-    requireNoDbError(error, "Failed to list surf points")
+    requireNoDbError(error, "Failed to list Workflows")
     return {
-      surfPoints: (data ?? []).map(formatSurfPoint),
+      workflows: (data ?? []).map(formatWorkflow),
       totalCount: data?.length ?? 0,
     }
   }
 
-  async getSurfPoint(context: SignalSurfContext, surfPointId: string) {
-    const surfPoint = await this.getSurfPointForUpdate(context, surfPointId)
-    return { surfPoint: formatSurfPoint(surfPoint) }
+  async getWorkflow(context: SignalSurfContext, workflowId: string) {
+    const workflow = await this.getWorkflowForUpdate(context, workflowId)
+    return { workflow: formatWorkflow(workflow) }
   }
 
   async listProductTools(
@@ -2624,9 +2624,9 @@ export class SignalSurfRepository {
     }
   }
 
-  async createSurfPoint(
+  async createWorkflow(
     context: SignalSurfContext,
-    input: CreateSurfPointInput
+    input: CreateWorkflowInput
   ) {
     const databaseIds = await this.resolveDatabaseIds(
       context,
@@ -2653,9 +2653,9 @@ export class SignalSurfRepository {
       config: input.config ?? {},
     }
 
-    if (input.folderId !== undefined) insertData.folder_id = input.folderId
-    if (input.folderId) {
-      await this.assertFolderBelongsToProduct(context, input.folderId)
+    if (input.projectId !== undefined) insertData.project_id = input.projectId
+    if (input.projectId) {
+      await this.assertDatabaseFolderBelongsToProduct(context, input.projectId)
     }
     if (promptTemplate !== undefined)
       insertData.prompt_template = promptTemplate
@@ -2667,31 +2667,31 @@ export class SignalSurfRepository {
       insertData.relevance_threshold = input.relevanceThreshold
 
     const { data, error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .insert(insertData)
-      .select(SURF_POINT_COLUMNS)
+      .select(WORKFLOW_COLUMNS)
       .single()
 
     if (error?.code === "23505") {
-      const existing = await this.findSurfPointByName(context, input.name)
+      const existing = await this.findWorkflowByName(context, input.name)
       throw new UserFacingError(
-        `Surf point "${input.name}" already exists for this product${
+        `Workflow "${input.name}" already exists for this product${
           existing ? ` (id: ${existing.id})` : ""
-        }. Use update_surf_point or choose a different name.`,
+        }. Use update_workflow or choose a different name.`,
         { code: "CONFLICT", status: 409 }
       )
     }
-    requireNoDbError(error, "Failed to create surf point")
-    return { surfPoint: formatSurfPoint(data as SurfPointRow) }
+    requireNoDbError(error, "Failed to create Workflow")
+    return { workflow: formatWorkflow(data as WorkflowRow) }
   }
 
-  async updateSurfPoint(
+  async updateWorkflow(
     context: SignalSurfContext,
-    input: UpdateSurfPointInput
+    input: UpdateWorkflowInput
   ) {
-    await this.assertSurfPointBelongsToProduct(context, input.surfPointId)
-    if (input.folderId) {
-      await this.assertFolderBelongsToProduct(context, input.folderId)
+    await this.assertWorkflowBelongsToProduct(context, input.workflowId)
+    if (input.projectId) {
+      await this.assertDatabaseFolderBelongsToProduct(context, input.projectId)
     }
     if (input.variables !== undefined && input.variablesPatch !== undefined) {
       throw new UserFacingError(
@@ -2730,7 +2730,7 @@ export class SignalSurfRepository {
       updateData.description = input.description?.trim() || null
     if (input.color !== undefined) updateData.color = input.color
     if (input.icon !== undefined) updateData.icon = input.icon
-    if (input.folderId !== undefined) updateData.folder_id = input.folderId
+    if (input.projectId !== undefined) updateData.project_id = input.projectId
     if (input.databaseIds !== undefined) {
       updateData.database_ids = await this.resolveDatabaseIds(
         context,
@@ -2759,7 +2759,7 @@ export class SignalSurfRepository {
         input.promptTemplate === undefined)
 
     const existing = needsExisting
-      ? await this.getSurfPointForUpdate(context, input.surfPointId)
+      ? await this.getWorkflowForUpdate(context, input.workflowId)
       : null
 
     if (input.variables !== undefined) updateData.variables = input.variables
@@ -2779,8 +2779,8 @@ export class SignalSurfRepository {
     }
     if (updateData.tool_config !== undefined) {
       // Tool attachment is set here (no dedicated attach/detach tool), so the
-      // referenced auto_tool_ids must be validated against this surf point's
-      // product, exactly as the removed attach_surf_point_tool did. This blocks
+      // referenced auto_tool_ids must be validated against this Workflow's
+      // product, exactly as the removed attach_workflow_tool did. This blocks
       // a multi-product token from writing another product's tool id.
       await this.assertProductToolsBelongToProduct(
         context,
@@ -2821,21 +2821,21 @@ export class SignalSurfRepository {
     }
 
     const { data, error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .update(updateData)
-      .eq("id", input.surfPointId)
+      .eq("id", input.workflowId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
-      .select(SURF_POINT_COLUMNS)
+      .select(WORKFLOW_COLUMNS)
       .single()
 
     if (error?.code === "23505") {
-      throw new UserFacingError("A surf point with this name already exists.", {
+      throw new UserFacingError("A Workflow with this name already exists.", {
         code: "CONFLICT",
         status: 409,
       })
     }
-    requireNoDbError(error, "Failed to update surf point")
+    requireNoDbError(error, "Failed to update Workflow")
 
     if (input.isActive !== undefined) {
       const { error: sourceError } = await this.db
@@ -2844,7 +2844,7 @@ export class SignalSurfRepository {
           is_active: input.isActive,
           updated_at: new Date().toISOString(),
         })
-        .eq("playbook_id", input.surfPointId)
+        .eq("workflow_id", input.workflowId)
       requireNoDbError(
         errorOrNull(sourceError),
         "Failed to cascade source state"
@@ -2852,7 +2852,7 @@ export class SignalSurfRepository {
     }
 
     return {
-      surfPoint: formatSurfPoint(data as SurfPointRow),
+      workflow: formatWorkflow(data as WorkflowRow),
       changedFields: changedKeys,
     }
   }
@@ -2863,33 +2863,33 @@ export class SignalSurfRepository {
     return describeFlowNodeTypes()
   }
 
-  private async loadPlaybookFlow(
+  private async loadWorkflowFlow(
     context: SignalSurfContext,
-    playbookId: string
+    workflowId: string
   ): Promise<{
     name: string | null
     config: JsonRecord
-    flow: SurfPointFlowV2
+    flow: WorkflowFlowV2
   }> {
     const { data, error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .select("id, name, config")
-      .eq("id", playbookId)
+      .eq("id", workflowId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
       .maybeSingle()
-    requireNoDbError(error, "Failed to load surf point")
+    requireNoDbError(error, "Failed to load Workflow")
     if (!data) {
-      throw new UserFacingError("Surf point not found or access denied.", {
+      throw new UserFacingError("Workflow not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
       })
     }
     const row = data as { name?: string | null; config?: unknown }
     const config = asRecord(row.config)
-    let flow: SurfPointFlowV2 = { version: FLOW_VERSION, nodes: [], edges: [] }
+    let flow: WorkflowFlowV2 = { version: FLOW_VERSION, nodes: [], edges: [] }
     if (config.flow != null) {
-      const parsed = surfPointFlowV2Schema.safeParse(config.flow)
+      const parsed = workflowFlowV2Schema.safeParse(config.flow)
       if (parsed.success) flow = parsed.data
     }
     return {
@@ -2918,7 +2918,7 @@ export class SignalSurfRepository {
 
   private async columnsForActionTargets(
     context: SignalSurfContext,
-    flow: SurfPointFlowV2
+    flow: WorkflowFlowV2
   ): Promise<Record<string, string[]>> {
     const dbIds = new Set<string>()
     for (const node of flow.nodes) {
@@ -2937,11 +2937,11 @@ export class SignalSurfRepository {
     return columnsByDatabaseId
   }
 
-  private async persistPlaybookFlow(
+  private async persistWorkflowFlow(
     context: SignalSurfContext,
-    playbookId: string,
+    workflowId: string,
     config: JsonRecord,
-    flow: SurfPointFlowV2
+    flow: WorkflowFlowV2
   ) {
     const problems = validateFlow(flow)
     const blocking = problems.filter(
@@ -3001,12 +3001,12 @@ export class SignalSurfRepository {
     }
 
     const { error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .update(updateData)
-      .eq("id", playbookId)
+      .eq("id", workflowId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
-    requireNoDbError(error, "Failed to save surf point flow")
+    requireNoDbError(error, "Failed to save Workflow flow")
 
     const warnings = problems.filter(
       (problem) => problem.code !== "cycle" && problem.code !== "dangling_edge"
@@ -3020,11 +3020,11 @@ export class SignalSurfRepository {
     }
   }
 
-  async updateSurfPointFlow(
+  async updateWorkflowFlow(
     context: SignalSurfContext,
-    input: { playbookId: string; flow: unknown }
+    input: { workflowId: string; flow: unknown }
   ) {
-    const parsed = surfPointFlowV2Schema.safeParse(input.flow)
+    const parsed = workflowFlowV2Schema.safeParse(input.flow)
     if (!parsed.success) {
       throw new UserFacingError(
         `Invalid flow graph: ${parsed.error.issues
@@ -3033,21 +3033,21 @@ export class SignalSurfRepository {
         { code: "BAD_REQUEST", status: 400 }
       )
     }
-    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
-    const summary = await this.persistPlaybookFlow(
+    const loaded = await this.loadWorkflowFlow(context, input.workflowId)
+    const summary = await this.persistWorkflowFlow(
       context,
-      input.playbookId,
+      input.workflowId,
       loaded.config,
       parsed.data
     )
-    return { playbookId: input.playbookId, name: loaded.name, ...summary }
+    return { workflowId: input.workflowId, name: loaded.name, ...summary }
   }
 
   async applyFlowEdits(
     context: SignalSurfContext,
-    input: { playbookId: string; edits: FlowEditOp[] }
+    input: { workflowId: string; edits: FlowEditOp[] }
   ) {
-    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
+    const loaded = await this.loadWorkflowFlow(context, input.workflowId)
     const result = applyFlowEditsToGraph(
       loaded.flow,
       input.edits,
@@ -3055,19 +3055,19 @@ export class SignalSurfRepository {
     )
     if (!result.ok) {
       return {
-        playbookId: input.playbookId,
+        workflowId: input.workflowId,
         applied: false,
         results: result.results,
       }
     }
-    const summary = await this.persistPlaybookFlow(
+    const summary = await this.persistWorkflowFlow(
       context,
-      input.playbookId,
+      input.workflowId,
       loaded.config,
       result.flow
     )
     return {
-      playbookId: input.playbookId,
+      workflowId: input.workflowId,
       applied: true,
       refs: result.refs,
       results: result.results,
@@ -3077,14 +3077,14 @@ export class SignalSurfRepository {
 
   async getNodeUpstreamContext(
     context: SignalSurfContext,
-    input: { playbookId: string; nodeId: string }
+    input: { workflowId: string; nodeId: string }
   ) {
-    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
+    const loaded = await this.loadWorkflowFlow(context, input.workflowId)
     if (!loaded.flow.nodes.some((node) => node.id === input.nodeId)) {
       throw new UserFacingError(
         `No node "${
           input.nodeId
-        }" in this surf point's flow. Existing node ids: ${loaded.flow.nodes
+        }" in this Workflow's flow. Existing node ids: ${loaded.flow.nodes
           .map((node) => node.id)
           .join(", ")}`,
         { code: "NOT_FOUND", status: 404 }
@@ -3099,7 +3099,7 @@ export class SignalSurfRepository {
   async createCampaign(
     context: SignalSurfContext,
     input: {
-      playbookId: string
+      workflowId: string
       contactTableId: string
       recipientField?: string
       mailbox?: string
@@ -3131,7 +3131,7 @@ export class SignalSurfRepository {
       )
     }
 
-    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
+    const loaded = await this.loadWorkflowFlow(context, input.workflowId)
 
     const { data: table, error: tableError } = await this.db
       .from("databases")
@@ -3196,9 +3196,9 @@ export class SignalSurfRepository {
     requireNoDbError(toolError, "Failed to create the sending mailbox tool")
     const toolId = (toolRow as { id: string }).id
 
-    // Authorize the mailbox tool on the surf point pool before persisting the
+    // Authorize the mailbox tool on the Workflow pool before persisting the
     // flow so the step agents' allowedToolIds resolve against it.
-    const existing = await this.getSurfPointForUpdate(context, input.playbookId)
+    const existing = await this.getWorkflowForUpdate(context, input.workflowId)
     const toolConfig = asRecord(existing?.tool_config)
     const autoToolIds = uniqueStrings([
       ...(Array.isArray(toolConfig.auto_tool_ids)
@@ -3207,12 +3207,12 @@ export class SignalSurfRepository {
       toolId,
     ])
     const { error: linkError } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .update({
         tool_config: { ...toolConfig, auto_tool_ids: autoToolIds },
         updated_at: new Date().toISOString(),
       })
-      .eq("id", input.playbookId)
+      .eq("id", input.workflowId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
     requireNoDbError(linkError, "Failed to attach the mailbox tool")
@@ -3221,36 +3221,36 @@ export class SignalSurfRepository {
       { contactTableId: input.contactTableId, recipientField, toolId, steps },
       (kind) => `${kind}-${randomUUID().slice(0, 8)}`
     )
-    await this.persistPlaybookFlow(
+    await this.persistWorkflowFlow(
       context,
-      input.playbookId,
+      input.workflowId,
       loaded.config,
       built.flow
     )
 
     return {
-      playbookId: input.playbookId,
+      workflowId: input.workflowId,
       sequenceNodeId: built.sequenceNodeId,
       stepAgentIds: built.stepAgentIds,
       mailboxToolId: toolId,
       mailboxAccountId: mailbox,
       stepCount: steps.length,
       message:
-        "Campaign built. It does NOT enrol contacts automatically — open the surf point in SignalSurf and click Enroll to start the drip.",
+        "Campaign built. It does NOT enrol contacts automatically — open the Workflow in SignalSurf and click Enroll to start the drip.",
     }
   }
 
-  async testSurfPointNode(
+  async testWorkflowNode(
     context: SignalSurfContext,
-    input: { playbookId: string; nodeId: string; sampleText?: string }
+    input: { workflowId: string; nodeId: string; sampleText?: string }
   ) {
-    await this.assertSurfPointBelongsToProduct(context, input.playbookId)
-    const loaded = await this.loadPlaybookFlow(context, input.playbookId)
+    await this.assertWorkflowBelongsToProduct(context, input.workflowId)
+    const loaded = await this.loadWorkflowFlow(context, input.workflowId)
     if (!loaded.flow.nodes.some((node) => node.id === input.nodeId)) {
       throw new UserFacingError(
         `No node "${
           input.nodeId
-        }" in this surf point's flow. Existing node ids: ${loaded.flow.nodes
+        }" in this Workflow's flow. Existing node ids: ${loaded.flow.nodes
           .map((node) => node.id)
           .join(", ")}`,
         { code: "NOT_FOUND", status: 404 }
@@ -3267,7 +3267,7 @@ export class SignalSurfRepository {
       process.env.INTERNAL_API_SECRET
     const { data, error } = await this.db.functions.invoke("surf-flow-debug", {
       body: {
-        playbookId: input.playbookId,
+        workflowId: input.workflowId,
         nodeId: input.nodeId,
         ...(input.sampleText ? { sampleText: input.sampleText } : {}),
       },
@@ -3279,17 +3279,17 @@ export class SignalSurfRepository {
         { code: "UPSTREAM_ERROR", status: 502 }
       )
     }
-    return { playbookId: input.playbookId, nodeId: input.nodeId, result: data }
+    return { workflowId: input.workflowId, nodeId: input.nodeId, result: data }
   }
 
-  async runSurfPoint(context: SignalSurfContext, input: RunSurfPointInput) {
-    const surfPoint = await this.getSurfPointRunTarget(
+  async runWorkflow(context: SignalSurfContext, input: RunWorkflowInput) {
+    const workflow = await this.getWorkflowRunTarget(
       context,
-      input.surfPointId
+      input.workflowId
     )
-    if (!surfPoint.is_active && !input.allowInactive) {
+    if (!workflow.is_active && !input.allowInactive) {
       throw new UserFacingError(
-        "Surf point is inactive. Pass allowInactive=true to queue it intentionally.",
+        "Workflow is inactive. Pass allowInactive=true to queue it intentionally.",
         { code: "BAD_REQUEST", status: 400 }
       )
     }
@@ -3297,15 +3297,15 @@ export class SignalSurfRepository {
     const { data: sourceData, error: sourceError } = await this.db
       .from("sources")
       .select(SOURCE_COLUMNS)
-      .eq("playbook_id", input.surfPointId)
+      .eq("workflow_id", input.workflowId)
       .eq("type", "pull")
       .eq("is_active", true)
 
-    requireNoDbError(sourceError, "Failed to list active surf point sources")
+    requireNoDbError(sourceError, "Failed to list active Workflow sources")
     const sources = (sourceData ?? []) as SourceRow[]
     if (sources.length === 0) {
       throw new UserFacingError(
-        "No active pull sources found for this surf point.",
+        "No active pull sources found for this Workflow.",
         { code: "BAD_REQUEST", status: 400 }
       )
     }
@@ -3317,7 +3317,7 @@ export class SignalSurfRepository {
       sources.find((source) => source.user_id)?.user_id
     if (!userId) {
       throw new UserFacingError(
-        "Cannot queue surf point run because no job user could be resolved.",
+        "Cannot queue Workflow run because no job user could be resolved.",
         { code: "CONFIG_ERROR", status: 500 }
       )
     }
@@ -3343,7 +3343,7 @@ export class SignalSurfRepository {
       const deterministicIds = sources.map((source) =>
         idempotentSurfJobId(
           context,
-          input.surfPointId,
+          input.workflowId,
           source.id,
           input.idempotencyKey!
         )
@@ -3383,14 +3383,14 @@ export class SignalSurfRepository {
       id: input.idempotencyKey
         ? idempotentSurfJobId(
             context,
-            input.surfPointId,
+            input.workflowId,
             source.id,
             input.idempotencyKey
           )
         : randomUUID(),
       product_id: context.productId,
       user_id: userId,
-      playbook_id: input.surfPointId,
+      workflow_id: input.workflowId,
       job_type: "extract",
       status: "pending",
       priority: 1,
@@ -3410,7 +3410,7 @@ export class SignalSurfRepository {
       .insert(jobInserts)
       .select("*")
 
-    requireNoDbError(error, "Failed to queue surf point run")
+    requireNoDbError(error, "Failed to queue Workflow run")
     const queuedJobs = ((data ?? []) as SurfJobRow[]).map(formatSurfJob)
     const skippedJobs = [...existingJobsBySourceId.values()].map(formatSurfJob)
     const jobs = [...queuedJobs, ...skippedJobs]
@@ -3428,13 +3428,13 @@ export class SignalSurfRepository {
 
   // ─── Quick Surf (per-column enrichment) ────────────────────────────────────
   //
-  // Mirrors the dashboard column "Quick Surf" toggle: a hidden surf point
-  // (playbooks row) bound to one column via an internal `manual_trigger` source
+  // Mirrors the dashboard column "Quick Surf" toggle: a hidden Workflow
+  // (workflows row) bound to one column via an internal `manual_trigger` source
   // whose metadata carries { event_type, database_id, target_field, disabled? }.
   // Running enqueues one `analyze` surf job per row through the normal brain
   // pipeline (so credits are charged by the brain as each job runs); poll with
   // list_surf_jobs / wait_for_surf_job. Sources are product-scoped through their
-  // owning playbook, so every lookup re-verifies the playbook's product_id rather
+  // owning workflow, so every lookup re-verifies the workflow's product_id rather
   // than relying on an embedded-resource filter the test double cannot model.
   private async findQuickSurfSource(
     context: SignalSurfContext,
@@ -3442,12 +3442,12 @@ export class SignalSurfRepository {
     fieldKey: string
   ): Promise<{
     id: string
-    playbook_id: string | null
+    workflow_id: string | null
     metadata: JsonRecord
   } | null> {
     const { data, error } = await this.db
       .from("sources")
-      .select("id, playbook_id, metadata")
+      .select("id, workflow_id, metadata")
       .contains("metadata", {
         event_type: "manual_trigger",
         database_id: databaseId,
@@ -3456,22 +3456,22 @@ export class SignalSurfRepository {
     requireNoDbError(error, "Failed to look up Quick Surf source")
     const candidates = (data ?? []) as Array<{
       id: string
-      playbook_id: string | null
+      workflow_id: string | null
       metadata: unknown
     }>
     for (const candidate of candidates) {
-      if (!candidate.playbook_id) continue
-      const { data: playbook } = await this.db
-        .from("playbooks")
+      if (!candidate.workflow_id) continue
+      const { data: workflow } = await this.db
+        .from("workflows")
         .select("id")
-        .eq("id", candidate.playbook_id)
+        .eq("id", candidate.workflow_id)
         .eq("product_id", context.productId)
         .is("deleted_at", null)
         .maybeSingle()
-      if (playbook) {
+      if (workflow) {
         return {
           id: candidate.id,
-          playbook_id: candidate.playbook_id,
+          workflow_id: candidate.workflow_id,
           metadata: asRecord(candidate.metadata),
         }
       }
@@ -3521,15 +3521,15 @@ export class SignalSurfRepository {
         })
         .eq("id", existing.id)
       requireNoDbError(srcError, "Failed to re-enable Quick Surf")
-      if (existing.playbook_id) {
+      if (existing.workflow_id) {
         const { error: pbError } = await this.db
-          .from("playbooks")
+          .from("workflows")
           .update({
             surf_prompt: whatToDo,
             prompt_template: whatToDo,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", existing.playbook_id)
+          .eq("id", existing.workflow_id)
           .eq("product_id", context.productId)
         requireNoDbError(pbError, "Failed to update Quick Surf instruction")
       }
@@ -3539,7 +3539,7 @@ export class SignalSurfRepository {
         restored: wasDisabled,
         databaseId: input.databaseId,
         fieldKey: input.fieldKey,
-        surfPointId: existing.playbook_id,
+        workflowId: existing.workflow_id,
         sourceId: existing.id,
       }
     }
@@ -3553,12 +3553,12 @@ export class SignalSurfRepository {
       )
     }
 
-    const surfPointId = randomUUID()
-    const playbookName = `${database.name || "Database"} · ${fieldLabel}`
-    const { error: pbError } = await this.db.from("playbooks").insert({
-      id: surfPointId,
+    const workflowId = randomUUID()
+    const workflowName = `${database.name || "Database"} · ${fieldLabel}`
+    const { error: pbError } = await this.db.from("workflows").insert({
+      id: workflowId,
       product_id: context.productId,
-      name: playbookName,
+      name: workflowName,
       description: null,
       is_default: false,
       database_ids: [input.databaseId],
@@ -3568,7 +3568,7 @@ export class SignalSurfRepository {
       tool_config: {},
       deleted_at: null,
     })
-    requireNoDbError(pbError, "Failed to create the Quick Surf surf point")
+    requireNoDbError(pbError, "Failed to create the Quick Surf Workflow")
 
     const sourceId = randomUUID()
     const { error: srcError } = await this.db.from("sources").insert({
@@ -3581,14 +3581,14 @@ export class SignalSurfRepository {
       },
       data_schema: { fields: [] },
       is_active: true,
-      playbook_id: surfPointId,
+      workflow_id: workflowId,
     })
     if (srcError) {
-      // Roll back the playbook so we never leave an orphaned hidden surf point.
+      // Roll back the workflow so we never leave an orphaned hidden Workflow.
       await this.db
-        .from("playbooks")
+        .from("workflows")
         .delete()
-        .eq("id", surfPointId)
+        .eq("id", workflowId)
         .eq("product_id", context.productId)
       requireNoDbError(srcError, "Failed to bind Quick Surf to the column")
     }
@@ -3598,7 +3598,7 @@ export class SignalSurfRepository {
       restored: false,
       databaseId: input.databaseId,
       fieldKey: input.fieldKey,
-      surfPointId,
+      workflowId,
       sourceId,
     }
   }
@@ -3620,7 +3620,7 @@ export class SignalSurfRepository {
         fieldKey: input.fieldKey,
       }
     }
-    // Turn off WITHOUT deleting: keep the surf point + its "what to do" so
+    // Turn off WITHOUT deleting: keep the Workflow + its "what to do" so
     // re-enabling restores the instruction.
     const { error } = await this.db
       .from("sources")
@@ -3646,7 +3646,7 @@ export class SignalSurfRepository {
     await this.assertDatabaseBelongsToProduct(context, input.databaseId)
     const { data, error } = await this.db
       .from("sources")
-      .select("id, metadata, playbook_id")
+      .select("id, metadata, workflow_id")
       .contains("metadata", {
         event_type: "manual_trigger",
         database_id: input.databaseId,
@@ -3655,11 +3655,11 @@ export class SignalSurfRepository {
     const sources = (data ?? []) as Array<{
       id: string
       metadata: unknown
-      playbook_id: string | null
+      workflow_id: string | null
     }>
     const columns: Array<{
       fieldKey: string
-      surfPointId: string
+      workflowId: string
       sourceId: string
       whatToDo: string | null
     }> = []
@@ -3669,19 +3669,19 @@ export class SignalSurfRepository {
       if (typeof targetField !== "string" || !targetField) continue
       // Off-but-remembered columns are not "enabled" — skip them.
       if (meta.disabled === true) continue
-      if (!source.playbook_id) continue
-      const { data: playbook } = await this.db
-        .from("playbooks")
+      if (!source.workflow_id) continue
+      const { data: workflow } = await this.db
+        .from("workflows")
         .select("id, surf_prompt")
-        .eq("id", source.playbook_id)
+        .eq("id", source.workflow_id)
         .eq("product_id", context.productId)
         .is("deleted_at", null)
         .maybeSingle()
-      if (!playbook) continue
-      const surfPrompt = asRecord(playbook).surf_prompt
+      if (!workflow) continue
+      const surfPrompt = asRecord(workflow).surf_prompt
       columns.push({
         fieldKey: targetField,
-        surfPointId: source.playbook_id,
+        workflowId: source.workflow_id,
         sourceId: source.id,
         whatToDo: typeof surfPrompt === "string" ? surfPrompt : null,
       })
@@ -3714,7 +3714,7 @@ export class SignalSurfRepository {
       input.databaseId,
       input.fieldKey
     )
-    if (!source || !source.playbook_id) {
+    if (!source || !source.workflow_id) {
       throw new UserFacingError(
         `Quick Surf is not set up on column "${input.fieldKey}". Call enable_quick_surf first.`,
         { code: "NOT_FOUND", status: 404 }
@@ -3727,16 +3727,16 @@ export class SignalSurfRepository {
       )
     }
 
-    const { data: playbookData, error: pbError } = await this.db
-      .from("playbooks")
+    const { data: workflowData, error: pbError } = await this.db
+      .from("workflows")
       .select(
         "id, prompt_template, surf_prompt, scoring_rubric, is_active, product_id"
       )
-      .eq("id", source.playbook_id)
+      .eq("id", source.workflow_id)
       .eq("product_id", context.productId)
       .maybeSingle()
-    requireNoDbError(pbError, "Failed to load the Quick Surf surf point")
-    const playbook = playbookData as {
+    requireNoDbError(pbError, "Failed to load the Quick Surf Workflow")
+    const workflow = workflowData as {
       id: string
       prompt_template?: string | null
       surf_prompt?: string | null
@@ -3744,15 +3744,15 @@ export class SignalSurfRepository {
       is_active?: boolean | null
       product_id: string
     } | null
-    const playbookValid =
-      !!playbook &&
-      (playbook.is_active ?? true) &&
-      (!!playbook.prompt_template ||
-        !!playbook.surf_prompt ||
-        !!playbook.scoring_rubric)
-    if (!playbook || !playbookValid) {
+    const workflowValid =
+      !!workflow &&
+      (workflow.is_active ?? true) &&
+      (!!workflow.prompt_template ||
+        !!workflow.surf_prompt ||
+        !!workflow.scoring_rubric)
+    if (!workflow || !workflowValid) {
       throw new UserFacingError(
-        "The Quick Surf surf point has no instruction or is inactive — re-run enable_quick_surf with a whatToDo.",
+        "The Quick Surf Workflow has no instruction or is inactive — re-run enable_quick_surf with a whatToDo.",
         { code: "BAD_REQUEST", status: 400 }
       )
     }
@@ -3792,8 +3792,8 @@ export class SignalSurfRepository {
           },
         ],
         p_source_id: source.id,
-        p_playbook_id: playbook.id,
-        p_product_id: playbook.product_id,
+        p_workflow_id: workflow.id,
+        p_product_id: workflow.product_id,
         p_user_id: userId,
         p_target_field: input.fieldKey,
         p_preserve_existing: input.overwriteExisting !== true,
@@ -3836,7 +3836,7 @@ export class SignalSurfRepository {
           databaseId: input.databaseId,
           fieldKey: input.fieldKey,
           entryId: input.entryId,
-          surfPointId: playbook.id,
+          workflowId: workflow.id,
           queued: 0,
           skipped: 1,
           skippedExisting: 1,
@@ -3852,7 +3852,7 @@ export class SignalSurfRepository {
           databaseId: input.databaseId,
           fieldKey: input.fieldKey,
           entryId: input.entryId,
-          surfPointId: playbook.id,
+          workflowId: workflow.id,
           queued: 0,
           skipped: 1,
           skippedExisting: 0,
@@ -3865,7 +3865,7 @@ export class SignalSurfRepository {
         databaseId: input.databaseId,
         fieldKey: input.fieldKey,
         entryId: input.entryId,
-        surfPointId: playbook.id,
+        workflowId: workflow.id,
         queued: 1,
         skipped: 0,
         skippedExisting: 0,
@@ -3943,7 +3943,7 @@ export class SignalSurfRepository {
       fieldKey: input.fieldKey,
       scope: input.scope ?? null,
       selected: entryIds.length > 0 ? entryIds.length : undefined,
-      surfPointId: playbook.id,
+      workflowId: workflow.id,
       queued: rawSignalIds.length,
       skipped,
       skippedExisting,
@@ -4010,21 +4010,21 @@ export class SignalSurfRepository {
   ) {
     const limit = input.limit ?? 50
     const offset = input.offset ?? 0
-    const surfPointIds = input.surfPointId
-      ? [input.surfPointId]
-      : await this.listProductSurfPointIds(context)
+    const workflowIds = input.workflowId
+      ? [input.workflowId]
+      : await this.listProductWorkflowIds(context)
 
-    if (input.surfPointId) {
-      await this.assertSurfPointInProduct(context, input.surfPointId)
+    if (input.workflowId) {
+      await this.assertWorkflowInProduct(context, input.workflowId)
     }
-    if (surfPointIds.length === 0) {
+    if (workflowIds.length === 0) {
       return { jobs: [], totalCount: 0, limit, offset }
     }
 
     let query = this.db
       .from("surf_jobs")
       .select("*", { count: "exact" })
-      .in("playbook_id", surfPointIds)
+      .in("workflow_id", workflowIds)
 
     if (input.status) query = query.eq("status", input.status)
 
@@ -4070,65 +4070,65 @@ export class SignalSurfRepository {
     }
   }
 
-  async deleteSurfPoints(context: SignalSurfContext, surfPointIds: string[]) {
-    const ids = uniqueIds(surfPointIds)
-    const existing = await this.getSurfPointsByIds(context, ids)
+  async deleteWorkflows(context: SignalSurfContext, workflowIds: string[]) {
+    const ids = uniqueIds(workflowIds)
+    const existing = await this.getWorkflowsByIds(context, ids)
     if (existing.length !== ids.length) {
       throw new UserFacingError(
-        "One or more surf points were not found or are already deleted.",
+        "One or more Workflows were not found or are already deleted.",
         { code: "NOT_FOUND", status: 404 }
       )
     }
 
     const now = new Date().toISOString()
     const { data, error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .update({ deleted_at: now, updated_at: now })
       .eq("product_id", context.productId)
       .is("deleted_at", null)
       .in("id", ids)
       .select("id, name")
 
-    requireNoDbError(error, "Failed to delete surf points")
+    requireNoDbError(error, "Failed to delete Workflows")
 
     const { error: cancelError } = await this.db
       .from("surf_jobs")
       .update({
         status: "failed",
-        last_error: "Playbook deleted",
+        last_error: "Workflow deleted",
         completed_at: now,
       })
-      .in("playbook_id", ids)
+      .in("workflow_id", ids)
       .eq("status", "pending")
     requireNoDbError(errorOrNull(cancelError), "Failed to cancel pending jobs")
 
     if (context.userId) {
       const { data: prefs } = await this.db
         .from("user_preferences")
-        .select("current_playbook_id")
+        .select("current_workflow_id")
         .eq("user_id", context.userId)
         .maybeSingle()
       if (
-        prefs?.current_playbook_id &&
-        ids.includes(prefs.current_playbook_id)
+        prefs?.current_workflow_id &&
+        ids.includes(prefs.current_workflow_id)
       ) {
-        const replacement = await this.findFirstActiveSurfPoint(context, ids)
+        const replacement = await this.findFirstActiveWorkflow(context, ids)
         const { error: prefsError } = await this.db
           .from("user_preferences")
           .update({
-            current_playbook_id: replacement?.id ?? null,
+            current_workflow_id: replacement?.id ?? null,
             updated_at: now,
           })
           .eq("user_id", context.userId)
         requireNoDbError(
           errorOrNull(prefsError),
-          "Failed to update current surf point preference"
+          "Failed to update current Workflow preference"
         )
       }
     }
 
     return {
-      deletedSurfPoints: (data ?? []) as Array<{ id: string; name: string }>,
+      deletedWorkflows: (data ?? []) as Array<{ id: string; name: string }>,
       count: data?.length ?? 0,
     }
   }
@@ -4361,22 +4361,22 @@ export class SignalSurfRepository {
 
     requireNoDbError(error, "Failed to delete tables")
 
-    const { data: linkedSurfPoints, error: linkedError } = await this.db
-      .from("playbooks")
+    const { data: linkedWorkflows, error: linkedError } = await this.db
+      .from("workflows")
       .select("id, database_ids")
       .eq("product_id", context.productId)
       .is("deleted_at", null)
 
-    requireNoDbError(linkedError, "Failed to list surf points linked to tables")
+    requireNoDbError(linkedError, "Failed to list Workflows linked to tables")
     const deletedIdSet = new Set(ids)
     const now = new Date().toISOString()
-    const unlinkedSurfPoints: Array<{ id: string; databaseIds: string[] }> = []
-    for (const surfPoint of (linkedSurfPoints ?? []) as Array<{
+    const unlinkedWorkflows: Array<{ id: string; databaseIds: string[] }> = []
+    for (const workflow of (linkedWorkflows ?? []) as Array<{
       id: string
       database_ids: string[] | null
     }>) {
-      const currentIds = Array.isArray(surfPoint.database_ids)
-        ? surfPoint.database_ids
+      const currentIds = Array.isArray(workflow.database_ids)
+        ? workflow.database_ids
         : []
       const nextIds = currentIds.filter(
         (databaseId) => !deletedIdSet.has(databaseId)
@@ -4384,20 +4384,20 @@ export class SignalSurfRepository {
       if (nextIds.length === currentIds.length) continue
 
       const { error: updateError } = await this.db
-        .from("playbooks")
+        .from("workflows")
         .update({
           database_ids: nextIds,
           updated_at: now,
         })
-        .eq("id", surfPoint.id)
+        .eq("id", workflow.id)
         .eq("product_id", context.productId)
         .is("deleted_at", null)
       requireNoDbError(
         updateError,
-        "Failed to unlink deleted table from surf point"
+        "Failed to unlink deleted table from Workflow"
       )
-      unlinkedSurfPoints.push({
-        id: surfPoint.id,
+      unlinkedWorkflows.push({
+        id: workflow.id,
         databaseIds: nextIds,
       })
     }
@@ -4410,7 +4410,7 @@ export class SignalSurfRepository {
       })),
       deletedDatabaseIds: ids,
       count: count ?? ids.length,
-      unlinkedSurfPoints,
+      unlinkedWorkflows,
     }
   }
 
@@ -4550,10 +4550,10 @@ export class SignalSurfRepository {
 
   async createTableRow(context: SignalSurfContext, input: CreateTableRowInput) {
     await this.assertDatabaseBelongsToProduct(context, input.databaseId)
-    if (input.playbookId) {
-      await this.assertSurfPointCanWriteDatabase(
+    if (input.workflowId) {
+      await this.assertWorkflowCanWriteDatabase(
         context,
-        input.playbookId,
+        input.workflowId,
         input.databaseId
       )
     }
@@ -4567,7 +4567,7 @@ export class SignalSurfRepository {
       .from("entries")
       .insert({
         database_id: input.databaseId,
-        playbook_id: input.playbookId ?? null,
+        workflow_id: input.workflowId ?? null,
         data: input.data,
         note: input.note ?? null,
         origin: "mcp",
@@ -4584,10 +4584,10 @@ export class SignalSurfRepository {
   // Handles both single-row (edits: [one]) and batch (edits: [many]) calls —
   // one array-based tool, same as deleteTableRows. `data`/`dataPatch` writes
   // for the whole batch go through ONE atomic update_entries_with_source_batch
-  // call; `note`/`playbookId` have no batch RPC equivalent so they write
+  // call; `note`/`workflowId` have no batch RPC equivalent so they write
   // per-edit, same cost as the old single-row tool called N times for just
   // those fields. Every edit is validated (ownership, item_ref references,
-  // playbook/database match) before ANY write, so one bad edit rejects the
+  // workflow/database match) before ANY write, so one bad edit rejects the
   // whole call.
   async updateTableRows(
     context: SignalSurfContext,
@@ -4630,17 +4630,17 @@ export class SignalSurfRepository {
         edit.data === undefined &&
         edit.dataPatch === undefined &&
         edit.note === undefined &&
-        edit.playbookId === undefined
+        edit.workflowId === undefined
       ) {
         throw new UserFacingError(
-          `Edit for row ${edit.rowId} must include at least one of data, dataPatch, note, or playbookId.`,
+          `Edit for row ${edit.rowId} must include at least one of data, dataPatch, note, or workflowId.`,
           { code: "BAD_REQUEST", status: 400 }
         )
       }
-      if (edit.playbookId) {
-        await this.assertSurfPointCanWriteDatabase(
+      if (edit.workflowId) {
+        await this.assertWorkflowCanWriteDatabase(
           context,
-          edit.playbookId,
+          edit.workflowId,
           existing.database_id as string
         )
       }
@@ -4684,11 +4684,11 @@ export class SignalSurfRepository {
     }
 
     for (const edit of input.edits) {
-      if (edit.playbookId === undefined) continue
+      if (edit.workflowId === undefined) continue
       const { error } = await this.db
         .from("entries")
         .update({
-          playbook_id: edit.playbookId,
+          workflow_id: edit.workflowId,
           updated_at: new Date().toISOString(),
         })
         .eq("id", edit.rowId)
@@ -4888,7 +4888,7 @@ export class SignalSurfRepository {
       .eq("id", sourceId)
       .maybeSingle()
 
-    requireNoDbError(error, "Failed to read surf point source")
+    requireNoDbError(error, "Failed to read Workflow source")
     if (!data) {
       throw new UserFacingError("Source not found or access denied.", {
         code: "NOT_FOUND",
@@ -4897,7 +4897,7 @@ export class SignalSurfRepository {
     }
 
     const source = data as SourceRow
-    await this.assertSurfPointBelongsToProduct(context, source.playbook_id)
+    await this.assertWorkflowBelongsToProduct(context, source.workflow_id)
     return source
   }
 
@@ -4967,18 +4967,18 @@ export class SignalSurfRepository {
     rows: Array<ReturnType<typeof formatEntry>>
     warnings: string[]
   }> {
-    const surfPoint = await this.getSurfPointForUpdate(
+    const workflow = await this.getWorkflowForUpdate(
       context,
-      source.playbook_id
+      source.workflow_id
     )
-    const allowedDatabaseIds = new Set(surfPoint.database_ids ?? [])
+    const allowedDatabaseIds = new Set(workflow.database_ids ?? [])
     const imported: Array<ReturnType<typeof formatEntry>> = []
     const warnings: string[] = []
 
     for (const row of rows) {
       if (!allowedDatabaseIds.has(row.targetDatabaseId)) {
         warnings.push(
-          `Mapping "${row.mappingName}" targets database ${row.targetDatabaseId}, which is not attached to this surf point.`
+          `Mapping "${row.mappingName}" targets database ${row.targetDatabaseId}, which is not attached to this Workflow.`
         )
         continue
       }
@@ -4992,7 +4992,7 @@ export class SignalSurfRepository {
       const { data: existing, error: existingError } = await this.db
         .from("entries")
         .select(ENTRY_COLUMNS)
-        .eq("playbook_id", source.playbook_id)
+        .eq("workflow_id", source.workflow_id)
         .eq("database_id", row.targetDatabaseId)
         .eq("entry_key_hash", row.entryKeyHash)
         .maybeSingle()
@@ -5024,7 +5024,7 @@ export class SignalSurfRepository {
         .from("entries")
         .insert({
           id: randomUUID(),
-          playbook_id: source.playbook_id,
+          workflow_id: source.workflow_id,
           database_id: row.targetDatabaseId,
           data: row.data,
           note: null,
@@ -5049,17 +5049,17 @@ export class SignalSurfRepository {
     }
   }
 
-  private async listSourceRowsForSurfPoint(
+  private async listSourceRowsForWorkflow(
     context: SignalSurfContext,
-    surfPointId: string
+    workflowId: string
   ): Promise<SourceRow[]> {
-    await this.assertSurfPointBelongsToProduct(context, surfPointId)
+    await this.assertWorkflowBelongsToProduct(context, workflowId)
     const { data, error } = await this.db
       .from("sources")
       .select(SOURCE_COLUMNS)
-      .eq("playbook_id", surfPointId)
+      .eq("workflow_id", workflowId)
 
-    requireNoDbError(error, "Failed to list surf point sources")
+    requireNoDbError(error, "Failed to list Workflow sources")
     return (data ?? []) as SourceRow[]
   }
 
@@ -5116,24 +5116,24 @@ export class SignalSurfRepository {
       .from("sources")
       .delete({ count: "exact" })
       .in("id", sourceIds)
-    requireNoDbError(errorOrNull(error), "Failed to delete surf point sources")
+    requireNoDbError(errorOrNull(error), "Failed to delete Workflow sources")
 
     const cleanupTargets = new Map<
       string,
-      { surfPointId: string; endpointId: string }
+      { workflowId: string; endpointId: string }
     >()
     for (const source of sources) {
       const endpointId = readSourceEndpointId(source)
       if (!endpointId) continue
-      cleanupTargets.set(`${source.playbook_id}:${endpointId}`, {
-        surfPointId: source.playbook_id,
+      cleanupTargets.set(`${source.workflow_id}:${endpointId}`, {
+        workflowId: source.workflow_id,
         endpointId,
       })
     }
     for (const target of cleanupTargets.values()) {
       await this.disableOrphanedPlatformSourceConfig(
         context,
-        target.surfPointId,
+        target.workflowId,
         target.endpointId
       )
     }
@@ -5143,13 +5143,13 @@ export class SignalSurfRepository {
 
   private async enforceSourceExclusivity(
     context: SignalSurfContext,
-    surfPointId: string,
+    workflowId: string,
     sourceType: SourceTypeInput,
     replaceExisting: boolean,
     keepSourceId?: string
   ): Promise<number> {
     const existingSources = (
-      await this.listSourceRowsForSurfPoint(context, surfPointId)
+      await this.listSourceRowsForWorkflow(context, workflowId)
     ).filter((source) => source.id !== keepSourceId)
     if (existingSources.length === 0) return 0
 
@@ -5171,14 +5171,14 @@ export class SignalSurfRepository {
 
   private async disableOrphanedPlatformSourceConfig(
     context: SignalSurfContext,
-    surfPointId: string,
+    workflowId: string,
     endpointId: string | null
   ): Promise<void> {
     if (!endpointId) return
 
-    const remainingSources = await this.listSourceRowsForSurfPoint(
+    const remainingSources = await this.listSourceRowsForWorkflow(
       context,
-      surfPointId
+      workflowId
     )
     if (
       remainingSources.some(
@@ -5193,7 +5193,7 @@ export class SignalSurfRepository {
       .from("platform_search_config")
       .update({ is_enabled: false, updated_at: now })
       .eq("product_id", context.productId)
-      .eq("playbook_id", surfPointId)
+      .eq("workflow_id", workflowId)
       .eq("platform", endpointId)
     requireNoDbError(
       errorOrNull(searchConfigError),
@@ -5204,7 +5204,7 @@ export class SignalSurfRepository {
       .from("tracked_accounts")
       .update({ is_enabled: false, updated_at: now })
       .eq("product_id", context.productId)
-      .eq("playbook_id", surfPointId)
+      .eq("workflow_id", workflowId)
       .eq("platform", endpointId)
     requireNoDbError(
       errorOrNull(trackedAccountsError),
@@ -5214,7 +5214,7 @@ export class SignalSurfRepository {
 
   private async syncPlatformSourceConfig(
     context: SignalSurfContext,
-    surfPointId: string,
+    workflowId: string,
     endpointId: string | null,
     config: JsonRecord
   ): Promise<void> {
@@ -5225,13 +5225,13 @@ export class SignalSurfRepository {
       const { error } = await this.db.from("platform_search_config").upsert(
         {
           product_id: context.productId,
-          playbook_id: surfPointId,
+          workflow_id: workflowId,
           platform: endpointId,
           is_enabled: true,
           cooldown_minutes: 60,
           keywords,
         },
-        { onConflict: "playbook_id,platform" }
+        { onConflict: "workflow_id,platform" }
       )
       requireNoDbError(
         errorOrNull(error),
@@ -5244,7 +5244,7 @@ export class SignalSurfRepository {
         .from("tracked_accounts")
         .delete()
         .eq("product_id", context.productId)
-        .eq("playbook_id", surfPointId)
+        .eq("workflow_id", workflowId)
         .eq("platform", endpointId)
       requireNoDbError(
         errorOrNull(deleteError),
@@ -5259,12 +5259,12 @@ export class SignalSurfRepository {
       const { error } = await this.db.from("tracked_accounts").upsert(
         trackedAccounts.map((username) => ({
           product_id: context.productId,
-          playbook_id: surfPointId,
+          workflow_id: workflowId,
           platform: endpointId,
           username,
           is_enabled: true,
         })),
-        { onConflict: "playbook_id,platform,username" }
+        { onConflict: "workflow_id,platform,username" }
       )
       requireNoDbError(
         errorOrNull(error),
@@ -5273,27 +5273,27 @@ export class SignalSurfRepository {
     }
   }
 
-  async listSurfPointSources(context: SignalSurfContext, surfPointId: string) {
-    await this.assertSurfPointBelongsToProduct(context, surfPointId)
+  async listWorkflowSources(context: SignalSurfContext, workflowId: string) {
+    await this.assertWorkflowBelongsToProduct(context, workflowId)
 
     const { data, error } = await this.db
       .from("sources")
       .select(SOURCE_COLUMNS)
-      .eq("playbook_id", surfPointId)
+      .eq("workflow_id", workflowId)
       .order("updated_at", { ascending: false })
 
-    requireNoDbError(error, "Failed to list surf point sources")
+    requireNoDbError(error, "Failed to list Workflow sources")
     const sources = (data ?? []) as SourceRow[]
     return {
-      surfPointId,
+      workflowId,
       sources: sources.map(formatSource),
       totalCount: sources.length,
     }
   }
 
-  async createSurfPointSource(
+  async createWorkflowSource(
     context: SignalSurfContext,
-    input: CreateSurfPointSourceInput
+    input: CreateWorkflowSourceInput
   ) {
     const config = asRecord(input.config)
     const sourceDatabaseName = await this.resolveSourceDatabaseName(
@@ -5304,7 +5304,7 @@ export class SignalSurfRepository {
     const fields = buildSourceFields(input, sourceDatabaseName)
     const replacedCount = await this.enforceSourceExclusivity(
       context,
-      input.surfPointId,
+      input.workflowId,
       input.sourceType,
       input.replaceExisting === true
     )
@@ -5312,7 +5312,7 @@ export class SignalSurfRepository {
     if (input.sourceType === "platform") {
       const endpointId = readTrimmedString(fields.pullConfig?.endpoint_id)
       const existing = (
-        await this.listSourceRowsForSurfPoint(context, input.surfPointId)
+        await this.listSourceRowsForWorkflow(context, input.workflowId)
       ).find(
         (source) =>
           readTrimmedString(asRecord(source.pull_config).endpoint_id) ===
@@ -5341,7 +5341,7 @@ export class SignalSurfRepository {
 
         await this.syncPlatformSourceConfig(
           context,
-          input.surfPointId,
+          input.workflowId,
           endpointId,
           config
         )
@@ -5369,7 +5369,7 @@ export class SignalSurfRepository {
       .insert({
         id: randomUUID(),
         user_id: userId,
-        playbook_id: input.surfPointId,
+        workflow_id: input.workflowId,
         name: fields.name,
         type: fields.dbType,
         pull_config: fields.pullConfig,
@@ -5382,12 +5382,12 @@ export class SignalSurfRepository {
       .select(SOURCE_COLUMNS)
       .single()
 
-    requireNoDbError(error, "Failed to create surf point source")
+    requireNoDbError(error, "Failed to create Workflow source")
 
     if (input.sourceType === "platform") {
       await this.syncPlatformSourceConfig(
         context,
-        input.surfPointId,
+        input.workflowId,
         readTrimmedString(fields.pullConfig?.endpoint_id),
         config
       )
@@ -5403,9 +5403,9 @@ export class SignalSurfRepository {
     }
   }
 
-  async updateSurfPointSource(
+  async updateWorkflowSource(
     context: SignalSurfContext,
-    input: UpdateSurfPointSourceInput
+    input: UpdateWorkflowSourceInput
   ) {
     if (input.pullConfig !== undefined && input.pullConfigPatch !== undefined) {
       throw new UserFacingError(
@@ -5467,7 +5467,7 @@ export class SignalSurfRepository {
       )
       replacedCount = await this.enforceSourceExclusivity(
         context,
-        source.playbook_id,
+        source.workflow_id,
         rebuildSourceType,
         input.replaceExisting === true,
         source.id
@@ -5527,14 +5527,14 @@ export class SignalSurfRepository {
       .select(SOURCE_COLUMNS)
       .single()
 
-    requireNoDbError(error, "Failed to update surf point source")
+    requireNoDbError(error, "Failed to update Workflow source")
     const updatedSource = data as SourceRow
     const nextEndpointId = readSourceEndpointId(updatedSource)
 
     if (previousEndpointId && previousEndpointId !== nextEndpointId) {
       await this.disableOrphanedPlatformSourceConfig(
         context,
-        source.playbook_id,
+        source.workflow_id,
         previousEndpointId
       )
     }
@@ -5542,7 +5542,7 @@ export class SignalSurfRepository {
     if (configForPlatformSync) {
       await this.syncPlatformSourceConfig(
         context,
-        updatedSource.playbook_id,
+        updatedSource.workflow_id,
         nextEndpointId,
         configForPlatformSync
       )
@@ -5559,9 +5559,9 @@ export class SignalSurfRepository {
     }
   }
 
-  async deleteSurfPointSource(
+  async deleteWorkflowSource(
     context: SignalSurfContext,
-    input: DeleteSurfPointSourceInput
+    input: DeleteWorkflowSourceInput
   ) {
     const sourceIds = uniqueIds([
       ...(input.sourceIds ?? []),
@@ -5578,7 +5578,7 @@ export class SignalSurfRepository {
       .from("sources")
       .select(SOURCE_COLUMNS)
       .in("id", sourceIds)
-    requireNoDbError(error, "Failed to read surf point sources")
+    requireNoDbError(error, "Failed to read Workflow sources")
 
     const sources = (data ?? []) as SourceRow[]
     if (sources.length !== sourceIds.length) {
@@ -5588,7 +5588,7 @@ export class SignalSurfRepository {
       })
     }
     for (const source of sources) {
-      await this.assertSurfPointBelongsToProduct(context, source.playbook_id)
+      await this.assertWorkflowBelongsToProduct(context, source.workflow_id)
     }
 
     const deletedCount = await this.deleteSourceRows(context, sources)
@@ -5598,9 +5598,9 @@ export class SignalSurfRepository {
     }
   }
 
-  async setSurfPointSourceActive(
+  async setWorkflowSourceActive(
     context: SignalSurfContext,
-    input: SetSurfPointSourceActiveInput
+    input: SetWorkflowSourceActiveInput
   ) {
     const { data: existing, error: existingError } = await this.db
       .from("sources")
@@ -5608,7 +5608,7 @@ export class SignalSurfRepository {
       .eq("id", input.sourceId)
       .maybeSingle()
 
-    requireNoDbError(existingError, "Failed to read surf point source")
+    requireNoDbError(existingError, "Failed to read Workflow source")
     if (!existing) {
       throw new UserFacingError("Source not found or access denied.", {
         code: "NOT_FOUND",
@@ -5617,7 +5617,7 @@ export class SignalSurfRepository {
     }
 
     const source = existing as SourceRow
-    await this.assertSurfPointBelongsToProduct(context, source.playbook_id)
+    await this.assertWorkflowBelongsToProduct(context, source.workflow_id)
 
     const { data, error } = await this.db
       .from("sources")
@@ -5629,7 +5629,7 @@ export class SignalSurfRepository {
       .select(SOURCE_COLUMNS)
       .single()
 
-    requireNoDbError(error, "Failed to update surf point source")
+    requireNoDbError(error, "Failed to update Workflow source")
     return { source: formatSource(data as SourceRow) }
   }
 
@@ -5715,32 +5715,32 @@ export class SignalSurfRepository {
     }
   }
 
-  async listSurfPointTools(context: SignalSurfContext, surfPointId: string) {
-    const surfPoint = await this.getSurfPointForUpdate(context, surfPointId)
-    const toolIds = uniqueStrings(asRecord(surfPoint.tool_config).auto_tool_ids)
+  async listWorkflowTools(context: SignalSurfContext, workflowId: string) {
+    const workflow = await this.getWorkflowForUpdate(context, workflowId)
+    const toolIds = uniqueStrings(asRecord(workflow.tool_config).auto_tool_ids)
     return {
-      surfPointId,
+      workflowId,
       toolIds,
       totalCount: toolIds.length,
     }
   }
 
-  async attachSurfPointTool(
+  async attachWorkflowTool(
     context: SignalSurfContext,
-    input: SurfPointToolInput
+    input: WorkflowToolInput
   ) {
     await this.assertProductToolBelongsToProduct(context, input.toolId)
-    return this.updateSurfPointToolIds(context, input.surfPointId, (toolIds) =>
+    return this.updateWorkflowToolIds(context, input.workflowId, (toolIds) =>
       toolIds.includes(input.toolId) ? toolIds : [...toolIds, input.toolId]
     )
   }
 
-  async detachSurfPointTool(
+  async detachWorkflowTool(
     context: SignalSurfContext,
-    input: SurfPointToolInput
+    input: WorkflowToolInput
   ) {
     await this.assertProductToolBelongsToProduct(context, input.toolId)
-    return this.updateSurfPointToolIds(context, input.surfPointId, (toolIds) =>
+    return this.updateWorkflowToolIds(context, input.workflowId, (toolIds) =>
       toolIds.filter((toolId) => toolId !== input.toolId)
     )
   }
@@ -5796,23 +5796,23 @@ export class SignalSurfRepository {
       )
     }
     throw new UserFacingError(
-      "databaseIds is required because this product has no user-facing databases. Pass databaseIds: [] only for an intentional action-only surf point.",
+      "databaseIds is required because this product has no user-facing databases. Pass databaseIds: [] only for an intentional action-only Workflow.",
       { code: "BAD_REQUEST", status: 400 }
     )
   }
 
-  private async findSurfPointByName(
+  private async findWorkflowByName(
     context: SignalSurfContext,
     name: string
   ): Promise<{ id: string } | null> {
     const { data, error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .select("id")
       .eq("product_id", context.productId)
       .eq("name", name.trim())
       .is("deleted_at", null)
       .maybeSingle()
-    requireNoDbError(error, "Failed to check existing surf point")
+    requireNoDbError(error, "Failed to check existing Workflow")
     return (data as { id: string } | null) ?? null
   }
 
@@ -5938,20 +5938,20 @@ export class SignalSurfRepository {
     }
   }
 
-  private async assertSurfPointBelongsToProduct(
+  private async assertWorkflowBelongsToProduct(
     context: SignalSurfContext,
-    surfPointId: string
+    workflowId: string
   ): Promise<void> {
     const { data, error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .select("id")
-      .eq("id", surfPointId)
+      .eq("id", workflowId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
       .maybeSingle()
-    requireNoDbError(error, "Failed to validate surf point access")
+    requireNoDbError(error, "Failed to validate Workflow access")
     if (!data) {
-      throw new UserFacingError("Surf point not found or access denied.", {
+      throw new UserFacingError("Workflow not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
       })
@@ -6001,33 +6001,33 @@ export class SignalSurfRepository {
     }
   }
 
-  private async assertSurfPointInProduct(
+  private async assertWorkflowInProduct(
     context: SignalSurfContext,
-    surfPointId: string
+    workflowId: string
   ): Promise<void> {
     const { data, error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .select("id")
-      .eq("id", surfPointId)
+      .eq("id", workflowId)
       .eq("product_id", context.productId)
       .maybeSingle()
-    requireNoDbError(error, "Failed to validate surf point access")
+    requireNoDbError(error, "Failed to validate Workflow access")
     if (!data) {
-      throw new UserFacingError("Surf point not found or access denied.", {
+      throw new UserFacingError("Workflow not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
       })
     }
   }
 
-  private async listProductSurfPointIds(
+  private async listProductWorkflowIds(
     context: SignalSurfContext
   ): Promise<string[]> {
     const { data, error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .select("id")
       .eq("product_id", context.productId)
-    requireNoDbError(error, "Failed to resolve product surf points")
+    requireNoDbError(error, "Failed to resolve product Workflows")
     return ((data ?? []) as Array<{ id: string }>).map((row) => row.id)
   }
 
@@ -6060,23 +6060,23 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     job: SurfJobRow
   ): Promise<void> {
-    await this.assertSurfPointInProduct(context, job.playbook_id)
+    await this.assertWorkflowInProduct(context, job.workflow_id)
   }
 
-  private async getSurfPointRunTarget(
+  private async getWorkflowRunTarget(
     context: SignalSurfContext,
-    surfPointId: string
+    workflowId: string
   ): Promise<{ id: string; name: string; is_active: boolean }> {
     const { data, error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .select("id, name, is_active")
-      .eq("id", surfPointId)
+      .eq("id", workflowId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
       .maybeSingle()
-    requireNoDbError(error, "Failed to validate surf point access")
+    requireNoDbError(error, "Failed to validate Workflow access")
     if (!data) {
-      throw new UserFacingError("Surf point not found or access denied.", {
+      throw new UserFacingError("Workflow not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
       })
@@ -6084,21 +6084,21 @@ export class SignalSurfRepository {
     return data as { id: string; name: string; is_active: boolean }
   }
 
-  private async assertSurfPointCanWriteDatabase(
+  private async assertWorkflowCanWriteDatabase(
     context: SignalSurfContext,
-    surfPointId: string,
+    workflowId: string,
     databaseId: string
   ): Promise<void> {
     const { data, error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .select("id, database_ids")
-      .eq("id", surfPointId)
+      .eq("id", workflowId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
       .maybeSingle()
-    requireNoDbError(error, "Failed to validate surf point target databases")
+    requireNoDbError(error, "Failed to validate Workflow target databases")
     if (!data) {
-      throw new UserFacingError("Surf point not found or access denied.", {
+      throw new UserFacingError("Workflow not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
       })
@@ -6108,7 +6108,7 @@ export class SignalSurfRepository {
       : []
     if (!databaseIds.includes(databaseId)) {
       throw new UserFacingError(
-        `Surf point ${surfPointId} is not configured to write to database ${databaseId}.`,
+        `Workflow ${workflowId} is not configured to write to database ${databaseId}.`,
         { code: "BAD_REQUEST", status: 400 }
       )
     }
@@ -6206,28 +6206,6 @@ export class SignalSurfRepository {
     }
   }
 
-  private async assertFolderBelongsToProduct(
-    context: SignalSurfContext,
-    folderId: string
-  ): Promise<void> {
-    const { data, error } = await this.db
-      .from("playbook_folders")
-      .select("id")
-      .eq("id", folderId)
-      .eq("product_id", context.productId)
-      .maybeSingle()
-    requireNoDbError(error, "Failed to validate surf point folder access")
-    if (!data) {
-      throw new UserFacingError(
-        "Surf point folder not found or access denied.",
-        {
-          code: "NOT_FOUND",
-          status: 404,
-        }
-      )
-    }
-  }
-
   private async assertDatabaseFolderBelongsToProduct(
     context: SignalSurfContext,
     folderId: string
@@ -6247,48 +6225,48 @@ export class SignalSurfRepository {
     }
   }
 
-  private async getSurfPointsByIds(
+  private async getWorkflowsByIds(
     context: SignalSurfContext,
     ids: string[]
   ): Promise<Array<{ id: string; name: string }>> {
     if (ids.length === 0) return []
     const { data, error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .select("id, name")
       .eq("product_id", context.productId)
       .is("deleted_at", null)
       .in("id", ids)
-    requireNoDbError(error, "Failed to validate surf points")
+    requireNoDbError(error, "Failed to validate Workflows")
     return (data ?? []) as Array<{ id: string; name: string }>
   }
 
-  private async getSurfPointForUpdate(
+  private async getWorkflowForUpdate(
     context: SignalSurfContext,
     id: string
-  ): Promise<SurfPointRow> {
+  ): Promise<WorkflowRow> {
     const { data, error } = await this.db
-      .from("playbooks")
-      .select(SURF_POINT_COLUMNS)
+      .from("workflows")
+      .select(WORKFLOW_COLUMNS)
       .eq("id", id)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
       .maybeSingle()
-    requireNoDbError(error, "Failed to fetch surf point")
+    requireNoDbError(error, "Failed to fetch Workflow")
     if (!data) {
-      throw new UserFacingError("Surf point not found or access denied.", {
+      throw new UserFacingError("Workflow not found or access denied.", {
         code: "NOT_FOUND",
         status: 404,
       })
     }
-    return data as SurfPointRow
+    return data as WorkflowRow
   }
 
-  private async updateSurfPointToolIds(
+  private async updateWorkflowToolIds(
     context: SignalSurfContext,
-    surfPointId: string,
+    workflowId: string,
     mutate: (toolIds: string[]) => string[]
   ) {
-    const existing = await this.getSurfPointForUpdate(context, surfPointId)
+    const existing = await this.getWorkflowForUpdate(context, workflowId)
     const currentToolConfig = asRecord(existing.tool_config)
     const cleanToolConfig = withoutLegacyToolRouting(currentToolConfig)
     const currentToolIds = uniqueStrings(currentToolConfig.auto_tool_ids)
@@ -6296,14 +6274,14 @@ export class SignalSurfRepository {
 
     if (sameStrings(currentToolIds, nextToolIds)) {
       return {
-        surfPoint: formatSurfPoint(existing),
+        workflow: formatWorkflow(existing),
         toolIds: currentToolIds,
         changed: false,
       }
     }
 
     const { data, error } = await this.db
-      .from("playbooks")
+      .from("workflows")
       .update({
         tool_config: {
           ...cleanToolConfig,
@@ -6311,26 +6289,26 @@ export class SignalSurfRepository {
         },
         updated_at: new Date().toISOString(),
       })
-      .eq("id", surfPointId)
+      .eq("id", workflowId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
-      .select(SURF_POINT_COLUMNS)
+      .select(WORKFLOW_COLUMNS)
       .single()
 
-    requireNoDbError(error, "Failed to update surf point tools")
+    requireNoDbError(error, "Failed to update Workflow tools")
     return {
-      surfPoint: formatSurfPoint(data as SurfPointRow),
+      workflow: formatWorkflow(data as WorkflowRow),
       toolIds: nextToolIds,
       changed: true,
     }
   }
 
-  private async findFirstActiveSurfPoint(
+  private async findFirstActiveWorkflow(
     context: SignalSurfContext,
     excludedIds: string[]
   ): Promise<{ id: string } | null> {
     let query = this.db
-      .from("playbooks")
+      .from("workflows")
       .select("id")
       .eq("product_id", context.productId)
       .eq("is_active", true)
@@ -6341,7 +6319,7 @@ export class SignalSurfRepository {
     for (const id of excludedIds) query = query.neq("id", id)
 
     const { data, error } = await query.maybeSingle()
-    requireNoDbError(error, "Failed to resolve replacement surf point")
+    requireNoDbError(error, "Failed to resolve replacement Workflow")
     return (data as { id: string } | null) ?? null
   }
 
@@ -6690,8 +6668,8 @@ function getTableFieldValue(row: EntryRow, field: string): unknown {
     itemId: row.id,
     databaseId: row.database_id,
     database_id: row.database_id,
-    playbookId: row.playbook_id,
-    playbook_id: row.playbook_id,
+    workflowId: row.workflow_id,
+    workflow_id: row.workflow_id,
     note: row.note,
     origin: row.origin,
     originRef: row.origin_ref,
@@ -6859,10 +6837,10 @@ function formatAccountListProfile(row: AccountListProfileRow) {
   }
 }
 
-function formatSurfPoint(row: SurfPointRow) {
+function formatWorkflow(row: WorkflowRow) {
   return {
     id: row.id,
-    surfPointId: row.id,
+    workflowId: row.id,
     name: row.name,
     description: row.description,
     isDefault: row.is_default,
@@ -6878,7 +6856,7 @@ function formatSurfPoint(row: SurfPointRow) {
     toolConfig: row.tool_config ?? {},
     variables: row.variables ?? {},
     config: row.config ?? {},
-    folderId: row.folder_id,
+    projectId: row.project_id,
     displayOrder: row.display_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -6892,7 +6870,7 @@ function formatSource(row: SourceRow) {
   const source: Record<string, unknown> = {
     id: row.id,
     sourceId: row.id,
-    surfPointId: row.playbook_id,
+    workflowId: row.workflow_id,
     name: row.name ?? null,
     type: row.type ?? null,
     sourceType,
@@ -6924,7 +6902,7 @@ function formatSurfJob(row: SurfJobRow) {
     productId: row.product_id ?? null,
     userId: row.user_id ?? null,
     runId: row.run_id ?? null,
-    surfPointId: row.playbook_id,
+    workflowId: row.workflow_id,
     sourceId: row.source_id ?? null,
     jobType: row.job_type ?? null,
     status: row.status,
@@ -6953,7 +6931,7 @@ function formatProductTool(row: ProductToolRow) {
     id: row.id,
     toolId: row.id,
     productId: row.product_id,
-    surfPointId: row.playbook_id ?? null,
+    workflowId: row.workflow_id ?? null,
     toolType: row.tool_type,
     name: displayName,
     isEnabled: row.is_enabled ?? null,
@@ -7018,7 +6996,7 @@ function formatEntry(row: EntryRow) {
     rowId: row.id,
     itemId: row.id,
     databaseId: row.database_id,
-    playbookId: row.playbook_id,
+    workflowId: row.workflow_id,
     data: row.data ?? {},
     note: row.note ?? "",
     origin: row.origin,

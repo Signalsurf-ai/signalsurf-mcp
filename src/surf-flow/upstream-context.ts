@@ -1,7 +1,7 @@
-import type { FlowNode, FlowNodeType, SurfPointFlowV2 } from "./index.js"
+import type { FlowNode, FlowNodeType, WorkflowFlowV2 } from "./index.js"
 
 /**
- * Topology-aware data-flow resolution for SurfPointFlow V2.
+ * Topology-aware data-flow resolution for WorkflowFlow V2.
  *
  * In a linear pipeline "the data" is just the signal and every step sees it. In
  * an open graph, what is in scope at a node depends on the PATH taken to reach
@@ -51,7 +51,7 @@ export interface UpstreamContext {
  * are missing (consistent with validateFlow's liveEdges).
  */
 export function upstreamAncestors(
-  flow: SurfPointFlowV2,
+  flow: WorkflowFlowV2,
   nodeId: string
 ): FlowNode[] {
   const ids = new Set(flow.nodes.map((n) => n.id))
@@ -104,7 +104,7 @@ function actionTargetDatabaseId(node: FlowNode): string | undefined {
  * resolvers call exec(...); the eval passes synchronous fake-catalog resolvers.
  */
 export async function buildUpstreamContext(
-  flow: SurfPointFlowV2,
+  flow: WorkflowFlowV2,
   nodeId: string,
   resolvers: UpstreamResolvers = {}
 ): Promise<UpstreamContext> {

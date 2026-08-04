@@ -8,17 +8,17 @@ import type { SignalSurfContext } from "../src/types.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 const productId = "00000000-0000-4000-8000-000000000001"
-const playbookId = "00000000-0000-4000-8000-000000000101"
+const workflowId = "00000000-0000-4000-8000-000000000101"
 
 function editorContext(): SignalSurfContext {
   return { productId, role: "editor" }
 }
 
-function playbookRow(config: Record<string, unknown> = {}) {
+function workflowRow(config: Record<string, unknown> = {}) {
   return {
-    id: playbookId,
+    id: workflowId,
     product_id: productId,
-    name: "My Playbook",
+    name: "My Workflow",
     config,
     tool_config: {},
     variables: {},
@@ -70,7 +70,7 @@ function data(result: any) {
 
 describe("describe_node_types tool", () => {
   it("returns the six Flow V2 node types", async () => {
-    const client = await connect(new FakeSupabase({ playbooks: [] }))
+    const client = await connect(new FakeSupabase({ workflows: [] }))
     const result = await client.callTool({
       name: "describe_node_types",
       arguments: {},
@@ -87,12 +87,12 @@ describe("describe_node_types tool", () => {
   })
 })
 
-describe("update_surf_point_flow tool", () => {
+describe("update_workflow_flow tool", () => {
   it("saves a valid trigger -> agent graph", async () => {
-    const client = await connect(new FakeSupabase({ playbooks: [playbookRow()] }))
+    const client = await connect(new FakeSupabase({ workflows: [workflowRow()] }))
     const result = await client.callTool({
-      name: "update_surf_point_flow",
-      arguments: { playbookId, flow: triggerAgentFlow },
+      name: "update_workflow_flow",
+      arguments: { workflowId, flow: triggerAgentFlow },
     })
     expect(result.isError).toBeFalsy()
     expect(data(result).nodeCount).toBe(2)
@@ -100,11 +100,11 @@ describe("update_surf_point_flow tool", () => {
   })
 
   it("rejects a cyclic graph", async () => {
-    const client = await connect(new FakeSupabase({ playbooks: [playbookRow()] }))
+    const client = await connect(new FakeSupabase({ workflows: [workflowRow()] }))
     const result = await client.callTool({
-      name: "update_surf_point_flow",
+      name: "update_workflow_flow",
       arguments: {
-        playbookId,
+        workflowId,
         flow: {
           version: 2,
           nodes: [
@@ -121,14 +121,14 @@ describe("update_surf_point_flow tool", () => {
     expect(result.isError).toBeTruthy()
   })
 
-  it("is blocked for a viewer token (needs surf_points.write)", async () => {
+  it("is blocked for a viewer token (needs workflows.write)", async () => {
     const client = await connect(
-      new FakeSupabase({ playbooks: [playbookRow()] }),
+      new FakeSupabase({ workflows: [workflowRow()] }),
       { productId, role: "viewer" }
     )
     const result = await client.callTool({
-      name: "update_surf_point_flow",
-      arguments: { playbookId, flow: triggerAgentFlow },
+      name: "update_workflow_flow",
+      arguments: { workflowId, flow: triggerAgentFlow },
     })
     expect(result.isError).toBeTruthy()
   })
@@ -136,11 +136,11 @@ describe("update_surf_point_flow tool", () => {
 
 describe("apply_flow_edits tool", () => {
   it("builds a graph atomically with refs", async () => {
-    const client = await connect(new FakeSupabase({ playbooks: [playbookRow()] }))
+    const client = await connect(new FakeSupabase({ workflows: [workflowRow()] }))
     const result = await client.callTool({
       name: "apply_flow_edits",
       arguments: {
-        playbookId,
+        workflowId,
         edits: [
           { op: "add_node", ref: "trig", node: { type: "trigger" } },
           { op: "add_node", ref: "ag", node: { type: "agent", prompt: "go" } },
@@ -157,11 +157,11 @@ describe("apply_flow_edits tool", () => {
 describe("get_node_upstream_context tool", () => {
   it("returns the upstream trigger for a node", async () => {
     const client = await connect(
-      new FakeSupabase({ playbooks: [playbookRow({ flow: triggerAgentFlow })] })
+      new FakeSupabase({ workflows: [workflowRow({ flow: triggerAgentFlow })] })
     )
     const result = await client.callTool({
       name: "get_node_upstream_context",
-      arguments: { playbookId, nodeId: "a1" },
+      arguments: { workflowId, nodeId: "a1" },
     })
     expect(result.isError).toBeFalsy()
     expect(data(result).ancestors.map((a: any) => a.id)).toContain("t1")
@@ -169,11 +169,11 @@ describe("get_node_upstream_context tool", () => {
 
   it("errors when the node id is unknown", async () => {
     const client = await connect(
-      new FakeSupabase({ playbooks: [playbookRow({ flow: triggerAgentFlow })] })
+      new FakeSupabase({ workflows: [workflowRow({ flow: triggerAgentFlow })] })
     )
     const result = await client.callTool({
       name: "get_node_upstream_context",
-      arguments: { playbookId, nodeId: "ghost" },
+      arguments: { workflowId, nodeId: "ghost" },
     })
     expect(result.isError).toBeTruthy()
   })
@@ -181,11 +181,11 @@ describe("get_node_upstream_context tool", () => {
 
 describe("create_campaign tool", () => {
   it("requires an explicit mailbox (the MCP cannot list Unipile accounts)", async () => {
-    const client = await connect(new FakeSupabase({ playbooks: [playbookRow()] }))
+    const client = await connect(new FakeSupabase({ workflows: [workflowRow()] }))
     const result = await client.callTool({
       name: "create_campaign",
       arguments: {
-        playbookId,
+        workflowId,
         contactTableId: "00000000-0000-4000-8000-000000000201",
         steps: [{ copy: "hello" }],
       },
@@ -197,14 +197,14 @@ describe("create_campaign tool", () => {
   })
 })
 
-describe("test_surf_point_node tool", () => {
+describe("test_workflow_node tool", () => {
   it("errors clearly when surf-flow-debug is unavailable", async () => {
     const client = await connect(
-      new FakeSupabase({ playbooks: [playbookRow({ flow: triggerAgentFlow })] })
+      new FakeSupabase({ workflows: [workflowRow({ flow: triggerAgentFlow })] })
     )
     const result = await client.callTool({
-      name: "test_surf_point_node",
-      arguments: { playbookId, nodeId: "a1" },
+      name: "test_workflow_node",
+      arguments: { workflowId, nodeId: "a1" },
     })
     // FakeSupabase has no functions.invoke -> the tool reports it is unavailable.
     expect(result.isError).toBeTruthy()
