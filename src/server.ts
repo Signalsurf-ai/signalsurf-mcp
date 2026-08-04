@@ -34,7 +34,7 @@ import {
   deleteWorkflowSchema,
   deleteTableSchema,
   deleteTableRowsSchema,
-  applyFlowEditsSchema,
+  editWorkflowFlowsSchema,
   createCampaignSchema,
   findCapabilitiesSchema,
   getBrandContextSchema,
@@ -42,7 +42,6 @@ import {
   getNodeUpstreamContextSchema,
   getWorkflowSchema,
   testWorkflowNodeSchema,
-  updateWorkflowFlowSchema,
   getSurfJobSchema,
   getTableRowSchema,
   listDatabasesSchema,
@@ -94,7 +93,7 @@ I want to… →
 - Enrich a whole table → use the enrich_table prompt; it scripts get_enrichment_context → enable_quick_surf → run_quick_surf(scope="all") → wait_for_surf_job.
 - Set up a new Workflow → use the set_up_workflow prompt.
 - Build a lead list with Deepline → use the build_lead_list prompt.
-- Build a multi-step / branching Workflow → a Workflow is a node graph (Flow V2). Call describe_node_types first, then update_workflow_flow (whole graph) or apply_flow_edits (incremental); get_node_upstream_context before mapping create_row fields.
+- Build a multi-step / branching Workflow → a Workflow is a node graph (Flow V2). Call describe_node_types first, then edit_workflow_flows (atomic); get_node_upstream_context before mapping create_row fields.
 - Build a contact-list email drip → use create_campaign (do not hand-wire it); pass a connected Unipile mailbox id.
 - Decide what to write into a column → call get_enrichment_context(databaseId[, fieldKey]) for brand context, schema, popular existing values, and field conventions.
 - Run or monitor a Workflow → run_workflow, then list_surf_jobs / wait_for_surf_job.
@@ -380,24 +379,11 @@ function registerTools(
   )
 
   registerPublicTool(
-    "update_workflow_flow",
-    updateWorkflowFlowSchema,
+    "edit_workflow_flows",
+    editWorkflowFlowsSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("update_workflow_flow")
-        return repository.updateWorkflowFlow(toolContext(args), {
-          workflowId: args.workflowId,
-          flow: args.flow,
-        })
-      })
-  )
-
-  registerPublicTool(
-    "apply_flow_edits",
-    applyFlowEditsSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("apply_flow_edits")
+        assertToolAllowed("edit_workflow_flows")
         return repository.applyFlowEdits(toolContext(args), {
           workflowId: args.workflowId,
           edits: args.edits,

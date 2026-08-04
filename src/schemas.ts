@@ -398,26 +398,6 @@ export const findCapabilitiesSchema = {
 }
 
 // ── Flow V2 node-graph + Campaign tools (SIG-977 / SIG-1023) ─────────────────
-// The `flow`/`edits` shapes are documented loosely here; the server re-validates
-// with the strict WorkflowFlowV2 schema and returns field-level errors/hints.
-const flowGraphInputSchema = z
-  .object({
-    version: z.literal(2),
-    nodes: z
-      .array(z.record(z.string(), z.unknown()))
-      .describe(
-        "Flow nodes. type is trigger | rule | agent | action | wait | sequence. Call describe_node_types for each type's fields."
-      ),
-    edges: z
-      .array(z.record(z.string(), z.unknown()))
-      .describe(
-        "Directed edges { id, source, target, condition }. condition: always | on_pass | on_fail | category:<label> | step:<index>."
-      ),
-  })
-  .describe(
-    "WorkflowFlowV2 graph: { version: 2, nodes: [...], edges: [...] }."
-  )
-
 const flowEditOpInputSchema = z.object({
   op: z.enum([
     "add_node",
@@ -456,13 +436,7 @@ const flowEditOpInputSchema = z.object({
   edgeId: z.string().optional().describe("remove_edge: edge id."),
 })
 
-export const updateWorkflowFlowSchema = {
-  ...productTargetSchema,
-  workflowId: uuidSchema,
-  flow: flowGraphInputSchema,
-}
-
-export const applyFlowEditsSchema = {
+export const editWorkflowFlowsSchema = {
   ...productTargetSchema,
   workflowId: uuidSchema,
   edits: z.array(flowEditOpInputSchema).min(1),
@@ -725,8 +699,7 @@ export const PUBLIC_MCP_TOOL_SCHEMAS = {
   cancel_surf_job: cancelSurfJobSchema,
   delete_workflow: deleteWorkflowSchema,
   describe_node_types: undefined,
-  update_workflow_flow: updateWorkflowFlowSchema,
-  apply_flow_edits: applyFlowEditsSchema,
+  edit_workflow_flows: editWorkflowFlowsSchema,
   get_node_upstream_context: getNodeUpstreamContextSchema,
   create_campaign: createCampaignSchema,
   test_workflow_node: testWorkflowNodeSchema,

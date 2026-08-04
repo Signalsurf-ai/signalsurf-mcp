@@ -87,58 +87,11 @@ describe("describe_node_types tool", () => {
   })
 })
 
-describe("update_workflow_flow tool", () => {
-  it("saves a valid trigger -> agent graph", async () => {
-    const client = await connect(new FakeSupabase({ workflows: [workflowRow()] }))
-    const result = await client.callTool({
-      name: "update_workflow_flow",
-      arguments: { workflowId, flow: triggerAgentFlow },
-    })
-    expect(result.isError).toBeFalsy()
-    expect(data(result).nodeCount).toBe(2)
-    expect(data(result).edgeCount).toBe(1)
-  })
-
-  it("rejects a cyclic graph", async () => {
-    const client = await connect(new FakeSupabase({ workflows: [workflowRow()] }))
-    const result = await client.callTool({
-      name: "update_workflow_flow",
-      arguments: {
-        workflowId,
-        flow: {
-          version: 2,
-          nodes: [
-            { id: "a", type: "agent", prompt: "x" },
-            { id: "b", type: "agent", prompt: "y" },
-          ],
-          edges: [
-            { id: "e1", source: "a", target: "b", condition: "always" },
-            { id: "e2", source: "b", target: "a", condition: "always" },
-          ],
-        },
-      },
-    })
-    expect(result.isError).toBeTruthy()
-  })
-
-  it("is blocked for a viewer token (needs workflows.write)", async () => {
-    const client = await connect(
-      new FakeSupabase({ workflows: [workflowRow()] }),
-      { productId, role: "viewer" }
-    )
-    const result = await client.callTool({
-      name: "update_workflow_flow",
-      arguments: { workflowId, flow: triggerAgentFlow },
-    })
-    expect(result.isError).toBeTruthy()
-  })
-})
-
-describe("apply_flow_edits tool", () => {
+describe("edit_workflow_flows tool", () => {
   it("builds a graph atomically with refs", async () => {
     const client = await connect(new FakeSupabase({ workflows: [workflowRow()] }))
     const result = await client.callTool({
-      name: "apply_flow_edits",
+      name: "edit_workflow_flows",
       arguments: {
         workflowId,
         edits: [
@@ -152,12 +105,41 @@ describe("apply_flow_edits tool", () => {
     expect(data(result).applied).toBe(true)
     expect(data(result).nodeCount).toBe(2)
   })
+
+  it("is blocked for a viewer token", async () => {
+    const client = await connect(
+      new FakeSupabase({ workflows: [workflowRow()] }),
+      { productId, role: "viewer" }
+    )
+    const result = await client.callTool({
+      name: "edit_workflow_flows",
+      arguments: {
+        workflowId,
+        edits: [{ op: "add_node", node: { type: "trigger" } }],
+      },
+    })
+    expect(result.isError).toBeTruthy()
+  })
+
+  it("does not expose retired Flow mutation tool names", async () => {
+    const client = await connect(new FakeSupabase({ workflows: [] }))
+    const tools = await client.listTools()
+    const names = tools.tools.map((tool) => tool.name)
+    expect(names).not.toContain("update_workflow_flow")
+    expect(names).not.toContain("apply_flow_edits")
+  })
 })
 
 describe("get_node_upstream_context tool", () => {
   it("returns the upstream trigger for a node", async () => {
     const client = await connect(
-      new FakeSupabase({ workflows: [workflowRow({ flow: triggerAgentFlow })] })
+      new FakeSupabase({
+        workflows: [
+          workflowRow({
+            flows: [{ id: "flow-1", name: "Flow 1", ...triggerAgentFlow }],
+          }),
+        ],
+      })
     )
     const result = await client.callTool({
       name: "get_node_upstream_context",
@@ -169,7 +151,13 @@ describe("get_node_upstream_context tool", () => {
 
   it("errors when the node id is unknown", async () => {
     const client = await connect(
-      new FakeSupabase({ workflows: [workflowRow({ flow: triggerAgentFlow })] })
+      new FakeSupabase({
+        workflows: [
+          workflowRow({
+            flows: [{ id: "flow-1", name: "Flow 1", ...triggerAgentFlow }],
+          }),
+        ],
+      })
     )
     const result = await client.callTool({
       name: "get_node_upstream_context",

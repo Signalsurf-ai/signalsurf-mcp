@@ -58,11 +58,14 @@ import {
   buildUpstreamContext,
   describeNodeTypes as describeFlowNodeTypes,
   flowEntryNodeIds,
-  workflowFlowV2Schema,
+  mergeWorkflowFlows,
+  splitWorkflowFlows,
   validateFieldReferences,
   validateFlow,
+  workflowFlowsSchema,
   type FlowEditOp,
-  type WorkflowFlowV2,
+  type FlowV2,
+  type WorkflowFlows,
 } from "./surf-flow/index.js"
 import {
   evaluateRunCondition,
@@ -2869,7 +2872,8 @@ export class SignalSurfRepository {
   ): Promise<{
     name: string | null
     config: JsonRecord
-    flow: WorkflowFlowV2
+    flow: FlowV2
+    flows: WorkflowFlows
   }> {
     const { data, error } = await this.db
       .from("workflows")
@@ -2887,15 +2891,20 @@ export class SignalSurfRepository {
     }
     const row = data as { name?: string | null; config?: unknown }
     const config = asRecord(row.config)
-    let flow: WorkflowFlowV2 = { version: FLOW_VERSION, nodes: [], edges: [] }
-    if (config.flow != null) {
-      const parsed = workflowFlowV2Schema.safeParse(config.flow)
-      if (parsed.success) flow = parsed.data
+    const parsed = workflowFlowsSchema.safeParse(config.flows ?? [])
+    if (!parsed.success) {
+      throw new UserFacingError("Workflow contains invalid Flows.", {
+        code: "BAD_REQUEST",
+        status: 400,
+      })
     }
+    const flows = parsed.data
+    const flow = mergeWorkflowFlows(flows)
     return {
       name: typeof row.name === "string" ? row.name : null,
       config,
       flow,
+      flows,
     }
   }
 
@@ -2918,7 +2927,7 @@ export class SignalSurfRepository {
 
   private async columnsForActionTargets(
     context: SignalSurfContext,
-    flow: WorkflowFlowV2
+    flow: FlowV2
   ): Promise<Record<string, string[]>> {
     const dbIds = new Set<string>()
     for (const node of flow.nodes) {
@@ -2941,7 +2950,8 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     workflowId: string,
     config: JsonRecord,
-    flow: WorkflowFlowV2
+    flow: FlowV2,
+    previousFlows: WorkflowFlows
   ) {
     const problems = validateFlow(flow)
     const blocking = problems.filter(
@@ -2974,7 +2984,7 @@ export class SignalSurfRepository {
     const firstRule = flow.nodes.find((node) => node.type === "rule")
     const firstAgent = flow.nodes.find((node) => node.type === "agent")
     const updateData: Record<string, unknown> = {
-      config: { ...config, flow },
+      config: { ...config, flows: splitWorkflowFlows(flow, previousFlows) },
       updated_at: new Date().toISOString(),
     }
     if (firstRule && "prompt" in firstRule && firstRule.prompt != null) {
@@ -3020,29 +3030,6 @@ export class SignalSurfRepository {
     }
   }
 
-  async updateWorkflowFlow(
-    context: SignalSurfContext,
-    input: { workflowId: string; flow: unknown }
-  ) {
-    const parsed = workflowFlowV2Schema.safeParse(input.flow)
-    if (!parsed.success) {
-      throw new UserFacingError(
-        `Invalid flow graph: ${parsed.error.issues
-          .map((issue) => issue.message)
-          .join("; ")}`,
-        { code: "BAD_REQUEST", status: 400 }
-      )
-    }
-    const loaded = await this.loadWorkflowFlow(context, input.workflowId)
-    const summary = await this.persistWorkflowFlow(
-      context,
-      input.workflowId,
-      loaded.config,
-      parsed.data
-    )
-    return { workflowId: input.workflowId, name: loaded.name, ...summary }
-  }
-
   async applyFlowEdits(
     context: SignalSurfContext,
     input: { workflowId: string; edits: FlowEditOp[] }
@@ -3064,7 +3051,8 @@ export class SignalSurfRepository {
       context,
       input.workflowId,
       loaded.config,
-      result.flow
+      result.flow,
+      loaded.flows
     )
     return {
       workflowId: input.workflowId,
@@ -3225,7 +3213,8 @@ export class SignalSurfRepository {
       context,
       input.workflowId,
       loaded.config,
-      built.flow
+      built.flow,
+      loaded.flows
     )
 
     return {

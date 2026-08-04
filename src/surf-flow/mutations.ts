@@ -7,14 +7,14 @@ import {
   type FlowEdge,
   type FlowEdgeCondition,
   type FlowNode,
-  type WorkflowFlowV2,
+  type FlowV2,
 } from "./index.js"
 
 /**
  * Pure, in-place-free graph mutations for WorkflowFlow V2.
  *
  * These are the granular building blocks the Surfer agent uses to edit an open
- * node graph incrementally (instead of re-emitting the whole `config.flow`).
+ * node graph incrementally (instead of re-emitting the whole `config.flows`).
  * They are pure: caller supplies node/edge ids (the chat executor mints them,
  * the eval uses a counter) so the functions never depend on randomness and are
  * trivially testable, and both the online chat path and the offline eval call
@@ -70,7 +70,7 @@ export type FlowNodeInput = DistributiveOmit<FlowNode, "id" | "typeVersion"> & {
   typeVersion?: 1
 }
 
-function nodeById(flow: WorkflowFlowV2, id: string): FlowNode | undefined {
+function nodeById(flow: FlowV2, id: string): FlowNode | undefined {
   return flow.nodes.find((n) => n.id === id)
 }
 
@@ -161,10 +161,10 @@ export function legalConditionForSource(
 
 /** Append a new node (id supplied by caller). Validates the node shape. */
 export function addNode(
-  flow: WorkflowFlowV2,
+  flow: FlowV2,
   nodeInput: FlowNodeInput,
   id: string
-): WorkflowFlowV2 {
+): FlowV2 {
   if (nodeById(flow, id)) {
     throw new FlowMutationError(
       "duplicate_id",
@@ -185,10 +185,10 @@ export function addNode(
 
 /** Connect two nodes. Hard-rejects local boundary violations. */
 export function connectNodes(
-  flow: WorkflowFlowV2,
+  flow: FlowV2,
   link: { source: string; target: string; condition?: FlowEdgeCondition },
   edgeId: string
-): WorkflowFlowV2 {
+): FlowV2 {
   const condition = link.condition ?? "always"
   if (flow.edges.some((e) => e.id === edgeId)) {
     throw new FlowMutationError(
@@ -234,10 +234,10 @@ export function connectNodes(
 
 /** Patch an existing node. Type is immutable; the merged node is re-validated. */
 export function updateNode(
-  flow: WorkflowFlowV2,
+  flow: FlowV2,
   nodeId: string,
   patch: Record<string, unknown>
-): WorkflowFlowV2 {
+): FlowV2 {
   const node = nodeById(flow, nodeId)
   if (!node) {
     throw new FlowMutationError(
@@ -272,9 +272,9 @@ export function updateNode(
 
 /** Remove a node and every edge touching it. */
 export function removeNode(
-  flow: WorkflowFlowV2,
+  flow: FlowV2,
   nodeId: string
-): WorkflowFlowV2 {
+): FlowV2 {
   if (!nodeById(flow, nodeId)) {
     throw new FlowMutationError(
       "node_not_found",
@@ -290,9 +290,9 @@ export function removeNode(
 
 /** Remove a single edge by id. */
 export function removeEdge(
-  flow: WorkflowFlowV2,
+  flow: FlowV2,
   edgeId: string
-): WorkflowFlowV2 {
+): FlowV2 {
   if (!flow.edges.some((e) => e.id === edgeId)) {
     throw new FlowMutationError(
       "edge_not_found",
@@ -339,12 +339,12 @@ export interface FlowEditResult {
  * flagged) so a partial graph never lands. Returns the ref→minted-id map.
  */
 export function applyFlowEdits(
-  flow: WorkflowFlowV2,
+  flow: FlowV2,
   edits: FlowEditOp[],
   mintId: (kind: "node" | "edge") => string
 ): {
   ok: boolean
-  flow: WorkflowFlowV2
+  flow: FlowV2
   results: FlowEditResult[]
   refs: Record<string, string>
 } {

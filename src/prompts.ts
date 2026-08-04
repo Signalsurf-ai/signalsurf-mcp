@@ -53,7 +53,7 @@ Follow these steps in order:
 3. Call create_workflow({ name, databaseIds }) to create the workflow. Keep the returned workflowId.
 4. Attach a signal source: call create_signal({ workflowId, type, ... }). Choose the type that matches the source (platform, custom-pull, rss, webhook, web-monitor, github, etc.). A webhook signal returns a callable webhookUrl.
 5. Simple Workflow: tune behavior with update_workflow — set scoring_rubric and surf_prompt, and attach product tools via toolConfigPatch.auto_tool_ids (ids from list_product_tools).
-6. Multi-step / branching Workflow: call describe_node_types to learn the node types and legal edge conditions, then build the graph with update_workflow_flow (whole graph) or apply_flow_edits (incremental, atomic). Before mapping a create_row/object_sink node's fields, call get_node_upstream_context so the keys are real columns. For a contact-list email drip, use create_campaign instead of hand-wiring a sequence.
+6. Multi-step / branching Workflow: call describe_node_types to learn the node types and legal edge conditions, then build the graph with edit_workflow_flows (atomic). Before mapping a create_row/object_sink node's fields, call get_node_upstream_context so the keys are real columns. For a contact-list email drip, use create_campaign instead of hand-wiring a sequence.
 7. Trigger a first run with run_workflow({ workflowId }), then poll with wait_for_surf_job / list_surf_jobs and report the result.
 
 Never pass a null or guessed id — resolve productId, databaseId, workflowId, and node ids from the calls above before using them.`

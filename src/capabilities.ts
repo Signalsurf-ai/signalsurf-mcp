@@ -96,8 +96,7 @@ export type PublicMcpToolName =
   | "cancel_surf_job"
   | "delete_workflow"
   | "describe_node_types"
-  | "update_workflow_flow"
-  | "apply_flow_edits"
+  | "edit_workflow_flows"
   | "get_node_upstream_context"
   | "create_campaign"
   | "test_workflow_node"
@@ -332,19 +331,10 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
-  update_workflow_flow: {
-    title: "Update Workflow Flow",
+  edit_workflow_flows: {
+    title: "Edit Workflow Flows",
     description:
-      "Create or replace a Workflow's multi-step Flow V2 graph (stored at config.flow). Input { workflowId, flow } where flow is { version: 2, nodes, edges }. Validates the graph (rejects cycles and dangling edges) and blocks create_row/object_sink fields that map to non-existent columns. Use this for a whole-graph build; use apply_flow_edits for incremental edits. Call describe_node_types first if unsure of node shapes.",
-    requiredCapability: "workflows.write",
-    surferSurface: "manage_workflows",
-    publicStatus: "supported",
-    annotations: MUTATE_ANNOTATIONS,
-  },
-  apply_flow_edits: {
-    title: "Apply Flow Edits",
-    description:
-      "Apply several Flow V2 edits to a Workflow in one atomic call — prefer this for multi-step builds/edits. Input { workflowId, edits }. edits is an ordered list of ops: {op:'add_node', ref?, node}, {op:'connect', source, target, condition?}, {op:'update_node', nodeId, patch}, {op:'remove_node', nodeId}, {op:'remove_edge', edgeId}. An add_node may set a ref so later ops reference the new node before its id exists. If any op is invalid the whole batch is rejected (applied:false with the failing op). For create_row/object_sink nodes call get_node_upstream_context first.",
+      "Edit the Flows inside one Workflow in a single atomic call. Input { workflowId, edits }. A disconnected Node chain becomes its own Flow; connected Nodes remain in the same Flow. edits is an ordered list of ops: {op:'add_node', ref?, node}, {op:'connect', source, target, condition?}, {op:'update_node', nodeId, patch}, {op:'remove_node', nodeId}, {op:'remove_edge', edgeId}. If any edit is invalid, the whole batch is rejected.",
     requiredCapability: "workflows.write",
     surferSurface: "manage_workflows",
     publicStatus: "supported",

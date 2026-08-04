@@ -1,4 +1,4 @@
-import type { FlowNode, FlowNodeType, WorkflowFlowV2 } from "./index.js"
+import type { FlowNode, FlowNodeType, FlowV2 } from "./index.js"
 
 /**
  * Topology-aware data-flow resolution for WorkflowFlow V2.
@@ -51,7 +51,7 @@ export interface UpstreamContext {
  * are missing (consistent with validateFlow's liveEdges).
  */
 export function upstreamAncestors(
-  flow: WorkflowFlowV2,
+  flow: FlowV2,
   nodeId: string
 ): FlowNode[] {
   const ids = new Set(flow.nodes.map((n) => n.id))
@@ -104,7 +104,7 @@ function actionTargetDatabaseId(node: FlowNode): string | undefined {
  * resolvers call exec(...); the eval passes synchronous fake-catalog resolvers.
  */
 export async function buildUpstreamContext(
-  flow: WorkflowFlowV2,
+  flow: FlowV2,
   nodeId: string,
   resolvers: UpstreamResolvers = {}
 ): Promise<UpstreamContext> {

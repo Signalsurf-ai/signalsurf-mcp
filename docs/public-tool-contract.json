@@ -3,7 +3,7 @@
   "canonicalization": "Recursively sort object keys, preserve array order, omit undefined object members, then SHA-256 the compact JSON.",
   "inputSchemaSha256": {
     "add_table_field": "5ee37d59c4b987a8f86900e054b8157d44d718d9157a2f54c67bc3ad7dd29bb9",
-    "apply_flow_edits": "d900b5a83084ad5bcd96029217cbe5c9cd2fbff8f9a8e51b29f4ed1bbbedbd61",
+    "edit_workflow_flows": "d900b5a83084ad5bcd96029217cbe5c9cd2fbff8f9a8e51b29f4ed1bbbedbd61",
     "cancel_surf_job": "b02ff66695c4cf150463bad231dbe365dd4b5f1c7286a85e492fd34b17a3a1c2",
     "create_campaign": "c846b3a1a40b93dcab9e385ae19bdadbd2bce4d1c28c291da44a8785e5b58050",
     "create_product": "64a712763bf80100c6fb0453e9ed54db1ec1d30e8896e9c9eb0b15e84d210f5e",
@@ -50,7 +50,6 @@
     "test_workflow_node": "f353d9d3b56ba8fd919243bf31618ef1698300d1234e37d34e88ab1c1ed24f01",
     "update_signal": "240d95324ff776f807d375c05a9f05d556ff8b288067e7a3eb0d807f93efd2b8",
     "update_workflow": "04feb7c31502f40080f82dfeda1e51e47aaa3a16afe10cbf2ddd0b412e18ce35",
-    "update_workflow_flow": "24c9ff956cbc4eb5c730c9fbb2186e274577580ae94fee0bf056e02068b330cd",
     "update_table": "33a4dc6016ca396a7426f3d5c3a881f42bbe2862909048d83d57427ea82cdd21",
     "update_table_field": "163308439e0cf459ccf27101947e735a74dcfe64c710cc900b2c6ed15ca0a6d6",
     "update_table_rows": "97ac421b4817614e652e8205267a41ea73ddbe799356454c62ab178a105c163d",
@@ -75,7 +74,7 @@
         }
       ]
     },
-    "apply_flow_edits": {
+    "edit_workflow_flows": {
       "valid": [
         {
           "workflowId": "00000000-0000-4000-8000-000000000001",
@@ -503,20 +502,6 @@
         }
       ],
       "invalid": [{ "workflowId": "not-a-uuid" }]
-    },
-    "update_workflow_flow": {
-      "valid": [
-        {
-          "workflowId": "00000000-0000-4000-8000-000000000001",
-          "flow": { "version": 2, "nodes": [], "edges": [] }
-        }
-      ],
-      "invalid": [
-        {
-          "workflowId": "00000000-0000-4000-8000-000000000001",
-          "flow": { "version": 1, "nodes": [], "edges": [] }
-        }
-      ]
     },
     "update_table": {
       "valid": [

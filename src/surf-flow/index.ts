@@ -2,7 +2,7 @@ import { z } from "zod"
 
 /**
  * Workflow Flow V2 — a persisted multi-step graph (DAG) stored at
- * `workflows.config.flow`. See docs/workflow-flow-v2.md.
+ * `workflows.config.flows`. See docs/workflow-flow-v2.md.
  *
  * This is the single source of truth for the flow shape. It is shared between
  * the Next.js app (editor + tRPC validation) and the Deno edge worker
@@ -242,22 +242,94 @@ export type FlowEdge = z.infer<typeof flowEdgeSchema>
  * The versioned envelope. Future versions extend this as a
  * `z.discriminatedUnion("version", [...])` so old saved specs keep parsing.
  */
-export const workflowFlowV2Schema = z.object({
+export const flowV2Schema = z.object({
   version: z.literal(FLOW_VERSION),
+  dataflowVersion: z.literal(2).optional(),
   nodes: z.array(flowNodeSchema),
   edges: z.array(flowEdgeSchema),
 })
-export type WorkflowFlowV2 = z.infer<typeof workflowFlowV2Schema>
+export type FlowV2 = z.infer<typeof flowV2Schema>
+
+export const persistedFlowV2Schema = flowV2Schema.extend({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(100),
+})
+export type PersistedFlowV2 = z.infer<typeof persistedFlowV2Schema>
+export const workflowFlowsSchema = z.array(persistedFlowV2Schema).max(50)
+export type WorkflowFlows = z.infer<typeof workflowFlowsSchema>
+
+export function mergeWorkflowFlows(flows: readonly PersistedFlowV2[]): FlowV2 {
+  return {
+    version: FLOW_VERSION,
+    ...(flows.some((flow) => flow.dataflowVersion === 2)
+      ? { dataflowVersion: 2 as const }
+      : {}),
+    nodes: flows.flatMap((flow) => flow.nodes),
+    edges: flows.flatMap((flow) => flow.edges),
+  }
+}
+
+export function splitWorkflowFlows(
+  graph: FlowV2,
+  previous: readonly PersistedFlowV2[] = []
+): PersistedFlowV2[] {
+  if (graph.nodes.length === 0) return []
+  const nodeIds = new Set(graph.nodes.map((node) => node.id))
+  const adjacent = new Map([...nodeIds].map((id) => [id, new Set<string>()]))
+  for (const edge of graph.edges) {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) continue
+    adjacent.get(edge.source)?.add(edge.target)
+    adjacent.get(edge.target)?.add(edge.source)
+  }
+  const previousByNode = new Map<string, PersistedFlowV2>()
+  for (const flow of previous) {
+    for (const node of flow.nodes) previousByNode.set(node.id, flow)
+  }
+  const visited = new Set<string>()
+  const claimed = new Set<string>()
+  const result: PersistedFlowV2[] = []
+  for (const start of graph.nodes) {
+    if (visited.has(start.id)) continue
+    const stack = [start.id]
+    const component = new Set<string>()
+    visited.add(start.id)
+    while (stack.length > 0) {
+      const id = stack.pop()!
+      component.add(id)
+      for (const neighbor of adjacent.get(id) ?? []) {
+        if (visited.has(neighbor)) continue
+        visited.add(neighbor)
+        stack.push(neighbor)
+      }
+    }
+    const retained = [...component]
+      .map((id) => previousByNode.get(id))
+      .find((flow) => flow && !claimed.has(flow.id))
+    const id = retained?.id ?? `flow-${start.id}`
+    claimed.add(id)
+    result.push({
+      id,
+      name: retained?.name ?? `Flow ${result.length + 1}`,
+      version: FLOW_VERSION,
+      ...(graph.dataflowVersion === 2 ? { dataflowVersion: 2 as const } : {}),
+      nodes: graph.nodes.filter((node) => component.has(node.id)),
+      edges: graph.edges.filter(
+        (edge) => component.has(edge.source) && component.has(edge.target)
+      ),
+    })
+  }
+  return result
+}
 
 // ─── Graph helpers (pure; safe in both Node and Deno) ────────────────────────
 
-function liveEdges(flow: WorkflowFlowV2): FlowEdge[] {
+function liveEdges(flow: FlowV2): FlowEdge[] {
   const ids = new Set(flow.nodes.map((n) => n.id))
   return flow.edges.filter((e) => ids.has(e.source) && ids.has(e.target))
 }
 
 /** Entry nodes = nodes with no inbound edge. Computed, never stored. */
-export function flowEntryNodeIds(flow: WorkflowFlowV2): string[] {
+export function flowEntryNodeIds(flow: FlowV2): string[] {
   const targets = new Set(liveEdges(flow).map((e) => e.target))
   return flow.nodes.filter((n) => !targets.has(n.id)).map((n) => n.id)
 }
@@ -273,7 +345,7 @@ export function flowEntryNodeIds(flow: WorkflowFlowV2): string[] {
  * relevant per-source trigger node(s).
  */
 export function entryTriggersForSource(
-  flow: WorkflowFlowV2,
+  flow: FlowV2,
   sourceId: string
 ): string[] {
   const entries = flowEntryNodeIds(flow)
@@ -287,7 +359,7 @@ export function entryTriggersForSource(
 
 /** First node of a type in declared order (used by the legacy dual-write). */
 export function firstNodeOfType<T extends FlowNodeType>(
-  flow: WorkflowFlowV2,
+  flow: FlowV2,
   type: T
 ): Extract<FlowNode, { type: T }> | undefined {
   return flow.nodes.find((n) => n.type === type) as
@@ -297,7 +369,7 @@ export function firstNodeOfType<T extends FlowNodeType>(
 
 /** Outbound edges of a node whose condition matches the node's branch result. */
 export function nextEdges(
-  flow: WorkflowFlowV2,
+  flow: FlowV2,
   nodeId: string,
   branch: FlowEdgeCondition
 ): FlowEdge[] {
@@ -339,7 +411,7 @@ export interface FlowProblem {
  * Structural validation for the executor: DAG-only; fan-in/joins are allowed.
  * Returns an empty array when the flow is structurally runnable.
  */
-export function validateFlow(flow: WorkflowFlowV2): FlowProblem[] {
+export function validateFlow(flow: FlowV2): FlowProblem[] {
   const problems: FlowProblem[] = []
   const nodeIds = new Set(flow.nodes.map((n) => n.id))
 
@@ -494,7 +566,7 @@ export function validateFlow(flow: WorkflowFlowV2): FlowProblem[] {
  * surfaced as warnings so the agent can self-repair without blocking the save.
  */
 export function validateFieldReferences(
-  flow: WorkflowFlowV2,
+  flow: FlowV2,
   columnsByDatabaseId: Record<string, string[]>
 ): FlowProblem[] {
   const problems: FlowProblem[] = []
