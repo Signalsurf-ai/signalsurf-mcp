@@ -2172,7 +2172,7 @@ describe("SignalSurfRepository", () => {
             key: "tier",
             type: "enum",
             options: ["tier_1", "tier_2", "tier_3"],
-            quick_surf: true,
+            enrich: true,
             ai_enabled: true,
             sources: [{ id: "legacy-tier-source" }],
           },
@@ -2223,7 +2223,7 @@ describe("SignalSurfRepository", () => {
         expect.objectContaining({
           key: "tier",
           type: "enum",
-          quick_surf: false,
+          enrich: false,
           ai_enabled: false,
           sources: [],
         }),

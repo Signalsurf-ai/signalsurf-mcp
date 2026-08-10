@@ -87,10 +87,10 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `create_signal`             | `sources.write`          | No          | Creates a signal for a Surf Point with typed config and product-scope validation                                      |
 | `update_signal`             | `sources.write`          | No          | Updates signal name, active state (enable/pause), typed config, `pull_config`, `metadata`, or `data_schema`           |
 | `delete_signal`             | `sources.write`          | Yes         | Deletes signals after product-scope validation and removes non-terminal jobs for those source ids                     |
-| `enable_quick_surf`         | `sources.write`          | No          | Binds a hidden manual-trigger source to one table column with instruction, optional auto-fill, and optional run gate  |
-| `disable_quick_surf`        | `sources.write`          | No          | Turns off a column binding while preserving its instruction and gate                                                  |
-| `list_quick_surf`           | `sources.read`           | No          | Lists Quick Surf-enabled columns for a table with their instructions                                                  |
-| `run_quick_surf`            | `surf_points.execute`    | No          | Queues enrichment, skips populated cells by default, and requires explicit overwrite consent for refreshes            |
+| `enable_enrich`         | `sources.write`          | No          | Binds a hidden manual-trigger source to one table column with instruction, optional auto-fill, and optional run gate  |
+| `disable_enrich`        | `sources.write`          | No          | Turns off a column binding while preserving its instruction and gate                                                  |
+| `list_enrich`           | `sources.read`           | No          | Lists Enrich-enabled columns for a table with their instructions                                                  |
+| `run_enrich`            | `surf_points.execute`    | No          | Queues enrichment, skips populated cells by default, and requires explicit overwrite consent for refreshes            |
 | `list_product_tools`        | `surf_points.read`       | No          | Lists safe product tool metadata; config secrets are not exposed                                                      |
 | `list_surf_point_tools`     | `surf_points.read`       | No          | Lists tool ids from `tool_config.auto_tool_ids` (attach/detach via `update_surf_point` toolConfigPatch)               |
 | `search_instagram_content`  | `creator_discovery.read` | No          | Searches public Instagram posts after one-time Web approval; three credits per page, no Reels fallback                |

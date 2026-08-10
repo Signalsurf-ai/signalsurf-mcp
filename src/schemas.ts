@@ -174,10 +174,10 @@ export const cancelSurfJobSchema = {
   jobId: uuidSchema,
 }
 
-// ─── Quick Surf (per-column enrichment) ──────────────────────────────────────
+// ─── Enrich (per-column enrichment) ──────────────────────────────────────────
 // A hidden surf point bound to one database column (target_field). enable/disable
 // manage the binding; run queues per-row brain enrichment jobs.
-const quickSurfColumnTarget = {
+const enrichColumnTarget = {
   ...productTargetSchema,
   databaseId: uuidSchema,
   fieldKey: z.string().trim().min(1).max(100),
@@ -202,24 +202,24 @@ const runConditionSchema = z.object({
     .nullish(),
 })
 
-export const enableQuickSurfSchema = {
-  ...quickSurfColumnTarget,
+export const enableEnrichSchema = {
+  ...enrichColumnTarget,
   whatToDo: z.string().trim().min(1).max(10000),
   auto: z.enum(["off", "on_created"]).optional(),
   runCondition: runConditionSchema.optional(),
 }
 
-export const disableQuickSurfSchema = {
-  ...quickSurfColumnTarget,
+export const disableEnrichSchema = {
+  ...enrichColumnTarget,
 }
 
-export const listQuickSurfSchema = {
+export const listEnrichSchema = {
   ...productTargetSchema,
   databaseId: uuidSchema,
 }
 
-export const runQuickSurfSchema = {
-  ...quickSurfColumnTarget,
+export const runEnrichSchema = {
+  ...enrichColumnTarget,
   scope: z.enum(["first10", "first100", "all"]).optional(),
   entryId: uuidSchema.optional(),
   entryIds: z.array(uuidSchema).min(1).max(1000).optional(),
@@ -750,10 +750,10 @@ export const PUBLIC_MCP_TOOL_SCHEMAS = {
   create_signal: createSurfPointSourceSchema,
   update_signal: updateSurfPointSourceSchema,
   delete_signal: deleteSurfPointSourceSchema,
-  enable_quick_surf: enableQuickSurfSchema,
-  disable_quick_surf: disableQuickSurfSchema,
-  list_quick_surf: listQuickSurfSchema,
-  run_quick_surf: runQuickSurfSchema,
+  enable_enrich: enableEnrichSchema,
+  disable_enrich: disableEnrichSchema,
+  list_enrich: listEnrichSchema,
+  run_enrich: runEnrichSchema,
   list_product_tools: listProductToolsSchema,
   list_surf_point_tools: listSurfPointToolsSchema,
   search_instagram_content: instagramContentSearchSchema,

@@ -124,7 +124,7 @@ const OUTBOUND_ACCOUNT_SCHEMA: JsonRecord = {
       type: "number",
       label: "Fit Score",
       description:
-        "1-10 ICP fit score. Prefer Quick Surf for reusable scoring across rows.",
+        "1-10 ICP fit score. Prefer Enrich for reusable scoring across rows.",
     },
     {
       key: "fit_reason",
@@ -385,7 +385,7 @@ function normalizeLegacyOutboundAccountFields(fields: unknown[]) {
     if (record?.key !== "tier") return field
     return {
       ...record,
-      quick_surf: false,
+      enrich: false,
       ai_enabled: false,
       sources: [],
     }
