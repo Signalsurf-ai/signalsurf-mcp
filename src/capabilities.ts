@@ -97,7 +97,7 @@ export type PublicMcpToolName =
   | "delete_surf_point"
   | "describe_node_types"
   | "update_surf_point_flow"
-  | "apply_flow_edits"
+  | "apply_surf_point_edits"
   | "get_node_upstream_context"
   | "create_campaign"
   | "test_surf_point_node"
@@ -335,14 +335,14 @@ export const PUBLIC_MCP_TOOLS = {
   update_surf_point_flow: {
     title: "Update Surf Point Flow",
     description:
-      "Create or replace a surf point's multi-step Flow V2 graph (stored at config.flow). Input { playbookId, flow } where flow is { version: 2, nodes, edges }. Validates the graph (rejects cycles and dangling edges) and blocks create_row/object_sink fields that map to non-existent columns. Use this for a whole-graph build; use apply_flow_edits for incremental edits. Call describe_node_types first if unsure of node shapes.",
+      "Create or replace a surf point's multi-step Flow V2 graph (stored at config.flow). Input { playbookId, flow } where flow is { version: 2, nodes, edges }. Validates the graph (rejects cycles and dangling edges) and blocks create_row/object_sink fields that map to non-existent columns. Use this for a whole-graph build; use apply_surf_point_edits for incremental edits. Call describe_node_types first if unsure of node shapes.",
     requiredCapability: "surf_points.write",
     surferSurface: "manage_surf_points",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
-  apply_flow_edits: {
-    title: "Apply Flow Edits",
+  apply_surf_point_edits: {
+    title: "Apply Surf Point Edits",
     description:
       "Apply several Flow V2 edits to a surf point in one atomic call — prefer this for multi-step builds/edits. Input { playbookId, edits }. edits is an ordered list of ops: {op:'add_node', ref?, node}, {op:'connect', source, target, condition?}, {op:'update_node', nodeId, patch}, {op:'remove_node', nodeId}, {op:'remove_edge', edgeId}. An add_node may set a ref so later ops reference the new node before its id exists. If any op is invalid the whole batch is rejected (applied:false with the failing op). For create_row/object_sink nodes call get_node_upstream_context first.",
     requiredCapability: "surf_points.write",

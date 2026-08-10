@@ -726,7 +726,7 @@ export const PUBLIC_MCP_TOOL_SCHEMAS = {
   delete_surf_point: deleteSurfPointSchema,
   describe_node_types: undefined,
   update_surf_point_flow: updateSurfPointFlowSchema,
-  apply_flow_edits: applyFlowEditsSchema,
+  apply_surf_point_edits: applyFlowEditsSchema,
   get_node_upstream_context: getNodeUpstreamContextSchema,
   create_campaign: createCampaignSchema,
   test_surf_point_node: testSurfPointNodeSchema,
