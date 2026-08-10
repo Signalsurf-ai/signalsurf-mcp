@@ -22,8 +22,8 @@
     "delete_table": "c1cdbe19ad327e7c906830066d3b3d3620e4924b008b948c62717041a0217ef5",
     "delete_table_rows": "8a55c6e7e82b965b107232bfc9a38635f5f238f0c9ebc1fb98c6ca87facad153",
     "describe_node_types": "efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49",
-    "disable_quick_surf": "113b03a1ad01ac9b3b467b79ea37388d0bf39ba1cf78896af4ca1d77694ef066",
-    "enable_quick_surf": "a50420d79c99017d09962426ee2bc8f9d6d7e0041ebbbc8d708b737bd30860a0",
+    "disable_enrich": "113b03a1ad01ac9b3b467b79ea37388d0bf39ba1cf78896af4ca1d77694ef066",
+    "enable_enrich": "a50420d79c99017d09962426ee2bc8f9d6d7e0041ebbbc8d708b737bd30860a0",
     "find_capabilities": "780608dd04f21ab9299af2df358deb9fb0b13178b49823e756b9e289b7d733b8",
     "get_brand_context": "7a047174577717786c80120c1b8bc26f318ccdfc9b393b9bbb1b8f7e694e2db9",
     "get_context": "efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49",
@@ -33,7 +33,7 @@
     "get_surf_point": "2d0e9780fa21d49900f941cca3af891b18b704fc47c0892302e085bbe897d8ab",
     "get_table_row": "988367254984fad8b057fd24324303cc08327029aca8e62b27a01207397bef59",
     "list_product_tools": "42925c0fde10777e909e202b4f59f640135d2ed974030038c8854d8e0d7abb86",
-    "list_quick_surf": "e52e394216932c43808150d7d4d05bbbdca77af82b8a498120cda38df6b055a6",
+    "list_enrich": "e52e394216932c43808150d7d4d05bbbdca77af82b8a498120cda38df6b055a6",
     "list_signals": "2d0e9780fa21d49900f941cca3af891b18b704fc47c0892302e085bbe897d8ab",
     "list_surf_jobs": "492f924446764c15926174bdb069747412a2e8b60ab9df5d59a5b539f512ffd2",
     "list_surf_point_tools": "2d0e9780fa21d49900f941cca3af891b18b704fc47c0892302e085bbe897d8ab",
@@ -44,7 +44,7 @@
     "read_table": "4bfe23e9f6b2a3a115a2bca2b5a824c279b34657db35500c83b41558f266a6f9",
     "read_table_view": "f70116ef07702700fa64abe648ff0487bca64ddb2d0ffd56addd4ba150540004",
     "remove_table_field": "113b03a1ad01ac9b3b467b79ea37388d0bf39ba1cf78896af4ca1d77694ef066",
-    "run_quick_surf": "28602e016977ee96d989ad142615e8256a4ba94bfd2fc6ddb98215e21067fa4d",
+    "run_enrich": "28602e016977ee96d989ad142615e8256a4ba94bfd2fc6ddb98215e21067fa4d",
     "run_surf_point": "800a3c8bfa52045238ced038a1f5538578681be21e249a2a7e7e60aec8350370",
     "search_instagram_content": "188f8857f184a6b505f3a8cb29321c66367fd0c6b2d1fbd02605f20c5ef14e07",
     "test_surf_point_node": "745edec507f3408916196bf3ea368cfcc739776d4aa2e2cc4baaedb2b823faeb",
@@ -275,7 +275,7 @@
       "valid": [{}],
       "invalid": [null]
     },
-    "disable_quick_surf": {
+    "disable_enrich": {
       "valid": [
         {
           "databaseId": "00000000-0000-4000-8000-000000000001",
@@ -289,7 +289,7 @@
         }
       ]
     },
-    "enable_quick_surf": {
+    "enable_enrich": {
       "valid": [
         {
           "databaseId": "00000000-0000-4000-8000-000000000001",
@@ -356,7 +356,7 @@
       "valid": [{ "includeDisabled": false, "limit": 100 }],
       "invalid": [{ "limit": 0 }]
     },
-    "list_quick_surf": {
+    "list_enrich": {
       "valid": [{ "databaseId": "00000000-0000-4000-8000-000000000001" }],
       "invalid": [{ "databaseId": "not-a-uuid" }]
     },
@@ -432,7 +432,7 @@
         }
       ]
     },
-    "run_quick_surf": {
+    "run_enrich": {
       "valid": [
         {
           "databaseId": "00000000-0000-4000-8000-000000000001",

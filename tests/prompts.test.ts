@@ -14,8 +14,8 @@ describe("buildEnrichTablePrompt", () => {
     const text = buildEnrichTablePrompt({})
     expect(text).toMatch(/list_tables/)
     expect(text).toMatch(/get_enrichment_context/)
-    expect(text).toMatch(/enable_quick_surf/)
-    expect(text).toMatch(/run_quick_surf/)
+    expect(text).toMatch(/enable_enrich/)
+    expect(text).toMatch(/run_enrich/)
     expect(text).toMatch(/wait_for_surf_job/)
   })
 
@@ -109,6 +109,6 @@ describe("enrich_table prompt over MCP", () => {
         ? got.messages[0].content.text
         : ""
     expect(text).toContain("db-99")
-    expect(text).toMatch(/run_quick_surf/)
+    expect(text).toMatch(/run_enrich/)
   })
 })

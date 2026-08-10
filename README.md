@@ -187,7 +187,7 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - `create_table_row`, `update_table_rows`, `delete_table_rows`
 - `list_table_fields`, `add_table_field`, `update_table_field`, `remove_table_field`, `create_relation_field`
 - `list_signals`, `create_signal`, `update_signal`, `delete_signal`
-- `enable_quick_surf`, `disable_quick_surf`, `list_quick_surf`, `run_quick_surf`
+- `enable_enrich`, `disable_enrich`, `list_enrich`, `run_enrich`
 - `list_product_tools`, `list_surf_point_tools` (attach/detach tools via `update_surf_point` `toolConfigPatch.auto_tool_ids`)
 - `search_instagram_content`
 - `deepline_search_people`, `deepline_search_companies`, `deepline_enrich_contact`, `deepline_search_catalog`, `deepline_execute_tool`
@@ -390,7 +390,7 @@ Sources and surf point tools:
   `manual-trigger`, `on-schedule`) are exclusive. A Surf Point can have one
   internal trigger and no external discovery signals alongside it. Pass
   `replaceExisting=true` only when intentionally replacing existing signals.
-- `enable_quick_surf` / `disable_quick_surf` / `list_quick_surf` / `run_quick_surf`:
+- `enable_enrich` / `disable_enrich` / `list_enrich` / `run_enrich`:
   per-column enrichment. Enable binds a hidden surf point plus an internal
   `manual_trigger` source to one `(databaseId, fieldKey)` with a "what to do"
   instruction; the brain fills that single column from each row's context. Enable
