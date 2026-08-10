@@ -3,7 +3,7 @@
   "canonicalization": "Recursively sort object keys, preserve array order, omit undefined object members, then SHA-256 the compact JSON.",
   "inputSchemaSha256": {
     "add_table_field": "5ee37d59c4b987a8f86900e054b8157d44d718d9157a2f54c67bc3ad7dd29bb9",
-    "apply_flow_edits": "2dd268408c89a3ffc5cded8571e618e4eab2ec65c30db60c2e69af698718c386",
+    "apply_surf_point_edits": "2dd268408c89a3ffc5cded8571e618e4eab2ec65c30db60c2e69af698718c386",
     "cancel_surf_job": "b02ff66695c4cf150463bad231dbe365dd4b5f1c7286a85e492fd34b17a3a1c2",
     "create_campaign": "9c09b7f791fbb1808e95ce9947978230e5658d7720160bcb3a0f6d30ebf2e886",
     "create_product": "64a712763bf80100c6fb0453e9ed54db1ec1d30e8896e9c9eb0b15e84d210f5e",
@@ -75,7 +75,7 @@
         }
       ]
     },
-    "apply_flow_edits": {
+    "apply_surf_point_edits": {
       "valid": [
         {
           "playbookId": "00000000-0000-4000-8000-000000000001",

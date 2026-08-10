@@ -8,7 +8,7 @@
   },
   "knownPublicMcpTools": [
     "add_table_field",
-    "apply_flow_edits",
+    "apply_surf_point_edits",
     "cancel_surf_job",
     "create_campaign",
     "create_product",
@@ -117,7 +117,7 @@
     "run_enrich": ["run_enrich"],
     "describe_node_types": ["describe_node_types"],
     "update_surf_point_flow": ["update_surf_point_flow"],
-    "apply_flow_edits": ["apply_flow_edits"],
+    "apply_surf_point_edits": ["apply_surf_point_edits"],
     "get_node_upstream_context": ["get_node_upstream_context"],
     "create_campaign": ["create_campaign"],
     "search_instagram_content": ["search_instagram_content"],

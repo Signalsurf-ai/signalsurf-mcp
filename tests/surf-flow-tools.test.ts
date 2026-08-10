@@ -134,11 +134,11 @@ describe("update_surf_point_flow tool", () => {
   })
 })
 
-describe("apply_flow_edits tool", () => {
+describe("apply_surf_point_edits tool", () => {
   it("builds a graph atomically with refs", async () => {
     const client = await connect(new FakeSupabase({ playbooks: [playbookRow()] }))
     const result = await client.callTool({
-      name: "apply_flow_edits",
+      name: "apply_surf_point_edits",
       arguments: {
         playbookId,
         edits: [
