@@ -345,6 +345,10 @@ class FakeQuery implements PromiseLike<any> {
     return this
   }
 
+  or(_filter: string) {
+    return this
+  }
+
   order(key: string, options: { ascending?: boolean } = {}) {
     this.orderSpecs.push({ key, ascending: options.ascending ?? true })
     return this

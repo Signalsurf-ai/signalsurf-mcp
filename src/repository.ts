@@ -76,6 +76,7 @@ import {
   applyPublicTableTemplate,
   type PublicTableTemplate,
 } from "./table-templates.js"
+import { loadWorkspaceCapabilities } from "./workspace-capabilities.js"
 
 export const POPULAR_VALUES_SCAN_LIMIT = 1000
 export const POPULAR_VALUES_TOP_N = 30
@@ -1434,6 +1435,10 @@ function readSourceEndpointId(source: SourceRow): string | null {
 
 export class SignalSurfRepository {
   constructor(private readonly db: SupabaseLike) {}
+
+  async loadWorkspaceCapabilities(productIds: readonly string[]) {
+    return loadWorkspaceCapabilities(this.db, productIds)
+  }
 
   async resolveMcpToken(
     token: string,

@@ -17,8 +17,8 @@ import {
   requiredCapabilitiesForTool,
   type PublicMcpToolName,
 } from "./capabilities.js"
-import { jsonResource, runJsonTool } from "./mcp-results.js"
-import { PROMPT_CATALOG, registerPrompts } from "./prompts.js"
+import { jsonErrorResult, jsonResource, runJsonTool } from "./mcp-results.js"
+import { registerPrompts, workspaceVisiblePromptCatalog } from "./prompts.js"
 import { SignalSurfRepository } from "./repository.js"
 import { searchCapabilities } from "./tool-search.js"
 import {
@@ -76,6 +76,14 @@ import {
   PUBLIC_MCP_TOOL_SCHEMAS,
 } from "./schemas.js"
 import type { SignalSurfContext } from "./types.js"
+import {
+  WORKSPACE_CAPABILITIES,
+  assertWorkspaceToolAllowed,
+  isToolVisibleAcrossProducts,
+  projectMcpCapabilitiesForWorkspace,
+  workspaceCapabilityEnabled,
+  workspaceCapabilityForTool,
+} from "./workspace-capabilities.js"
 
 export type CreateServerOptions = {
   context: SignalSurfContext
@@ -101,6 +109,38 @@ I want to… →
 
 When multiple products are authorized, pass products[].productId (from get_context) on every product-scoped call.`
 
+export function workspaceProjectedServerInstructions(
+  context: SignalSurfContext
+): string {
+  const sections = [
+    "SignalSurf MCP — operating manual.",
+    "Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter; never pass a null or guessed id.",
+    "Not sure which available capability fits → call find_capabilities(query).",
+  ]
+  if (isToolVisibleAcrossProducts(context, "list_tables")) {
+    sections.push(
+      "For available Table work, resolve databaseId with list_tables before reading or changing rows, fields, views, or Enrich configuration.",
+      "Use the enrich_table prompt for guided whole-column enrichment and get_enrichment_context before choosing column instructions."
+    )
+  }
+  if (isToolVisibleAcrossProducts(context, "list_workflows")) {
+    sections.push(
+      "For available Workflow work, resolve workflowId with list_workflows; use set_up_workflow for guided setup and poll jobs after execution."
+    )
+  }
+  if (isToolVisibleAcrossProducts(context, "create_campaign")) {
+    sections.push(
+      "For available Campaign work, use create_campaign instead of hand-wiring a sending flow."
+    )
+  }
+  if (authorizedProductIds(context).length > 1) {
+    sections.push(
+      "When multiple products are authorized, pass products[].productId from get_context on every product-scoped call."
+    )
+  }
+  return sections.join("\n\n")
+}
+
 export async function createSignalSurfMcpServer(
   options: CreateServerOptions
 ): Promise<McpServer> {
@@ -118,6 +158,10 @@ export async function createSignalSurfMcpServer(
       // Name resolution is best-effort; fall back to UUID display on failure.
     }
   }
+  context.workspaceCapabilitiesByProduct = await loadRepositoryCapabilities(
+    repository,
+    authorizedProductIds(context)
+  )
   const server = new McpServer(
     {
       name: "signalsurf-mcp",
@@ -129,14 +173,29 @@ export async function createSignalSurfMcpServer(
         tools: {},
         prompts: {},
       },
-      instructions: SERVER_INSTRUCTIONS,
+      instructions: workspaceProjectedServerInstructions(context),
     }
   )
 
   registerResources(server, repository, context)
   registerTools(server, repository, context)
-  registerPrompts(server)
+  registerPrompts(server, {
+    tables: isToolVisibleAcrossProducts(context, "list_tables"),
+    workflows: isToolVisibleAcrossProducts(context, "list_workflows"),
+  })
   return server
+}
+
+async function loadRepositoryCapabilities(
+  repository: SignalSurfRepository,
+  productIds: readonly string[]
+) {
+  if (typeof repository.loadWorkspaceCapabilities === "function") {
+    return repository.loadWorkspaceCapabilities(productIds)
+  }
+  return Object.fromEntries(
+    productIds.map((productId) => [productId, [...WORKSPACE_CAPABILITIES]])
+  )
 }
 
 function registerTools(
@@ -145,6 +204,14 @@ function registerTools(
   context: SignalSurfContext
 ) {
   const registeredTools = new Set<PublicMcpToolName>()
+  const visibleToolNames = PUBLIC_MCP_TOOL_NAMES.filter((name) =>
+    isToolVisibleAcrossProducts(context, name)
+  )
+  const visibleToolNameSet = new Set(visibleToolNames)
+  const visiblePromptCatalog = workspaceVisiblePromptCatalog({
+    tables: isToolVisibleAcrossProducts(context, "list_tables"),
+    workflows: isToolVisibleAcrossProducts(context, "list_workflows"),
+  })
 
   function toolConfig(name: PublicMcpToolName, inputSchema?: any) {
     const definition = PUBLIC_MCP_TOOLS[name]
@@ -175,6 +242,7 @@ function registerTools(
     inputSchema: any,
     handler: (args: any) => Promise<any>
   ) {
+    if (!visibleToolNameSet.has(name)) return
     if (inputSchema !== PUBLIC_MCP_TOOL_SCHEMAS[name]) {
       throw new Error(
         `Public MCP tool ${name} was registered with a non-canonical input schema.`
@@ -184,7 +252,25 @@ function registerTools(
       throw new Error(`Public MCP tool ${name} was registered more than once.`)
     }
     registeredTools.add(name)
-    server.registerTool(name, toolConfig(name, inputSchema), handler)
+    server.registerTool(
+      name,
+      toolConfig(name, inputSchema),
+      async (args: any) => {
+        if (workspaceCapabilityForTool(name) !== null) {
+          try {
+            const selectedContext = toolContext(args)
+            selectedContext.workspaceCapabilitiesByProduct =
+              await loadRepositoryCapabilities(repository, [
+                selectedContext.productId,
+              ])
+            assertWorkspaceToolAllowed(selectedContext, name)
+          } catch (error) {
+            return jsonErrorResult(error)
+          }
+        }
+        return handler(args)
+      }
+    )
   }
 
   registerPublicTool("get_context", undefined, async () =>
@@ -201,9 +287,12 @@ function registerTools(
         tokenName: context.tokenName ?? null,
         scopes: context.scopes ?? null,
         capabilities: {
-          effective: listContextCapabilities(context),
+          effective: projectMcpCapabilitiesForWorkspace(
+            context,
+            listContextCapabilities(context)
+          ),
           tools: Object.fromEntries(
-            PUBLIC_MCP_TOOL_NAMES.map((toolName) => [
+            visibleToolNames.map((toolName) => [
               toolName,
               requiredCapabilitiesForTool(toolName).every((capability) =>
                 canUseCapability(context, capability)
@@ -260,7 +349,7 @@ function registerTools(
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("find_capabilities")
-        const tools = PUBLIC_MCP_TOOL_NAMES.filter(
+        const tools = visibleToolNames.filter(
           (name) =>
             name !== "find_capabilities" &&
             canUseCapability(context, PUBLIC_MCP_TOOLS[name].requiredCapability)
@@ -271,7 +360,7 @@ function registerTools(
         }))
         return searchCapabilities(
           typeof args?.query === "string" ? args.query : "",
-          { tools, prompts: PROMPT_CATALOG }
+          { tools, prompts: visiblePromptCatalog }
         )
       })
   )
@@ -739,7 +828,7 @@ function registerTools(
       })
   )
 
-  const missingTools = PUBLIC_MCP_TOOL_NAMES.filter(
+  const missingTools = visibleToolNames.filter(
     (name) => !registeredTools.has(name)
   )
   if (missingTools.length > 0) {
@@ -777,14 +866,18 @@ function registerResources(
         role: context.role,
         tokenName: context.tokenName ?? null,
         scopes: context.scopes ?? null,
-        capabilities: listContextCapabilities(context),
+        capabilities: projectMcpCapabilitiesForWorkspace(
+          context,
+          listContextCapabilities(context)
+        ),
       })
     }
   )
 
   if (contextProductIds.length > 1) return
 
-  server.registerResource(
+  if (workspaceCapabilityEnabled(context, "workflows")) {
+    server.registerResource(
     "signalsurf_workflows",
     "signalsurf://workflows",
     {
@@ -803,7 +896,7 @@ function registerResources(
     }
   )
 
-  server.registerResource(
+    server.registerResource(
     "signalsurf_workflow",
     new ResourceTemplate("signalsurf://workflows/{workflowId}", {
       list: async () => {
@@ -846,7 +939,7 @@ function registerResources(
     }
   )
 
-  server.registerResource(
+    server.registerResource(
     "signalsurf_workflow_sources",
     new ResourceTemplate("signalsurf://workflows/{workflowId}/sources", {
       list: async () => {
@@ -892,7 +985,7 @@ function registerResources(
     }
   )
 
-  server.registerResource(
+    server.registerResource(
     "signalsurf_workflow_tools",
     new ResourceTemplate("signalsurf://workflows/{workflowId}/tools", {
       list: async () => {
@@ -935,6 +1028,8 @@ function registerResources(
     }
   )
 
+  }
+
   server.registerResource(
     "signalsurf_product_tools",
     "signalsurf://product-tools",
@@ -954,7 +1049,8 @@ function registerResources(
     }
   )
 
-  server.registerResource(
+  if (workspaceCapabilityEnabled(context, "workflows")) {
+    server.registerResource(
     "signalsurf_surf_jobs",
     "signalsurf://surf-jobs",
     {
@@ -973,7 +1069,7 @@ function registerResources(
     }
   )
 
-  server.registerResource(
+    server.registerResource(
     "signalsurf_surf_job",
     new ResourceTemplate("signalsurf://surf-jobs/{jobId}", {
       list: async () => {
@@ -1014,7 +1110,10 @@ function registerResources(
     }
   )
 
-  server.registerResource(
+  }
+
+  if (workspaceCapabilityEnabled(context, "tables")) {
+    server.registerResource(
     "signalsurf_databases",
     "signalsurf://databases",
     {
@@ -1033,7 +1132,7 @@ function registerResources(
     }
   )
 
-  server.registerResource(
+    server.registerResource(
     "signalsurf_database_rows",
     new ResourceTemplate("signalsurf://databases/{databaseId}/rows", {
       list: async () => {
@@ -1076,5 +1175,6 @@ function registerResources(
         })
       )
     }
-  )
+    )
+  }
 }

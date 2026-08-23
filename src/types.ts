@@ -19,6 +19,7 @@ export type SignalSurfContext = {
   oauthTokenId?: string
   oauthGrantId?: string
   oauthClientId?: string
+  workspaceCapabilitiesByProduct?: Record<string, readonly string[]>
 }
 
 export type JsonRecord = Record<string, unknown>

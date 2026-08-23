@@ -122,8 +122,33 @@ export const PROMPT_CATALOG = PROMPTS.map(({ name, title, description }) => ({
   description,
 }))
 
-export function registerPrompts(server: McpServer): void {
-  for (const prompt of PROMPTS) {
+export type PromptWorkspaceCapabilities = {
+  tables: boolean
+  workflows: boolean
+}
+
+export function workspaceVisiblePromptCatalog(
+  capabilities: PromptWorkspaceCapabilities
+) {
+  return PROMPT_CATALOG.filter((prompt) => {
+    if (prompt.name === "set_up_surf_point") return capabilities.workflows
+    return capabilities.tables
+  })
+}
+
+export function registerPrompts(
+  server: McpServer,
+  capabilities: PromptWorkspaceCapabilities = {
+    tables: true,
+    workflows: true,
+  }
+): void {
+  const visibleNames = new Set(
+    workspaceVisiblePromptCatalog(capabilities).map((prompt) => prompt.name)
+  )
+  for (const prompt of PROMPTS.filter((entry) =>
+    visibleNames.has(entry.name)
+  )) {
     server.registerPrompt(
       prompt.name,
       {
