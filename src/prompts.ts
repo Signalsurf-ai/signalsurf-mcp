@@ -131,7 +131,7 @@ export function workspaceVisiblePromptCatalog(
   capabilities: PromptWorkspaceCapabilities
 ) {
   return PROMPT_CATALOG.filter((prompt) => {
-    if (prompt.name === "set_up_surf_point") return capabilities.workflows
+    if (prompt.name === "set_up_workflow") return capabilities.workflows
     return capabilities.tables
   })
 }

@@ -42,6 +42,7 @@ export type WorkflowRow = {
   tool_config: JsonRecord | null
   variables: JsonRecord | null
   config: JsonRecord | null
+  kind: string | null
   project_id: string | null
   display_order: number | null
   created_at: string

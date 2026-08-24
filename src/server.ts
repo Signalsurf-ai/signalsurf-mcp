@@ -123,7 +123,7 @@ export function workspaceProjectedServerInstructions(
       "Use the enrich_table prompt for guided whole-column enrichment and get_enrichment_context before choosing column instructions."
     )
   }
-  if (isToolVisibleAcrossProducts(context, "list_workflows")) {
+  if (isToolVisibleAcrossProducts(context, "create_workflow")) {
     sections.push(
       "For available Workflow work, resolve workflowId with list_workflows; use set_up_workflow for guided setup and poll jobs after execution."
     )
@@ -181,7 +181,7 @@ export async function createSignalSurfMcpServer(
   registerTools(server, repository, context)
   registerPrompts(server, {
     tables: isToolVisibleAcrossProducts(context, "list_tables"),
-    workflows: isToolVisibleAcrossProducts(context, "list_workflows"),
+    workflows: isToolVisibleAcrossProducts(context, "create_workflow"),
   })
   return server
 }
@@ -210,7 +210,7 @@ function registerTools(
   const visibleToolNameSet = new Set(visibleToolNames)
   const visiblePromptCatalog = workspaceVisiblePromptCatalog({
     tables: isToolVisibleAcrossProducts(context, "list_tables"),
-    workflows: isToolVisibleAcrossProducts(context, "list_workflows"),
+    workflows: isToolVisibleAcrossProducts(context, "create_workflow"),
   })
 
   function toolConfig(name: PublicMcpToolName, inputSchema?: any) {
@@ -880,7 +880,10 @@ function registerResources(
 
   if (contextProductIds.length > 1) return
 
-  if (workspaceCapabilityEnabled(context, "workflows")) {
+  if (
+    workspaceCapabilityEnabled(context, "workflows") ||
+    workspaceCapabilityEnabled(context, "listening")
+  ) {
     server.registerResource(
     "signalsurf_workflows",
     "signalsurf://workflows",
@@ -1053,7 +1056,10 @@ function registerResources(
     }
   )
 
-  if (workspaceCapabilityEnabled(context, "workflows")) {
+  if (
+    workspaceCapabilityEnabled(context, "workflows") ||
+    workspaceCapabilityEnabled(context, "listening")
+  ) {
     server.registerResource(
     "signalsurf_surf_jobs",
     "signalsurf://surf-jobs",

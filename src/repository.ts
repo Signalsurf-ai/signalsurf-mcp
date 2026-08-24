@@ -719,6 +719,7 @@ const WORKFLOW_COLUMNS = [
   "tool_config",
   "variables",
   "config",
+  "kind",
   "project_id",
   "display_order",
   "created_at",
@@ -1747,11 +1748,18 @@ export class SignalSurfRepository {
     const { data, error } = await query
       .order("display_order", { ascending: true })
       .order("created_at", { ascending: true })
+      .limit(input.limit ?? 100)
 
     requireNoDbError(error, "Failed to list Workflows")
+    const workflows = ((data ?? []) as WorkflowRow[]).filter((workflow) =>
+      workspaceCapabilityEnabled(
+        context,
+        workflow.kind === "listening" ? "listening" : "workflows"
+      )
+    )
     return {
-      workflows: (data ?? []).map(formatWorkflow),
-      totalCount: data?.length ?? 0,
+      workflows: workflows.map(formatWorkflow),
+      totalCount: workflows.length,
     }
   }
 
@@ -6007,7 +6015,7 @@ export class SignalSurfRepository {
   ): Promise<void> {
     const { data, error } = await this.db
       .from("workflows")
-      .select("id")
+      .select("id, kind")
       .eq("id", workflowId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
@@ -6019,6 +6027,7 @@ export class SignalSurfRepository {
         status: 404,
       })
     }
+    this.assertWorkflowCapability(context, (data as { kind?: unknown }).kind)
   }
 
   private async assertProductToolBelongsToProduct(
@@ -6070,7 +6079,7 @@ export class SignalSurfRepository {
   ): Promise<void> {
     const { data, error } = await this.db
       .from("workflows")
-      .select("id")
+      .select("id, kind")
       .eq("id", workflowId)
       .eq("product_id", context.productId)
       .maybeSingle()
@@ -6081,6 +6090,7 @@ export class SignalSurfRepository {
         status: 404,
       })
     }
+    this.assertWorkflowCapability(context, (data as { kind?: unknown }).kind)
   }
 
   private async listProductWorkflowIds(
@@ -6088,10 +6098,19 @@ export class SignalSurfRepository {
   ): Promise<string[]> {
     const { data, error } = await this.db
       .from("workflows")
-      .select("id")
+      .select("id, kind")
       .eq("product_id", context.productId)
     requireNoDbError(error, "Failed to resolve product Workflows")
-    return ((data ?? []) as Array<{ id: string }>).map((row) => row.id)
+    return (
+      (data ?? []) as Array<{ id: string; kind?: unknown }>
+    )
+      .filter((row) =>
+        workspaceCapabilityEnabled(
+          context,
+          row.kind === "listening" ? "listening" : "workflows"
+        )
+      )
+      .map((row) => row.id)
   }
 
   private async findSurfJobById(jobId: string): Promise<SurfJobRow | null> {
@@ -6132,7 +6151,7 @@ export class SignalSurfRepository {
   ): Promise<{ id: string; name: string; is_active: boolean }> {
     const { data, error } = await this.db
       .from("workflows")
-      .select("id, name, is_active")
+      .select("id, name, is_active, kind")
       .eq("id", workflowId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
@@ -6144,6 +6163,7 @@ export class SignalSurfRepository {
         status: 404,
       })
     }
+    this.assertWorkflowCapability(context, (data as { kind?: unknown }).kind)
     return data as { id: string; name: string; is_active: boolean }
   }
 
@@ -6295,12 +6315,20 @@ export class SignalSurfRepository {
     if (ids.length === 0) return []
     const { data, error } = await this.db
       .from("workflows")
-      .select("id, name")
+      .select("id, name, kind")
       .eq("product_id", context.productId)
       .is("deleted_at", null)
       .in("id", ids)
     requireNoDbError(error, "Failed to validate Workflows")
-    return (data ?? []) as Array<{ id: string; name: string }>
+    const workflows = (data ?? []) as Array<{
+      id: string
+      name: string
+      kind?: unknown
+    }>
+    for (const workflow of workflows) {
+      this.assertWorkflowCapability(context, workflow.kind)
+    }
+    return workflows
   }
 
   private async getWorkflowForUpdate(
@@ -6321,7 +6349,22 @@ export class SignalSurfRepository {
         status: 404,
       })
     }
-    return data as WorkflowRow
+    const workflow = data as WorkflowRow
+    this.assertWorkflowCapability(context, workflow.kind)
+    return workflow
+  }
+
+  private assertWorkflowCapability(
+    context: SignalSurfContext,
+    kind: unknown
+  ): void {
+    const required: WorkspaceCapability =
+      kind === "listening" ? "listening" : "workflows"
+    if (workspaceCapabilityEnabled(context, required)) return
+    throw new UserFacingError(
+      "This operation is unavailable in the current Workspace.",
+      { code: "FORBIDDEN", status: 403 }
+    )
   }
 
   private async updateWorkflowToolIds(

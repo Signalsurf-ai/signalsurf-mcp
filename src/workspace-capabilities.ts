@@ -44,6 +44,11 @@ const WORKFLOW_TOOLS = new Set<PublicMcpToolName>([
   "list_workflow_tools",
 ])
 
+const WORKFLOW_CREATE_TOOLS = new Set<PublicMcpToolName>([
+  "create_workflow",
+  "describe_node_types",
+])
+
 const TABLE_TOOLS = new Set<PublicMcpToolName>([
   "get_enrichment_context",
   "list_tables",
@@ -84,7 +89,12 @@ type WorkspaceToolRequirement =
 function workspaceCapabilityRequirementForTool(
   toolName: PublicMcpToolName
 ): WorkspaceToolRequirement | null {
-  if (WORKFLOW_TOOLS.has(toolName)) return { allOf: ["workflows"] }
+  if (WORKFLOW_CREATE_TOOLS.has(toolName)) return { allOf: ["workflows"] }
+  if (WORKFLOW_TOOLS.has(toolName)) {
+    // Generic Workflow tools may resolve an ordinary Workflow or a Listening.
+    // Repository methods recheck the concrete row before returning or mutating.
+    return { anyOf: ["workflows", "listening"] }
+  }
   if (toolName === "create_table") return { allOf: ["tables"] }
   if (TABLE_TOOLS.has(toolName)) {
     // These generic tools resolve the concrete database at execution time.
@@ -133,6 +143,25 @@ function isRollingSchemaMiss(error: { code?: string } | null | undefined) {
   return error?.code === "42P01" || error?.code === "42703"
 }
 
+function capabilitiesWithOverrides(
+  productIds: readonly string[],
+  overrides: readonly {
+    product_id: string
+    capability_key: unknown
+    enabled: unknown
+  }[]
+): WorkspaceCapabilitiesByProduct {
+  return Object.fromEntries(
+    productIds.map((productId) => [
+      productId,
+      resolveEffectiveWorkspaceCapabilities(
+        WORKSPACE_CAPABILITIES,
+        overrides.filter((row) => row.product_id === productId)
+      ),
+    ])
+  )
+}
+
 export async function loadWorkspaceCapabilities(
   db: SupabaseLike,
   productIds: readonly string[]
@@ -161,6 +190,11 @@ export async function loadWorkspaceCapabilities(
     id: string
     organization_id: string
   }>
+  const overrideRows = (overridesResult.data ?? []) as Array<{
+    product_id: string
+    capability_key: unknown
+    enabled: unknown
+  }>
   const organizationIds = [
     ...new Set(products.map((row) => row.organization_id)),
   ]
@@ -171,7 +205,9 @@ export async function loadWorkspaceCapabilities(
     .in("status", ["active", "trialing"])
     .or("current_period_end.is.null,current_period_end.gte.now()")
     .order("created_at", { ascending: false })
-  if (isRollingSchemaMiss(subscriptionsResult.error)) return allEnabled
+  if (isRollingSchemaMiss(subscriptionsResult.error)) {
+    return capabilitiesWithOverrides(productIds, overrideRows)
+  }
   if (subscriptionsResult.error) {
     throw new Error("Workspace capabilities are unavailable")
   }
@@ -189,7 +225,9 @@ export async function loadWorkspaceCapabilities(
     .from("billing_plan_catalog")
     .select("plan_key, workspace_capabilities")
     .in("plan_key", planKeys)
-  if (isRollingSchemaMiss(plansResult.error)) return allEnabled
+  if (isRollingSchemaMiss(plansResult.error)) {
+    return capabilitiesWithOverrides(productIds, overrideRows)
+  }
   if (plansResult.error) {
     throw new Error("Workspace capabilities are unavailable")
   }
@@ -210,11 +248,7 @@ export async function loadWorkspaceCapabilities(
     string,
     Array<{ capability_key: unknown; enabled: unknown }>
   >()
-  for (const row of (overridesResult.data ?? []) as Array<{
-    product_id: string
-    capability_key: unknown
-    enabled: unknown
-  }>) {
+  for (const row of overrideRows) {
     const rows = overridesByProduct.get(row.product_id) ?? []
     rows.push(row)
     overridesByProduct.set(row.product_id, rows)
@@ -224,7 +258,15 @@ export async function loadWorkspaceCapabilities(
   return Object.fromEntries(
     productIds.map((productId) => {
       const product = productById.get(productId)
-      if (!product) return [productId, [...WORKSPACE_CAPABILITIES]]
+      if (!product) {
+        return [
+          productId,
+          resolveEffectiveWorkspaceCapabilities(
+            WORKSPACE_CAPABILITIES,
+            overridesByProduct.get(productId) ?? []
+          ),
+        ]
+      }
       const planKey =
         planByOrganization.get(product.organization_id) ?? "individual"
       return [

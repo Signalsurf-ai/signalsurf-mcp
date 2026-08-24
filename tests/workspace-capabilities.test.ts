@@ -16,6 +16,8 @@ const productId = "00000000-0000-4000-8000-000000000001"
 const organizationId = "00000000-0000-4000-8000-000000000002"
 const hiddenTableId = "00000000-0000-4000-8000-000000000003"
 const listeningTableId = "00000000-0000-4000-8000-000000000004"
+const ordinaryWorkflowId = "00000000-0000-4000-8000-000000000005"
+const listeningWorkflowId = "00000000-0000-4000-8000-000000000006"
 let cleanup: Array<() => Promise<void>> = []
 
 afterEach(async () => {
@@ -103,6 +105,90 @@ describe("hosted MCP Workspace capability projection", () => {
     ).resolves.toEqual({ [productId]: [...WORKSPACE_CAPABILITIES] })
   })
 
+  it("preserves explicit disables when later plan tables are rolling out", async () => {
+    const db = new FakeSupabase(
+      {
+        products: [{ id: productId, organization_id: organizationId }],
+        product_capability_overrides: [
+          {
+            product_id: productId,
+            capability_key: "workflows",
+            enabled: false,
+          },
+        ],
+      },
+      {
+        tableErrors: {
+          subscriptions: {
+            code: "42703",
+            message: "column current_period_end does not exist",
+          },
+        },
+      }
+    )
+
+    const capabilities = await loadWorkspaceCapabilities(db as any, [productId])
+    expect(capabilities[productId]).not.toContain("workflows")
+    expect(capabilities[productId]).toContain("listening")
+  })
+
+  it("keeps Listening independent from ordinary Workflows", async () => {
+    const db = policyDb([
+      { product_id: productId, capability_key: "workflows", enabled: false },
+    ])
+    db.tables.workflows.push(
+      {
+        id: ordinaryWorkflowId,
+        product_id: productId,
+        name: "Hidden ordinary Workflow",
+        kind: "workflow",
+        is_active: true,
+        deleted_at: null,
+        created_at: "2026-08-24T00:00:00Z",
+      },
+      {
+        id: listeningWorkflowId,
+        product_id: productId,
+        name: "Visible Listening",
+        kind: "listening",
+        is_active: true,
+        deleted_at: null,
+        created_at: "2026-08-24T00:00:00Z",
+      }
+    )
+    const client = await connect(db)
+    const toolNames = (await client.listTools()).tools.map((tool) => tool.name)
+    expect(toolNames).toContain("list_workflows")
+    expect(toolNames).not.toContain("create_workflow")
+    expect(toolNames).not.toContain("describe_node_types")
+
+    const listed = await client.callTool({
+      name: "list_workflows",
+      arguments: {},
+    })
+    const listedText =
+      listed.content?.[0]?.type === "text" ? listed.content[0].text : ""
+    expect(JSON.parse(listedText).data.workflows).toEqual([
+      expect.objectContaining({ workflowId: listeningWorkflowId }),
+    ])
+
+    const denied = await client.callTool({
+      name: "get_workflow",
+      arguments: { workflowId: ordinaryWorkflowId },
+    })
+    expect(denied.isError).toBe(true)
+    const allowed = await client.callTool({
+      name: "get_workflow",
+      arguments: { workflowId: listeningWorkflowId },
+    })
+    expect(allowed.isError).toBeFalsy()
+
+    const prompts = await client.listPrompts()
+    expect(prompts.prompts.map((prompt) => prompt.name)).not.toContain(
+      "set_up_workflow"
+    )
+  })
+
   it("omits disabled tools, prompts, discovery entries, and resources", async () => {
     const db = policyDb([
       { product_id: productId, capability_key: "tables", enabled: false },
@@ -116,7 +202,7 @@ describe("hosted MCP Workspace capability projection", () => {
     const toolNames = tools.tools.map((tool) => tool.name)
     expect(toolNames).not.toContain("list_tables")
     expect(toolNames).not.toContain("create_table")
-    expect(toolNames).not.toContain("list_surf_points")
+    expect(toolNames).not.toContain("list_workflows")
     expect(toolNames).not.toContain("list_signals")
     expect(toolNames).toContain("create_campaign")
     expect(toolNames).toContain("find_capabilities")
@@ -125,7 +211,7 @@ describe("hosted MCP Workspace capability projection", () => {
 
     const resources = await client.listResources()
     const resourceUris = resources.resources.map((resource) => resource.uri)
-    expect(resourceUris).not.toContain("signalsurf://surf-points")
+    expect(resourceUris).not.toContain("signalsurf://workflows")
     expect(resourceUris).not.toContain("signalsurf://databases")
 
     const discovery = await client.callTool({
@@ -137,7 +223,7 @@ describe("hosted MCP Workspace capability projection", () => {
     const body = JSON.parse(text)
     expect(
       body.data.tools.map((tool: { name: string }) => tool.name)
-    ).not.toEqual(expect.arrayContaining(["list_tables", "list_surf_points"]))
+    ).not.toEqual(expect.arrayContaining(["list_tables", "list_workflows"]))
     expect(body.data.prompts).toEqual([])
   })
 
