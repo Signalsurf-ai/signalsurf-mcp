@@ -3122,7 +3122,16 @@ export class SignalSurfRepository {
     const provider = String(
       (binding as { provider?: unknown } | null)?.provider ?? ""
     ).toUpperCase()
-    const isEmailProvider = ["GOOGLE", "GMAIL", "MAIL", "OUTLOOK"].some(
+    const isEmailProvider = [
+      "GOOGLE",
+      "GMAIL",
+      "MAIL",
+      "OUTLOOK",
+      "EXCHANGE",
+      "ICLOUD",
+      "IMAP",
+      "SMTP",
+    ].some(
       (candidate) => provider.includes(candidate)
     )
     if (!binding || !isEmailProvider) {

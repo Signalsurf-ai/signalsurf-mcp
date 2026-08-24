@@ -280,6 +280,51 @@ describe("create_campaign tool", () => {
     }
     expect(db.tables.campaigns).toEqual([])
   })
+
+  it.each(["EXCHANGE", "ICLOUD", "IMAP", "SMTP"])(
+    "accepts a canonical %s email provider binding",
+    async (provider) => {
+      const audienceDatabaseId = "00000000-0000-4000-8000-000000000201"
+      const db = new FakeSupabase({
+        campaigns: [],
+        product_unipile_accounts: [
+          {
+            product_id: productId,
+            unipile_account_id: "mailbox-1",
+            provider,
+          },
+        ],
+        managed_email_mailboxes: [],
+        databases: [
+          {
+            id: audienceDatabaseId,
+            product_id: productId,
+            data_model: "table",
+            schema: { fields: [{ key: "email", type: "email" }] },
+          },
+        ],
+      })
+      const client = await connect(db, {
+        productId,
+        role: "editor",
+        workspaceCapabilities: ["campaigns"],
+      })
+
+      const result = await client.callTool({
+        name: "create_campaign",
+        arguments: {
+          name: `${provider} outreach`,
+          goal: "Book product calls",
+          audienceDatabaseId,
+          mailbox: "mailbox-1",
+          steps: [{ copy: "hello" }],
+        },
+      })
+
+      expect(result.isError).toBeFalsy()
+      expect(db.tables.campaigns).toHaveLength(1)
+    }
+  )
 })
 
 describe("test_workflow_node tool", () => {
