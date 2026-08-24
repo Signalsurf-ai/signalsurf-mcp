@@ -14,6 +14,8 @@ import { FakeSupabase } from "./fake-supabase.js"
 
 const productId = "00000000-0000-4000-8000-000000000001"
 const organizationId = "00000000-0000-4000-8000-000000000002"
+const hiddenTableId = "00000000-0000-4000-8000-000000000003"
+const listeningTableId = "00000000-0000-4000-8000-000000000004"
 let cleanup: Array<() => Promise<void>> = []
 
 afterEach(async () => {
@@ -41,6 +43,7 @@ function policyDb(overrides: Array<Record<string, unknown>> = []) {
     user_preferences: [],
     sources: [],
     product_tools: [],
+    workflows: [],
   })
 }
 
@@ -103,6 +106,8 @@ describe("hosted MCP Workspace capability projection", () => {
   it("omits disabled tools, prompts, discovery entries, and resources", async () => {
     const db = policyDb([
       { product_id: productId, capability_key: "tables", enabled: false },
+      { product_id: productId, capability_key: "objects", enabled: false },
+      { product_id: productId, capability_key: "listening", enabled: false },
       { product_id: productId, capability_key: "workflows", enabled: false },
     ])
     const client = await connect(db)
@@ -161,5 +166,62 @@ describe("hosted MCP Workspace capability projection", () => {
       error: "This operation is unavailable in the current Workspace.",
     })
     expect(db.tables.databases).toEqual([])
+  })
+
+  it("filters generic table discovery and rechecks the concrete resource", async () => {
+    const db = policyDb([
+      { product_id: productId, capability_key: "tables", enabled: false },
+      { product_id: productId, capability_key: "objects", enabled: false },
+    ])
+    db.tables.databases.push(
+      {
+        id: hiddenTableId,
+        product_id: productId,
+        name: "Hidden table",
+        data_model: "table",
+        system_type: null,
+        display_order: 0,
+        created_at: "2026-08-24T00:00:00Z",
+      },
+      {
+        id: listeningTableId,
+        product_id: productId,
+        name: "Visible listening feed",
+        data_model: "table",
+        system_type: null,
+        display_order: 1,
+        created_at: "2026-08-24T00:00:00Z",
+      }
+    )
+    db.tables.workflows.push({
+      id: "workflow-listening",
+      product_id: productId,
+      kind: "listening",
+      database_ids: [listeningTableId],
+      deleted_at: null,
+    })
+    const client = await connect(db)
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toContain(
+      "list_tables"
+    )
+
+    const listed = await client.callTool({
+      name: "list_tables",
+      arguments: {},
+    })
+    const listedText =
+      listed.content?.[0]?.type === "text" ? listed.content[0].text : ""
+    expect(JSON.parse(listedText).data.databases).toEqual([
+      expect.objectContaining({ databaseId: listeningTableId }),
+    ])
+
+    const denied = await client.callTool({
+      name: "read_table",
+      arguments: { databaseId: hiddenTableId },
+    })
+    const deniedText =
+      denied.content?.[0]?.type === "text" ? denied.content[0].text : ""
+    expect(denied.isError).toBe(true)
+    expect(JSON.parse(deniedText)).toMatchObject({ code: "FORBIDDEN" })
   })
 })

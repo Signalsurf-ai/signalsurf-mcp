@@ -263,6 +263,10 @@ function registerTools(
               await loadRepositoryCapabilities(repository, [
                 selectedContext.productId,
               ])
+            context.workspaceCapabilitiesByProduct = {
+              ...context.workspaceCapabilitiesByProduct,
+              ...selectedContext.workspaceCapabilitiesByProduct,
+            }
             assertWorkspaceToolAllowed(selectedContext, name)
           } catch (error) {
             return jsonErrorResult(error)

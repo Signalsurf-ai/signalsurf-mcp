@@ -77,6 +77,33 @@ export function workspaceCapabilityForTool(
   return null
 }
 
+type WorkspaceToolRequirement =
+  | { allOf: readonly WorkspaceCapability[] }
+  | { anyOf: readonly WorkspaceCapability[] }
+
+function workspaceCapabilityRequirementForTool(
+  toolName: PublicMcpToolName
+): WorkspaceToolRequirement | null {
+  if (WORKFLOW_TOOLS.has(toolName)) return { allOf: ["workflows"] }
+  if (toolName === "create_table") return { allOf: ["tables"] }
+  if (TABLE_TOOLS.has(toolName)) {
+    // These generic tools resolve the concrete database at execution time.
+    // Visibility is shared, but authorization is still exact per resource.
+    return { anyOf: ["tables", "objects", "listening"] }
+  }
+  if (toolName === "create_campaign") return { allOf: ["campaigns"] }
+  return null
+}
+
+function requirementAllowed(
+  enabled: readonly string[],
+  requirement: WorkspaceToolRequirement
+): boolean {
+  return "allOf" in requirement
+    ? requirement.allOf.every((capability) => enabled.includes(capability))
+    : requirement.anyOf.some((capability) => enabled.includes(capability))
+}
+
 export function resolveEffectiveWorkspaceCapabilities(
   defaults: readonly unknown[],
   overrides: readonly { capability_key: unknown; enabled: unknown }[]
@@ -215,16 +242,17 @@ export function isToolVisibleAcrossProducts(
   context: SignalSurfContext,
   toolName: PublicMcpToolName
 ): boolean {
-  const required = workspaceCapabilityForTool(toolName)
-  if (!required) return true
+  const requirement = workspaceCapabilityRequirementForTool(toolName)
+  if (!requirement) return true
   const productIds = context.productIds?.length
     ? context.productIds
     : [context.productId]
   return productIds.every((productId) =>
-    (
+    requirementAllowed(
       context.workspaceCapabilitiesByProduct?.[productId] ??
-      WORKSPACE_CAPABILITIES
-    ).includes(required)
+        WORKSPACE_CAPABILITIES,
+      requirement
+    )
   )
 }
 
@@ -232,15 +260,15 @@ export function assertWorkspaceToolAllowed(
   context: SignalSurfContext,
   toolName: PublicMcpToolName
 ): void {
-  const required = workspaceCapabilityForTool(toolName)
-  if (!required) return
+  const requirement = workspaceCapabilityRequirementForTool(toolName)
+  if (!requirement) return
   const enabled =
     context.workspaceCapabilitiesByProduct?.[context.productId] ??
     WORKSPACE_CAPABILITIES
-  if (enabled.includes(required)) return
+  if (requirementAllowed(enabled, requirement)) return
   console.warn("[mcp] Workspace capability denied", {
     productId: context.productId,
-    capability: required,
+    requirement,
     toolName,
   })
   throw new UserFacingError(

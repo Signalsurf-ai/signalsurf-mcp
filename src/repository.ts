@@ -76,7 +76,11 @@ import {
   applyPublicTableTemplate,
   type PublicTableTemplate,
 } from "./table-templates.js"
-import { loadWorkspaceCapabilities } from "./workspace-capabilities.js"
+import {
+  loadWorkspaceCapabilities,
+  workspaceCapabilityEnabled,
+  type WorkspaceCapability,
+} from "./workspace-capabilities.js"
 
 export const POPULAR_VALUES_SCAN_LIMIT = 1000
 export const POPULAR_VALUES_TOP_N = 30
@@ -732,6 +736,7 @@ const DATABASE_COLUMNS = [
   "schema",
   "item_type",
   "system_type",
+  "data_model",
   "view_configs",
   "folder_id",
   "display_order",
@@ -1742,7 +1747,6 @@ export class SignalSurfRepository {
     const { data, error } = await query
       .order("display_order", { ascending: true })
       .order("created_at", { ascending: true })
-      .limit(input.limit ?? 100)
 
     requireNoDbError(error, "Failed to list Workflows")
     return {
@@ -4144,9 +4148,22 @@ export class SignalSurfRepository {
       .limit(input.limit ?? 100)
 
     requireNoDbError(error, "Failed to list databases")
+    const databaseRows = (data ?? []) as DatabaseRow[]
+    const listeningDatabaseIds = await this.listeningDatabaseIds(
+      context,
+      databaseRows.map((row) => row.id)
+    )
+    const visibleRows = databaseRows
+      .filter((row) =>
+        workspaceCapabilityEnabled(
+          context,
+          this.capabilityForDatabase(row, listeningDatabaseIds)
+        )
+      )
+      .slice(0, input.limit ?? 100)
     return {
-      databases: (data ?? []).map(formatDatabase),
-      totalCount: data?.length ?? 0,
+      databases: visibleRows.map(formatDatabase),
+      totalCount: visibleRows.length,
     }
   }
 
@@ -5817,14 +5834,16 @@ export class SignalSurfRepository {
     if (databaseIds.length === 0) return
     const { data, error } = await this.db
       .from("databases")
-      .select("id")
+      .select("id, data_model")
       .eq("product_id", context.productId)
       .in("id", databaseIds)
 
     requireNoDbError(error, "Failed to validate database access")
-    const found = new Set(
-      ((data ?? []) as Array<{ id: string }>).map((row) => row.id)
-    )
+    const databaseRows = (data ?? []) as Array<{
+      id: string
+      data_model: string | null
+    }>
+    const found = new Set(databaseRows.map((row) => row.id))
     const missing = databaseIds.filter((id) => !found.has(id))
     if (missing.length > 0) {
       throw new UserFacingError(
@@ -5832,6 +5851,55 @@ export class SignalSurfRepository {
         { code: "NOT_FOUND", status: 404 }
       )
     }
+    const listeningDatabaseIds = await this.listeningDatabaseIds(
+      context,
+      databaseIds
+    )
+    for (const database of databaseRows) {
+      const required = this.capabilityForDatabase(
+        database,
+        listeningDatabaseIds
+      )
+      if (!workspaceCapabilityEnabled(context, required)) {
+        throw new UserFacingError(
+          "This operation is unavailable in the current Workspace.",
+          { code: "FORBIDDEN", status: 403 }
+        )
+      }
+    }
+  }
+
+  private capabilityForDatabase(
+    database: { id: string; data_model?: string | null },
+    listeningDatabaseIds: ReadonlySet<string>
+  ): WorkspaceCapability {
+    if (listeningDatabaseIds.has(database.id)) return "listening"
+    return database.data_model === "object" ? "objects" : "tables"
+  }
+
+  private async listeningDatabaseIds(
+    context: SignalSurfContext,
+    databaseIds: readonly string[]
+  ): Promise<Set<string>> {
+    if (databaseIds.length === 0) return new Set()
+    const { data, error } = await this.db
+      .from("workflows")
+      .select("database_ids")
+      .eq("product_id", context.productId)
+      .eq("kind", "listening")
+      .is("deleted_at", null)
+      .overlaps("database_ids", [...databaseIds])
+    if (error?.code === "42P01" || error?.code === "42703") return new Set()
+    requireNoDbError(error, "Failed to classify database access")
+    return new Set(
+      ((data ?? []) as Array<{ database_ids?: unknown }>).flatMap((row) =>
+        Array.isArray(row.database_ids)
+          ? row.database_ids.filter(
+              (id): id is string => typeof id === "string"
+            )
+          : []
+      )
+    )
   }
 
   private async assertDatabaseBelongsToProduct(
@@ -5901,6 +5969,7 @@ export class SignalSurfRepository {
         status: 404,
       })
     }
+    await this.assertDatabaseIdsBelongToProduct(context, [databaseId])
     return data as DatabaseRow
   }
 
@@ -6976,6 +7045,7 @@ function formatDatabase(row: DatabaseRow) {
     schema: row.schema,
     itemType: row.item_type,
     systemType: row.system_type,
+    dataModel: row.data_model ?? "table",
     viewConfigs: row.view_configs ?? {},
     folderId: row.folder_id ?? null,
     displayOrder: row.display_order,

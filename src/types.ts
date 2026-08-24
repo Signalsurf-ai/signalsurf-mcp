@@ -59,6 +59,7 @@ export type DatabaseRow = {
   schema: unknown
   item_type: string | null
   system_type: string | null
+  data_model: string | null
   view_configs: JsonRecord | null
   folder_id?: string | null
   display_order: number

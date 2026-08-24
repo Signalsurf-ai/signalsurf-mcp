@@ -345,6 +345,14 @@ class FakeQuery implements PromiseLike<any> {
     return this
   }
 
+  overlaps(key: string, values: unknown[]) {
+    this.filters.push(
+      (row) =>
+        Array.isArray(row[key]) && row[key].some((value: unknown) => values.includes(value))
+    )
+    return this
+  }
+
   or(_filter: string) {
     return this
   }
