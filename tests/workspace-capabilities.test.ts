@@ -196,6 +196,17 @@ describe("hosted MCP Workspace capability projection", () => {
     expect(prompts.prompts.map((prompt) => prompt.name)).not.toContain(
       "set_up_workflow"
     )
+    const contextResult = await client.callTool({
+      name: "get_context",
+      arguments: {},
+    })
+    const contextText =
+      contextResult.content?.[0]?.type === "text"
+        ? contextResult.content[0].text
+        : ""
+    expect(JSON.parse(contextText).data.capabilities.effective).toContain(
+      "sources.read"
+    )
   })
 
   it("omits disabled tools, prompts, discovery entries, and resources", async () => {
@@ -234,6 +245,28 @@ describe("hosted MCP Workspace capability projection", () => {
       body.data.tools.map((tool: { name: string }) => tool.name)
     ).not.toEqual(expect.arrayContaining(["list_tables", "list_workflows"]))
     expect(body.data.prompts).toEqual([])
+  })
+
+  it("removes Campaign OAuth capability from the model-visible manifest", async () => {
+    const client = await connect(
+      policyDb([
+        {
+          product_id: productId,
+          capability_key: "campaigns",
+          enabled: false,
+        },
+      ])
+    )
+    const result = await client.callTool({
+      name: "get_context",
+      arguments: {},
+    })
+    const text =
+      result.content?.[0]?.type === "text" ? result.content[0].text : ""
+
+    expect(JSON.parse(text).data.capabilities.effective).not.toContain(
+      "campaigns.write"
+    )
   })
 
   it("rechecks policy before a stale registered tool can mutate", async () => {
@@ -302,7 +335,7 @@ describe("hosted MCP Workspace capability projection", () => {
 
     const listed = await client.callTool({
       name: "list_tables",
-      arguments: {},
+      arguments: { limit: 1 },
     })
     const listedText =
       listed.content?.[0]?.type === "text" ? listed.content[0].text : ""

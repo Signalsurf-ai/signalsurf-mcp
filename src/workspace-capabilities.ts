@@ -329,20 +329,21 @@ export function workspaceCapabilityEnabled(
   ).includes(capability)
 }
 
-function workspaceCapabilityForMcpCapability(
+function workspaceCapabilitiesForMcpCapability(
   capability: McpCapability
-): WorkspaceCapability | null {
+): readonly WorkspaceCapability[] {
+  if (capability.startsWith("campaigns.")) return ["campaigns"]
   if (
     capability.startsWith("workflows.") ||
     capability.startsWith("sources.")
   ) {
-    return "workflows"
+    return ["workflows", "listening"]
   }
   if (capability.startsWith("tables.") || capability.startsWith("schemas.")) {
-    return "tables"
+    return ["tables", "objects", "listening"]
   }
-  if (capability.startsWith("account_lists.")) return "lists"
-  return null
+  if (capability.startsWith("account_lists.")) return ["lists"]
+  return []
 }
 
 export function projectMcpCapabilitiesForWorkspace(
@@ -353,13 +354,15 @@ export function projectMcpCapabilitiesForWorkspace(
     ? context.productIds
     : [context.productId]
   return capabilities.filter((capability) => {
-    const required = workspaceCapabilityForMcpCapability(capability)
-    if (!required) return true
+    const required = workspaceCapabilitiesForMcpCapability(capability)
+    if (required.length === 0) return true
     return productIds.every((productId) =>
-      (
-        context.workspaceCapabilitiesByProduct?.[productId] ??
-        WORKSPACE_CAPABILITIES
-      ).includes(required)
+      required.some((workspaceCapability) =>
+        (
+          context.workspaceCapabilitiesByProduct?.[productId] ??
+          WORKSPACE_CAPABILITIES
+        ).includes(workspaceCapability)
+      )
     )
   })
 }

@@ -191,6 +191,14 @@ describe("create_campaign tool", () => {
       campaigns: [],
       workflows: [],
       product_tools: [],
+      product_unipile_accounts: [
+        {
+          product_id: productId,
+          unipile_account_id: "mailbox-1",
+          provider: "MAIL",
+        },
+      ],
+      managed_email_mailboxes: [],
       databases: [
         {
           id: audienceDatabaseId,
@@ -233,6 +241,44 @@ describe("create_campaign tool", () => {
       }),
     ])
     expect(db.tables.campaigns[0]).not.toHaveProperty("workflow_id")
+  })
+
+  it("rejects an unbound or non-email Campaign mailbox before inserting", async () => {
+    const audienceDatabaseId = "00000000-0000-4000-8000-000000000201"
+    const db = new FakeSupabase({
+      campaigns: [],
+      product_unipile_accounts: [
+        {
+          product_id: productId,
+          unipile_account_id: "linkedin-1",
+          provider: "LINKEDIN",
+        },
+      ],
+      managed_email_mailboxes: [],
+      databases: [
+        {
+          id: audienceDatabaseId,
+          product_id: productId,
+          data_model: "table",
+          schema: { fields: [{ key: "email", type: "email" }] },
+        },
+      ],
+    })
+    const client = await connect(db)
+    for (const mailbox of ["other-workspace-mailbox", "linkedin-1"]) {
+      const result = await client.callTool({
+        name: "create_campaign",
+        arguments: {
+          name: "Must not exist",
+          goal: "No side effects",
+          audienceDatabaseId,
+          mailbox,
+          steps: [{ copy: "hello" }],
+        },
+      })
+      expect(result.isError).toBe(true)
+    }
+    expect(db.tables.campaigns).toEqual([])
   })
 })
 

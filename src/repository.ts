@@ -3108,6 +3108,72 @@ export class SignalSurfRepository {
     })
   }
 
+  private async assertCampaignMailboxAllowed(
+    context: SignalSurfContext,
+    mailbox: string
+  ): Promise<void> {
+    const { data: binding, error: bindingError } = await this.db
+      .from("product_unipile_accounts")
+      .select("unipile_account_id, provider")
+      .eq("product_id", context.productId)
+      .eq("unipile_account_id", mailbox)
+      .maybeSingle()
+    requireNoDbError(bindingError, "Failed to validate Campaign mailbox")
+    const provider = String(
+      (binding as { provider?: unknown } | null)?.provider ?? ""
+    ).toUpperCase()
+    const isEmailProvider = ["GOOGLE", "GMAIL", "MAIL", "OUTLOOK"].some(
+      (candidate) => provider.includes(candidate)
+    )
+    if (!binding || !isEmailProvider) {
+      throw new UserFacingError(
+        "The Campaign mailbox is not an eligible email sender in this Workspace.",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+
+    const { data: managed, error: managedError } = await this.db
+      .from("managed_email_mailboxes")
+      .select(
+        "lifecycle_status, desired_state, transport_status, campaign_eligibility_status, readiness_source_observed_at"
+      )
+      .eq("product_id", context.productId)
+      .eq("unipile_account_id", mailbox)
+      .maybeSingle()
+    requireNoDbError(
+      managedError,
+      "Failed to validate Campaign mailbox eligibility"
+    )
+    if (!managed) return
+    const row = managed as {
+      lifecycle_status?: unknown
+      desired_state?: unknown
+      transport_status?: unknown
+      campaign_eligibility_status?: unknown
+      readiness_source_observed_at?: unknown
+    }
+    const observedAt = Date.parse(
+      String(row.readiness_source_observed_at ?? "")
+    )
+    const now = Date.now()
+    const readinessIsFresh =
+      Number.isFinite(observedAt) &&
+      now - observedAt <= 24 * 60 * 60 * 1000 &&
+      observedAt - now <= 5 * 60 * 1000
+    if (
+      row.lifecycle_status !== "active" ||
+      row.desired_state !== "active" ||
+      row.transport_status !== "connected" ||
+      row.campaign_eligibility_status !== "eligible" ||
+      !readinessIsFresh
+    ) {
+      throw new UserFacingError(
+        "The Campaign mailbox is not currently eligible to send.",
+        { code: "BAD_REQUEST", status: 400 }
+      )
+    }
+  }
+
   async createCampaign(
     context: SignalSurfContext,
     input: {
@@ -3127,6 +3193,7 @@ export class SignalSurfRepository {
         { code: "BAD_REQUEST", status: 400 }
       )
     }
+    await this.assertCampaignMailboxAllowed(context, mailbox)
 
     const { data: table, error: tableError } = await this.db
       .from("databases")
@@ -3157,8 +3224,7 @@ export class SignalSurfRepository {
     const explicitRecipient = input.recipientField?.trim()
     const recipientField = explicitRecipient
       ? fields.find(
-          (field) =>
-            field.key === explicitRecipient && field.type === "email"
+          (field) => field.key === explicitRecipient && field.type === "email"
         )?.key
       : fields.find(
           (field) =>
@@ -4133,11 +4199,40 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     input: ListDatabasesInput = {}
   ) {
+    let classificationQuery = this.db
+      .from("databases")
+      .select("id, data_model")
+      .eq("product_id", context.productId)
+
+    if (!input.includeSystem) {
+      classificationQuery = classificationQuery.is("system_type", null)
+    }
+
+    const { data: candidates, error: candidateError } =
+      await classificationQuery
+    requireNoDbError(candidateError, "Failed to classify databases")
+    const candidateRows = (candidates ?? []) as DatabaseRow[]
+    const listeningDatabaseIds = await this.listeningDatabaseIds(
+      context,
+      candidateRows.map((row) => row.id)
+    )
+    const visibleIds = candidateRows
+      .filter((row) =>
+        workspaceCapabilityEnabled(
+          context,
+          this.capabilityForDatabase(row, listeningDatabaseIds)
+        )
+      )
+      .map((row) => row.id)
+    if (visibleIds.length === 0) {
+      return { databases: [], totalCount: 0 }
+    }
+
     let query = this.db
       .from("databases")
       .select(DATABASE_COLUMNS)
       .eq("product_id", context.productId)
-
+      .in("id", visibleIds)
     if (!input.includeSystem) query = query.is("system_type", null)
 
     const { data, error } = await query
@@ -4146,19 +4241,7 @@ export class SignalSurfRepository {
       .limit(input.limit ?? 100)
 
     requireNoDbError(error, "Failed to list databases")
-    const databaseRows = (data ?? []) as DatabaseRow[]
-    const listeningDatabaseIds = await this.listeningDatabaseIds(
-      context,
-      databaseRows.map((row) => row.id)
-    )
-    const visibleRows = databaseRows
-      .filter((row) =>
-        workspaceCapabilityEnabled(
-          context,
-          this.capabilityForDatabase(row, listeningDatabaseIds)
-        )
-      )
-      .slice(0, input.limit ?? 100)
+    const visibleRows = (data ?? []) as DatabaseRow[]
     return {
       databases: visibleRows.map(formatDatabase),
       totalCount: visibleRows.length,
