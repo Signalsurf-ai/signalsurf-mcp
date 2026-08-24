@@ -62,10 +62,10 @@ import {
   deeplineSearchCatalogSchema,
   deeplineExecuteToolSchema,
   instagramContentSearchSchema,
-  enableQuickSurfSchema,
-  disableQuickSurfSchema,
-  listQuickSurfSchema,
-  runQuickSurfSchema,
+  enableEnrichSchema,
+  disableEnrichSchema,
+  listEnrichSchema,
+  runEnrichSchema,
   updateDatabaseFieldSchema,
   updateWorkflowSourceSchema,
   toolOutputSchema,
@@ -86,11 +86,11 @@ export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
 
 Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter — productId from get_context (when multiple products), databaseId from list_tables, workflowId from list_workflows. Never pass a null or guessed id.
 
-Execution model: enrichment runs on the SignalSurf server brain via Quick Surf and Workflows. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
+Execution model: enrichment runs on the SignalSurf server brain via Enrich and Workflows. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
 
 I want to… →
 - Not sure which tool or prompt fits → call find_capabilities(query) to search by intent.
-- Enrich a whole table → use the enrich_table prompt; it scripts get_enrichment_context → enable_quick_surf → run_quick_surf(scope="all") → wait_for_surf_job.
+- Enrich a whole table → use the enrich_table prompt; it scripts get_enrichment_context → enable_enrich → run_enrich(scope="all") → wait_for_surf_job.
 - Set up a new Workflow → use the set_up_workflow prompt.
 - Build a lead list with Deepline → use the build_lead_list prompt.
 - Build a multi-step / branching Workflow → a Workflow is a node graph (Flow V2). Call describe_node_types first, then edit_workflow_flows (atomic); get_node_upstream_context before mapping create_row fields.
@@ -620,39 +620,39 @@ function registerTools(
   )
 
   registerPublicTool(
-    "enable_quick_surf",
-    enableQuickSurfSchema,
+    "enable_enrich",
+    enableEnrichSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("enable_quick_surf")
-        return repository.enableQuickSurf(toolContext(args), args)
+        assertToolAllowed("enable_enrich")
+        return repository.enableEnrich(toolContext(args), args)
       })
   )
 
   registerPublicTool(
-    "disable_quick_surf",
-    disableQuickSurfSchema,
+    "disable_enrich",
+    disableEnrichSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("disable_quick_surf")
-        return repository.disableQuickSurf(toolContext(args), args)
+        assertToolAllowed("disable_enrich")
+        return repository.disableEnrich(toolContext(args), args)
       })
   )
 
   registerPublicTool(
-    "list_quick_surf",
-    listQuickSurfSchema,
+    "list_enrich",
+    listEnrichSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("list_quick_surf")
-        return repository.listQuickSurf(toolContext(args), args)
+        assertToolAllowed("list_enrich")
+        return repository.listEnrich(toolContext(args), args)
       })
   )
 
-  registerPublicTool("run_quick_surf", runQuickSurfSchema, async (args: any) =>
+  registerPublicTool("run_enrich", runEnrichSchema, async (args: any) =>
     runJsonTool(async () => {
-      assertToolAllowed("run_quick_surf")
-      return repository.runQuickSurf(toolContext(args), args)
+      assertToolAllowed("run_enrich")
+      return repository.runEnrich(toolContext(args), args)
     })
   )
 

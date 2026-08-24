@@ -233,7 +233,7 @@ type RunWorkflowInput = {
   dedupePending?: boolean
 }
 
-type EnableQuickSurfInput = {
+type EnableEnrichInput = {
   databaseId: string
   fieldKey: string
   whatToDo: string
@@ -241,16 +241,16 @@ type EnableQuickSurfInput = {
   runCondition?: RunCondition
 }
 
-type DisableQuickSurfInput = {
+type DisableEnrichInput = {
   databaseId: string
   fieldKey: string
 }
 
-type ListQuickSurfInput = {
+type ListEnrichInput = {
   databaseId: string
 }
 
-type RunQuickSurfInput = {
+type RunEnrichInput = {
   databaseId: string
   fieldKey: string
   scope?: "first10" | "first100" | "all"
@@ -259,13 +259,13 @@ type RunQuickSurfInput = {
   overwriteExisting?: boolean
 }
 
-const QUICK_SURF_SCOPE_LIMITS: Record<string, number> = {
+const ENRICH_SCOPE_LIMITS: Record<string, number> = {
   first10: 10,
   first100: 100,
   all: 1000,
 }
 
-function hasQuickSurfCellValue(data: unknown, fieldKey: string): boolean {
+function hasEnrichCellValue(data: unknown, fieldKey: string): boolean {
   const value = asRecord((data ?? {}) as JsonRecord)[fieldKey]
   if (value == null) return false
   if (typeof value === "string") return value.trim().length > 0
@@ -273,7 +273,7 @@ function hasQuickSurfCellValue(data: unknown, fieldKey: string): boolean {
   return true
 }
 
-function buildQuickSurfMetadata(
+function buildEnrichMetadata(
   input: {
     databaseId: string
     fieldKey: string
@@ -3415,9 +3415,9 @@ export class SignalSurfRepository {
     }
   }
 
-  // ─── Quick Surf (per-column enrichment) ────────────────────────────────────
+  // ─── Enrich (per-column enrichment) ────────────────────────────────────────
   //
-  // Mirrors the dashboard column "Quick Surf" toggle: a hidden Workflow
+  // Mirrors the dashboard column Enrich toggle: a hidden Workflow
   // (workflows row) bound to one column via an internal `manual_trigger` source
   // whose metadata carries { event_type, database_id, target_field, disabled? }.
   // Running enqueues one `analyze` surf job per row through the normal brain
@@ -3425,7 +3425,7 @@ export class SignalSurfRepository {
   // list_surf_jobs / wait_for_surf_job. Sources are product-scoped through their
   // owning workflow, so every lookup re-verifies the workflow's product_id rather
   // than relying on an embedded-resource filter the test double cannot model.
-  private async findQuickSurfSource(
+  private async findEnrichSource(
     context: SignalSurfContext,
     databaseId: string,
     fieldKey: string
@@ -3442,7 +3442,7 @@ export class SignalSurfRepository {
         database_id: databaseId,
         target_field: fieldKey,
       })
-    requireNoDbError(error, "Failed to look up Quick Surf source")
+    requireNoDbError(error, "Failed to look up Enrich source")
     const candidates = (data ?? []) as Array<{
       id: string
       workflow_id: string | null
@@ -3468,9 +3468,9 @@ export class SignalSurfRepository {
     return null
   }
 
-  async enableQuickSurf(
+  async enableEnrich(
     context: SignalSurfContext,
-    input: EnableQuickSurfInput
+    input: EnableEnrichInput
   ) {
     const database = await this.getDatabaseAndValidateProduct(
       context,
@@ -3486,7 +3486,7 @@ export class SignalSurfRepository {
     }
     if (field.is_primary === true) {
       throw new UserFacingError(
-        "The primary column cannot be enriched with Quick Surf.",
+        "The primary column cannot be enriched with Enrich.",
         { code: "BAD_REQUEST", status: 400 }
       )
     }
@@ -3496,7 +3496,7 @@ export class SignalSurfRepository {
         ? field.label
         : input.fieldKey
 
-    const existing = await this.findQuickSurfSource(
+    const existing = await this.findEnrichSource(
       context,
       input.databaseId,
       input.fieldKey
@@ -3506,10 +3506,10 @@ export class SignalSurfRepository {
       const { error: srcError } = await this.db
         .from("sources")
         .update({
-          metadata: buildQuickSurfMetadata(input, existing.metadata),
+          metadata: buildEnrichMetadata(input, existing.metadata),
         })
         .eq("id", existing.id)
-      requireNoDbError(srcError, "Failed to re-enable Quick Surf")
+      requireNoDbError(srcError, "Failed to re-enable Enrich")
       if (existing.workflow_id) {
         const { error: pbError } = await this.db
           .from("workflows")
@@ -3520,7 +3520,7 @@ export class SignalSurfRepository {
           })
           .eq("id", existing.workflow_id)
           .eq("product_id", context.productId)
-        requireNoDbError(pbError, "Failed to update Quick Surf instruction")
+        requireNoDbError(pbError, "Failed to update Enrich instruction")
       }
       return {
         success: true,
@@ -3537,7 +3537,7 @@ export class SignalSurfRepository {
       context.userId ?? (await this.resolveProductOwnerId(context))
     if (!ownerId) {
       throw new UserFacingError(
-        "Cannot enable Quick Surf because no owning user could be resolved.",
+        "Cannot enable Enrich because no owning user could be resolved.",
         { code: "CONFIG_ERROR", status: 500 }
       )
     }
@@ -3557,16 +3557,16 @@ export class SignalSurfRepository {
       tool_config: {},
       deleted_at: null,
     })
-    requireNoDbError(pbError, "Failed to create the Quick Surf Workflow")
+    requireNoDbError(pbError, "Failed to create the Enrich Workflow")
 
     const sourceId = randomUUID()
     const { error: srcError } = await this.db.from("sources").insert({
       id: sourceId,
       user_id: ownerId,
-      name: "Quick Surf",
+      name: "Enrich",
       type: "internal",
       metadata: {
-        ...buildQuickSurfMetadata(input),
+        ...buildEnrichMetadata(input),
       },
       data_schema: { fields: [] },
       is_active: true,
@@ -3579,7 +3579,7 @@ export class SignalSurfRepository {
         .delete()
         .eq("id", workflowId)
         .eq("product_id", context.productId)
-      requireNoDbError(srcError, "Failed to bind Quick Surf to the column")
+      requireNoDbError(srcError, "Failed to bind Enrich to the column")
     }
     return {
       success: true,
@@ -3592,11 +3592,11 @@ export class SignalSurfRepository {
     }
   }
 
-  async disableQuickSurf(
+  async disableEnrich(
     context: SignalSurfContext,
-    input: DisableQuickSurfInput
+    input: DisableEnrichInput
   ) {
-    const existing = await this.findQuickSurfSource(
+    const existing = await this.findEnrichSource(
       context,
       input.databaseId,
       input.fieldKey
@@ -3623,7 +3623,7 @@ export class SignalSurfRepository {
         },
       })
       .eq("id", existing.id)
-    requireNoDbError(error, "Failed to disable Quick Surf")
+    requireNoDbError(error, "Failed to disable Enrich")
     return {
       success: true,
       databaseId: input.databaseId,
@@ -3631,7 +3631,7 @@ export class SignalSurfRepository {
     }
   }
 
-  async listQuickSurf(context: SignalSurfContext, input: ListQuickSurfInput) {
+  async listEnrich(context: SignalSurfContext, input: ListEnrichInput) {
     await this.assertDatabaseBelongsToProduct(context, input.databaseId)
     const { data, error } = await this.db
       .from("sources")
@@ -3640,7 +3640,7 @@ export class SignalSurfRepository {
         event_type: "manual_trigger",
         database_id: input.databaseId,
       })
-    requireNoDbError(error, "Failed to list Quick Surf columns")
+    requireNoDbError(error, "Failed to list Enrich columns")
     const sources = (data ?? []) as Array<{
       id: string
       metadata: unknown
@@ -3678,7 +3678,7 @@ export class SignalSurfRepository {
     return { success: true, databaseId: input.databaseId, columns }
   }
 
-  async runQuickSurf(context: SignalSurfContext, input: RunQuickSurfInput) {
+  async runEnrich(context: SignalSurfContext, input: RunEnrichInput) {
     const entryIds = uniqueIds(input.entryIds ?? [])
     const modeCount =
       (input.scope ? 1 : 0) +
@@ -3698,20 +3698,20 @@ export class SignalSurfRepository {
     }
     await this.assertDatabaseBelongsToProduct(context, input.databaseId)
 
-    const source = await this.findQuickSurfSource(
+    const source = await this.findEnrichSource(
       context,
       input.databaseId,
       input.fieldKey
     )
     if (!source || !source.workflow_id) {
       throw new UserFacingError(
-        `Quick Surf is not set up on column "${input.fieldKey}". Call enable_quick_surf first.`,
+        `Enrich is not set up on column "${input.fieldKey}". Call enable_enrich first.`,
         { code: "NOT_FOUND", status: 404 }
       )
     }
     if (source.metadata.disabled === true) {
       throw new UserFacingError(
-        `Quick Surf is turned off on column "${input.fieldKey}". Call enable_quick_surf to turn it back on, then run.`,
+        `Enrich is turned off on column "${input.fieldKey}". Call enable_enrich to turn it back on, then run.`,
         { code: "BAD_REQUEST", status: 400 }
       )
     }
@@ -3724,7 +3724,7 @@ export class SignalSurfRepository {
       .eq("id", source.workflow_id)
       .eq("product_id", context.productId)
       .maybeSingle()
-    requireNoDbError(pbError, "Failed to load the Quick Surf Workflow")
+    requireNoDbError(pbError, "Failed to load the Enrich Workflow")
     const workflow = workflowData as {
       id: string
       prompt_template?: string | null
@@ -3741,7 +3741,7 @@ export class SignalSurfRepository {
         !!workflow.scoring_rubric)
     if (!workflow || !workflowValid) {
       throw new UserFacingError(
-        "The Quick Surf Workflow has no instruction or is inactive — re-run enable_quick_surf with a whatToDo.",
+        "The Enrich Workflow has no instruction or is inactive — re-run enable_enrich with a whatToDo.",
         { code: "BAD_REQUEST", status: 400 }
       )
     }
@@ -3749,7 +3749,7 @@ export class SignalSurfRepository {
     const userId = context.userId ?? (await this.resolveProductOwnerId(context))
     if (!userId) {
       throw new UserFacingError(
-        "Cannot queue Quick Surf because no job user could be resolved.",
+        "Cannot queue Enrich because no job user could be resolved.",
         { code: "CONFIG_ERROR", status: 500 }
       )
     }
@@ -3770,7 +3770,7 @@ export class SignalSurfRepository {
     > => {
       const rawSignalId = randomUUID()
       const jobId = randomUUID()
-      const { data, error } = await this.db.rpc("enqueue_quick_surf_jobs", {
+      const { data, error } = await this.db.rpc("enqueue_enrich_jobs", {
         p_entries: [
           {
             entry_id: entry.id,
@@ -3788,7 +3788,7 @@ export class SignalSurfRepository {
         p_preserve_existing: input.overwriteExisting !== true,
         p_triggered_by: "mcp",
       })
-      requireNoDbError(error, "Failed to enqueue Quick Surf job")
+      requireNoDbError(error, "Failed to enqueue Enrich job")
       const result = asRecord(data)
       const queuedRows = Array.isArray(result.queued) ? result.queued : []
       const queuedRow = asRecord(queuedRows[0])
@@ -3817,7 +3817,7 @@ export class SignalSurfRepository {
       }
       if (
         !input.overwriteExisting &&
-        hasQuickSurfCellValue(entry.data, input.fieldKey)
+        hasEnrichCellValue(entry.data, input.fieldKey)
       ) {
         return {
           success: true,
@@ -3863,7 +3863,7 @@ export class SignalSurfRepository {
       }
     }
 
-    const limit = input.scope ? QUICK_SURF_SCOPE_LIMITS[input.scope] : 1000
+    const limit = input.scope ? ENRICH_SCOPE_LIMITS[input.scope] : 1000
     const rowsQuery = this.db
       .from("entries")
       .select("id, data, database_id")
@@ -3874,7 +3874,7 @@ export class SignalSurfRepository {
         : await rowsQuery
             .order("updated_at", { ascending: false })
             .limit(input.scope === "all" ? limit + 1 : limit)
-    requireNoDbError(rowsError, "Failed to list rows for Quick Surf")
+    requireNoDbError(rowsError, "Failed to list rows for Enrich")
     const loadedEntries = (rows ?? []) as Array<{
       id: string
       data: unknown
@@ -3907,7 +3907,7 @@ export class SignalSurfRepository {
     const missingEntries = input.overwriteExisting
       ? conditionMatchedEntries
       : conditionMatchedEntries.filter(
-          (entry) => !hasQuickSurfCellValue(entry.data, input.fieldKey)
+          (entry) => !hasEnrichCellValue(entry.data, input.fieldKey)
         )
     const skippedExisting =
       conditionMatchedEntries.length - missingEntries.length

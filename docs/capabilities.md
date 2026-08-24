@@ -87,12 +87,12 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `create_signal`             | `sources.write`          | No          | Creates a signal for a Workflow with typed config and product-scope validation                                      |
 | `update_signal`             | `sources.write`          | No          | Updates signal name, active state (enable/pause), typed config, `pull_config`, `metadata`, or `data_schema`           |
 | `delete_signal`             | `sources.write`          | Yes         | Deletes signals after product-scope validation and removes non-terminal jobs for those source ids                     |
-| `enable_quick_surf`         | `sources.write`          | No          | Binds a hidden manual-trigger source to one table column with instruction, optional auto-fill, and optional run gate  |
-| `disable_quick_surf`        | `sources.write`          | No          | Turns off a column binding while preserving its instruction and gate                                                  |
-| `list_quick_surf`           | `sources.read`           | No          | Lists Quick Surf-enabled columns for a table with their instructions                                                  |
-| `run_quick_surf`            | `workflows.execute`    | No          | Queues enrichment, skips populated cells by default, and requires explicit overwrite consent for refreshes            |
-| `list_product_tools`        | `workflows.read`       | No          | Lists safe product tool metadata; config secrets are not exposed                                                      |
-| `list_workflow_tools`     | `workflows.read`       | No          | Lists tool ids from `tool_config.auto_tool_ids` (attach/detach via `update_workflow` toolConfigPatch)               |
+| `enable_enrich`             | `sources.write`          | No          | Binds a hidden manual-trigger source to one table column with instruction, optional auto-fill, and optional run gate  |
+| `disable_enrich`            | `sources.write`          | No          | Turns off a column binding while preserving its instruction and gate                                                  |
+| `list_enrich`               | `sources.read`           | No          | Lists Enrich-enabled columns for a table with their instructions                                                      |
+| `run_enrich`                | `workflows.execute`      | No          | Queues enrichment, skips populated cells by default, and requires explicit overwrite consent for refreshes           |
+| `list_product_tools`        | `workflows.read`         | No          | Lists safe product tool metadata; config secrets are not exposed                                                      |
+| `list_workflow_tools`       | `workflows.read`         | No          | Lists tool ids from `tool_config.auto_tool_ids` (attach/detach via `update_workflow` toolConfigPatch)                 |
 | `search_instagram_content`  | `creator_discovery.read` | No          | Searches public Instagram posts after one-time Web approval; three credits per page, no Reels fallback                |
 | `deepline_search_people`    | `deepline.read`          | No          | Runs a bounded managed Crustdata V3 people search after one-time Web approval; Apollo is an explicit BYOC override    |
 | `deepline_search_companies` | `deepline.read`          | No          | Runs a bounded managed Crustdata V3 company search after one-time Web approval; Apollo is an explicit BYOC override   |

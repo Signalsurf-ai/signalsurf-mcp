@@ -120,10 +120,10 @@ export type PublicMcpToolName =
   | "create_signal"
   | "update_signal"
   | "delete_signal"
-  | "enable_quick_surf"
-  | "disable_quick_surf"
-  | "list_quick_surf"
-  | "run_quick_surf"
+  | "enable_enrich"
+  | "disable_enrich"
+  | "list_enrich"
+  | "run_enrich"
   | "list_product_tools"
   | "list_workflow_tools"
   | "search_instagram_content"
@@ -208,7 +208,7 @@ export const PUBLIC_MCP_TOOLS = {
   get_enrichment_context: {
     title: "Get Enrichment Context",
     description:
-      "Bundle everything an agent needs before filling or enriching a table column: brand/positioning context, the table schema (fields, types, options, entry key, relations), the most popular existing values per tag/array field, and SignalSurf field conventions. Call this before writing whatToDo for enable_quick_surf or before manual row edits. Pass productId when this connection can access multiple products; pass fieldKey to scope popular values to one column.",
+      "Bundle everything an agent needs before filling or enriching a table column: brand/positioning context, the table schema (fields, types, options, entry key, relations), the most popular existing values per tag/array field, and SignalSurf field conventions. Call this before writing whatToDo for enable_enrich or before manual row edits. Pass productId when this connection can access multiple products; pass fieldKey to scope popular values to one column.",
     requiredCapability: "tables.read",
     surferSurface: "enrichment context",
     publicStatus: "supported",
@@ -618,37 +618,37 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: EXTERNAL_CREATE_ANNOTATIONS,
   },
-  enable_quick_surf: {
-    title: "Enable Quick Surf",
+  enable_enrich: {
+    title: "Enable Enrich",
     description:
-      "Enable Quick Surf on one table column: bind a hidden Workflow + manual-trigger source to (databaseId, fieldKey) with a 'what to do' instruction the brain uses to fill that single column from each row's context. Optionally pass auto ('on_created' to auto-fill new rows, 'off' to clear auto-fill) and runCondition for the column's 'only run if' gate. Re-enabling an off column restores it and updates the instruction. Pass productId when this connection can access multiple products.",
+      "Enable Enrich on one table column: bind a hidden Workflow + manual-trigger source to (databaseId, fieldKey) with a 'what to do' instruction the brain uses to fill that single column from each row's context. Optionally pass auto ('on_created' to auto-fill new rows, 'off' to clear auto-fill) and runCondition for the column's 'only run if' gate. Re-enabling an off column restores it and updates the instruction. Pass productId when this connection can access multiple products.",
     requiredCapability: "sources.write",
     surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
-  disable_quick_surf: {
-    title: "Disable Quick Surf",
+  disable_enrich: {
+    title: "Disable Enrich",
     description:
-      "Turn off Quick Surf for a column without deleting it — the 'what to do' instruction is kept so re-enabling restores it.",
+      "Turn off Enrich for a column without deleting it — the 'what to do' instruction is kept so re-enabling restores it.",
     requiredCapability: "sources.write",
     surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
-  list_quick_surf: {
-    title: "List Quick Surf",
+  list_enrich: {
+    title: "List Enrich",
     description:
-      "List the columns in a database that have Quick Surf enabled, each with its 'what to do' instruction and bound Workflow id.",
+      "List the columns in a database that have Enrich enabled, each with its 'what to do' instruction and bound Workflow id.",
     requiredCapability: "sources.read",
     surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
-  run_quick_surf: {
-    title: "Run Quick Surf",
+  run_enrich: {
+    title: "Run Enrich",
     description:
-      "Queue Quick Surf enrichment for a column. Pass exactly one mode: scope ('first10' | 'first100' | 'all', capped at 1000 rows) to backfill across rows, entryIds for a specific row subset, or entryId for a single cell. Populated cells are skipped by default and reported as skippedExisting; pass overwriteExisting=true only with explicit user consent to refresh them. Column/subset runs also apply the persisted runCondition gate. Poll returned jobs with list_surf_jobs / wait_for_surf_job. Credits are charged by the brain as each job runs.",
+      "Queue Enrich for a column. Pass exactly one mode: scope ('first10' | 'first100' | 'all', capped at 1000 rows) to backfill across rows, entryIds for a specific row subset, or entryId for a single cell. Populated cells are skipped by default and reported as skippedExisting; pass overwriteExisting=true only with explicit user consent to refresh them. Column/subset runs also apply the persisted runCondition gate. Poll returned jobs with list_surf_jobs / wait_for_surf_job. Credits are charged by the brain as each job runs.",
     requiredCapability: "workflows.execute",
     surferSurface: "manage_workflows",
     publicStatus: "supported",

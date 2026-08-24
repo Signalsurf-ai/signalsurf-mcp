@@ -64,12 +64,12 @@ function makeRepo(db: FakeSupabase) {
   return new SignalSurfRepository(db as never)
 }
 
-describe("Quick Surf column enrichment", () => {
-  it("enables Quick Surf by creating a product-scoped Workflow + manual_trigger source", async () => {
+describe("Enrich column enrichment", () => {
+  it("enables Enrich by creating a product-scoped Workflow + manual_trigger source", async () => {
     const db = makeDb()
     const repo = makeRepo(db)
 
-    const result = await repo.enableQuickSurf(context, {
+    const result = await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "Find the person's work email from their name and company.",
@@ -96,11 +96,11 @@ describe("Quick Surf column enrichment", () => {
     })
   })
 
-  it("persists auto mode and run-condition metadata when enabling Quick Surf", async () => {
+  it("persists auto mode and run-condition metadata when enabling Enrich", async () => {
     const db = makeDb()
     const repo = makeRepo(db)
 
-    await repo.enableQuickSurf(context, {
+    await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "Find work email for qualified companies.",
@@ -117,14 +117,14 @@ describe("Quick Surf column enrichment", () => {
   it("rejects enabling on a missing column or the primary column", async () => {
     const repo = makeRepo(makeDb())
     await expect(
-      repo.enableQuickSurf(context, {
+      repo.enableEnrich(context, {
         databaseId: db1,
         fieldKey: "nope",
         whatToDo: "x",
       })
     ).rejects.toThrow(/not found/i)
     await expect(
-      repo.enableQuickSurf(context, {
+      repo.enableEnrich(context, {
         databaseId: db1,
         fieldKey: "name",
         whatToDo: "x",
@@ -135,7 +135,7 @@ describe("Quick Surf column enrichment", () => {
   it("does not reach a database in another product", async () => {
     const repo = makeRepo(makeDb())
     await expect(
-      repo.enableQuickSurf(context, {
+      repo.enableEnrich(context, {
         databaseId: otherDb,
         fieldKey: "work_email",
         whatToDo: "x",
@@ -146,12 +146,12 @@ describe("Quick Surf column enrichment", () => {
   it("reuses the binding and converges the instruction on re-enable", async () => {
     const db = makeDb()
     const repo = makeRepo(db)
-    const first = await repo.enableQuickSurf(context, {
+    const first = await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "First instruction.",
     })
-    const second = await repo.enableQuickSurf(context, {
+    const second = await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "Updated instruction.",
@@ -166,20 +166,20 @@ describe("Quick Surf column enrichment", () => {
   it("disable keeps the instruction (off-but-remembered) and list hides it; re-enable restores", async () => {
     const db = makeDb()
     const repo = makeRepo(db)
-    await repo.enableQuickSurf(context, {
+    await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "Keep me.",
     })
 
-    const listed = await repo.listQuickSurf(context, { databaseId: db1 })
+    const listed = await repo.listEnrich(context, { databaseId: db1 })
     expect(listed.columns.map((c) => c.fieldKey)).toEqual(["work_email"])
 
-    await repo.disableQuickSurf(context, {
+    await repo.disableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
     })
-    const afterDisable = await repo.listQuickSurf(context, { databaseId: db1 })
+    const afterDisable = await repo.listEnrich(context, { databaseId: db1 })
     expect(afterDisable.columns).toHaveLength(0)
     // surf_prompt is preserved even while disabled.
     const source = db.tables.sources[0]
@@ -187,26 +187,26 @@ describe("Quick Surf column enrichment", () => {
     const workflow = db.tables.workflows[0]
     expect(workflow.surf_prompt).toBe("Keep me.")
 
-    const restored = await repo.enableQuickSurf(context, {
+    const restored = await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "Keep me.",
     })
     expect(restored.restored).toBe(true)
-    const afterRestore = await repo.listQuickSurf(context, { databaseId: db1 })
+    const afterRestore = await repo.listEnrich(context, { databaseId: db1 })
     expect(afterRestore.columns).toHaveLength(1)
   })
 
   it("runs a column scope by enqueuing one analyze job per row (capped)", async () => {
     const db = makeDb()
     const repo = makeRepo(db)
-    await repo.enableQuickSurf(context, {
+    await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "Find the work email.",
     })
 
-    const run = await repo.runQuickSurf(context, {
+    const run = await repo.runEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       scope: "first10",
@@ -231,13 +231,13 @@ describe("Quick Surf column enrichment", () => {
     const db = makeDb()
     db.tables.entries[0].data.work_email = "ada@example.com"
     const repo = makeRepo(db)
-    await repo.enableQuickSurf(context, {
+    await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "Find the work email.",
     })
 
-    const missingOnly = await repo.runQuickSurf(context, {
+    const missingOnly = await repo.runEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       scope: "first10",
@@ -249,7 +249,7 @@ describe("Quick Surf column enrichment", () => {
       entryIds: [entry2],
     })
 
-    const refresh = await repo.runQuickSurf(context, {
+    const refresh = await repo.runEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       scope: "first10",
@@ -267,12 +267,12 @@ describe("Quick Surf column enrichment", () => {
   it("runs a single cell by entryId", async () => {
     const db = makeDb()
     const repo = makeRepo(db)
-    await repo.enableQuickSurf(context, {
+    await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "Find the work email.",
     })
-    const run = await repo.runQuickSurf(context, {
+    const run = await repo.runEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       entryId: entry1,
@@ -288,13 +288,13 @@ describe("Quick Surf column enrichment", () => {
     const db = makeDb()
     db.tables.entries[0].data.work_email = "ada@example.com"
     const repo = makeRepo(db)
-    await repo.enableQuickSurf(context, {
+    await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "Find the work email.",
     })
 
-    const run = await repo.runQuickSurf(context, {
+    const run = await repo.runEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       entryId: entry1,
@@ -311,14 +311,14 @@ describe("Quick Surf column enrichment", () => {
   it("runs an explicit row subset and applies the persisted run condition", async () => {
     const db = makeDb()
     const repo = makeRepo(db)
-    await repo.enableQuickSurf(context, {
+    await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "Find the work email.",
       runCondition: { column: "score", predicate: "gt", value: 50 },
     })
 
-    const run = await repo.runQuickSurf(context, {
+    const run = await repo.runEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       entryIds: [entry1, entry2],
@@ -336,14 +336,14 @@ describe("Quick Surf column enrichment", () => {
   it("rejects an explicit subset when any requested row is missing", async () => {
     const db = makeDb()
     const repo = makeRepo(db)
-    await repo.enableQuickSurf(context, {
+    await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "Find the work email.",
     })
 
     await expect(
-      repo.runQuickSurf(context, {
+      repo.runEnrich(context, {
         databaseId: db1,
         fieldKey: "work_email",
         entryIds: [entry1, "00000000-0000-4000-8000-000000000399"],
@@ -364,13 +364,13 @@ describe("Quick Surf column enrichment", () => {
       })
     }
     const repo = makeRepo(db)
-    await repo.enableQuickSurf(context, {
+    await repo.enableEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       whatToDo: "Find the work email.",
     })
 
-    const run = await repo.runQuickSurf(context, {
+    const run = await repo.runEnrich(context, {
       databaseId: db1,
       fieldKey: "work_email",
       scope: "all",
@@ -381,13 +381,13 @@ describe("Quick Surf column enrichment", () => {
     expect(run.note).toMatch(/newest 1000 source rows/i)
   })
 
-  it("requires one run mode, and refuses to run a column with no Quick Surf", async () => {
+  it("requires one run mode, and refuses to run a column with no Enrich", async () => {
     const repo = makeRepo(makeDb())
     await expect(
-      repo.runQuickSurf(context, { databaseId: db1, fieldKey: "work_email" })
+      repo.runEnrich(context, { databaseId: db1, fieldKey: "work_email" })
     ).rejects.toThrow(/scope.*entryId.*entryIds/i)
     await expect(
-      repo.runQuickSurf(context, {
+      repo.runEnrich(context, {
         databaseId: db1,
         fieldKey: "work_email",
         scope: "all",

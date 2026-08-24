@@ -31,8 +31,8 @@ Follow these steps in order:
 2. Call get_enrichment_context(databaseId${
     args.databaseId ? `="${args.databaseId}"` : ""
   }) to load brand context, the table schema, popular existing values, and field conventions.
-3. For each column you want to enrich: call enable_quick_surf(databaseId, fieldKey, whatToDo). Write whatToDo using the brand context and schema from step 2, and follow the field conventions (e.g. reuse popular values; lowercase-dash-singular for tag arrays). Optionally set runCondition to only fill rows that meet a gate.
-4. Call run_quick_surf(databaseId, fieldKey, scope="all") for each enabled column to backfill missing cells among the newest 1000 rows. Populated cells and already-running jobs are skipped by default. Pass overwriteExisting=true only when the user explicitly asks to refresh existing values; for tables over 1000 rows, page read_table and run explicit entryIds for older rows.
+3. For each column you want to enrich: call enable_enrich(databaseId, fieldKey, whatToDo). Write whatToDo using the brand context and schema from step 2, and follow the field conventions (e.g. reuse popular values; lowercase-dash-singular for tag arrays). Optionally set runCondition to only fill rows that meet a gate.
+4. Call run_enrich(databaseId, fieldKey, scope="all") for each enabled column to backfill missing cells among the newest 1000 rows. Populated cells and already-running jobs are skipped by default. Pass overwriteExisting=true only when the user explicitly asks to refresh existing values; for tables over 1000 rows, page read_table and run explicit entryIds for older rows.
 5. Poll with wait_for_surf_job / list_surf_jobs until jobs finish, then report which columns were filled and any skipped rows.
 
 Never pass a null or guessed id — always resolve real ids in steps 1–2 first.`
@@ -78,7 +78,7 @@ Follow these steps in order:
 4. Call get_enrichment_context for the active table to learn its schema before mapping rows.
 5. Dispatch the selected search with a bounded 5-10 row limit unless the user explicitly requests another size. Managed Deepline uses Crustdata V3 by default; Apollo is only a deployment-level BYOC override. Paid searches return APPROVAL_REQUIRED before dispatch; the approval request is the confirmation boundary and must show the filters and bounded limit. After approval, repeat the exact call with approvalRequestId. Search returns preview rows and match counts; emails are not included. Do not add Active Jobs unless the user explicitly requests a separate hiring-research field.
 6. If and only if the user explicitly asks to return each company's technology stack, keep the account batch at 10 or fewer. Before any paid confirmation, call read_table on the account table, normalize stored and selected domains, and remove existing domains from the paid set. Then call deepline_execute_tool with toolId ${DEEPLINE_TOOL_IDS.technographics()} and payload { company_domain: <domain> } once per remaining new account. Each exact paid call currently has its own approval boundary; tell the user before starting this temporary hosted-MCP flow. Materialize unique technology names into tech_stack as an array; do not flatten it into prose or replace it with a fixed enum. Skip generic TAM mapping.
-7. Call create_table_row for each selected prospect, mapping only provider-returned values that have declared fields in the active account table schema. Keep provider/search provenance outside the default table schema, and do not invent Employees, Source/Evidence, Segment, buyer/offer, risk/review, notes, rejection, template-email, Tier, or Active Jobs columns. Do not overwrite populated provider values through Quick Surf unless the user explicitly asks for a refresh.
+7. Call create_table_row for each selected prospect, mapping only provider-returned values that have declared fields in the active account table schema. Keep provider/search provenance outside the default table schema, and do not invent Employees, Source/Evidence, Segment, buyer/offer, risk/review, notes, rejection, template-email, Tier, or Active Jobs columns. Do not overwrite populated provider values through Enrich unless the user explicitly asks for a refresh.
 8. Only after the directly editable account Status is qualified, find contacts and call deepline_enrich_contact({ firstName, lastName, domain|companyName }) when email is needed. It uses the same one-time approval flow. Credits are spent only on a hit; misses are free.
 9. Write found emails back to the contacts table with one update_table_rows call, then report account and contact counts separately.
 
@@ -95,9 +95,9 @@ type PromptDefinition = {
 const PROMPTS: PromptDefinition[] = [
   {
     name: "enrich_table",
-    title: "Enrich a table (Quick Surf)",
+    title: "Enrich a table",
     description:
-      "Guided workflow to enrich an entire SignalSurf table column-by-column using Quick Surf, with the server brain filling each cell.",
+      "Guided workflow to enrich an entire SignalSurf table column-by-column using Enrich, with the server brain filling each cell.",
     build: buildEnrichTablePrompt,
   },
   {

@@ -163,7 +163,7 @@ export class FakeSupabase {
       }
       return { data: null, error: null }
     }
-    if (name === "enqueue_quick_surf_jobs") {
+    if (name === "enqueue_enrich_jobs") {
       const queued: Row[] = []
       const skippedPending: Row[] = []
       this.tables.raw_signals ??= []

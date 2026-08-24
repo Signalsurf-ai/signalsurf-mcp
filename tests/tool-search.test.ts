@@ -8,9 +8,9 @@ import type { SignalSurfContext } from "../src/types.js"
 const catalog = {
   tools: [
     {
-      name: "run_quick_surf",
-      title: "Run Quick Surf",
-      description: "Queue Quick Surf enrichment for a column to backfill rows.",
+      name: "run_enrich",
+      title: "Run Enrich",
+      description: "Queue Enrich for a column to backfill rows.",
     },
     {
       name: "deepline_search_people",
@@ -26,8 +26,8 @@ const catalog = {
   prompts: [
     {
       name: "enrich_table",
-      title: "Enrich a table (Quick Surf)",
-      description: "Guided workflow to enrich an entire table using Quick Surf.",
+      title: "Enrich a table (Enrich)",
+      description: "Guided workflow to enrich an entire table using Enrich.",
     },
     {
       name: "build_lead_list",
@@ -38,10 +38,10 @@ const catalog = {
 }
 
 describe("searchCapabilities", () => {
-  it("ranks the enrich_table prompt first and surfaces the quick surf tool", () => {
+  it("ranks the enrich_table prompt first and surfaces the enrich tool", () => {
     const result = searchCapabilities("enrich a table", catalog)
     expect(result.prompts[0].name).toBe("enrich_table")
-    expect(result.tools.map((t) => t.name)).toContain("run_quick_surf")
+    expect(result.tools.map((t) => t.name)).toContain("run_enrich")
   })
 
   it("matches deepline/lead intent", () => {
@@ -100,7 +100,7 @@ describe("find_capabilities tool over MCP", () => {
     expect(data.prompts.map((p: any) => p.name)).toContain("enrich_table")
     const toolNames = data.tools.map((t: any) => t.name)
     expect(toolNames).toContain("get_enrichment_context")
-    // run_quick_surf needs workflows.execute — a viewer token must not see it.
-    expect(toolNames).not.toContain("run_quick_surf")
+    // run_enrich needs workflows.execute — a viewer token must not see it.
+    expect(toolNames).not.toContain("run_enrich")
   })
 })
