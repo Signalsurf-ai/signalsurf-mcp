@@ -65,6 +65,7 @@ export type McpCapability =
   | "workflows.write"
   | "workflows.execute"
   | "workflows.delete"
+  | "campaigns.write"
   | "tables.read"
   | "tables.write"
   | "tables.delete"
@@ -352,9 +353,9 @@ export const PUBLIC_MCP_TOOLS = {
   create_campaign: {
     title: "Create Campaign",
     description:
-      "Build a native cold-email Campaign (a contact-list drip) on a Workflow: a sequence node enrolling from a Contacts table, then one agent per step sending through a connected mailbox, wired correct-by-construction. Input { workflowId, contactTableId, mailbox, steps:[{copy, delayDays?, gate?}] }. The contact table must have item_type=contact. You MUST pass mailbox (a connected Unipile email account id) — this MCP does not list Unipile accounts. Replaces the Workflow's flow. Does NOT enrol contacts; the user enrols from the app.",
-    requiredCapability: "workflows.write",
-    surferSurface: "manage_workflows",
+      "Create a first-class draft cold-email Campaign for a Table or Object audience. Input { name, goal, description?, audienceDatabaseId, recipientField?, mailbox, steps:[{copy, delayDays?, gate?}] }. You MUST pass mailbox (a connected Unipile email account id). The Campaign is independent from Workflows and does not enroll contacts automatically.",
+    requiredCapability: "campaigns.write",
+    surferSurface: "manage_campaigns",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
@@ -685,6 +686,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "workflows.write",
     "workflows.execute",
     "workflows.delete",
+    "campaigns.write",
     "tables.read",
     "tables.write",
     "tables.delete",
@@ -706,6 +708,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "context.read",
     "workflows.read",
     "workflows.write",
+    "campaigns.write",
   ],
   "mcp:workflows.execute": [
     "context.read",
@@ -749,6 +752,7 @@ const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "workflows.write": ["mcp:workflows.write"],
   "workflows.execute": ["mcp:workflows.execute"],
   "workflows.delete": ["mcp:workflows.delete"],
+  "campaigns.write": ["mcp:workflows.write"],
   "tables.read": ["mcp:tables.read"],
   "tables.write": ["mcp:tables.write"],
   "tables.delete": ["mcp:tables.delete"],

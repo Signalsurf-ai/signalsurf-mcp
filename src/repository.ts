@@ -1,16 +1,30 @@
 import { createHash, randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-import type {
-  AccessRole,
-  DatabaseRow,
-  EntryRow,
-  JsonRecord,
-  SignalSurfContext,
-  SignalSurfProductContext,
-  SupabaseLike,
-  WorkflowRow,
-} from "./types.js"
+import { sha256Hex } from "./auth.js"
+import { canonicalJson, canonicalSha256 } from "./canonical-json.js"
+import {
+  grantedCapabilitiesForScopes,
+  isSupportedMcpScope,
+  parseStoredScopes,
+  scopesImplyWriteAccess,
+} from "./capabilities.js"
+import { FIELD_CONVENTIONS } from "./conventions.js"
+import {
+  buildDeeplineSearchPayload,
+  deeplineSearchPayloadHasConstraint,
+} from "./deepline-search.js"
+import {
+  DEEPLINE_TOOL_IDS,
+  cleanDeeplinePayload,
+  deeplineStatusOk,
+  executeDeeplineTool,
+  isDeeplineDisabled,
+  listDeeplineTools,
+  unwrapDeepline,
+  type DeeplineEnvelope,
+} from "./deepline.js"
+import { UserFacingError } from "./errors.js"
 import {
   buildImportMappingPreview,
   importMappingSummary,
@@ -20,41 +34,21 @@ import {
   type ImportMappingV1,
 } from "./import-mapping.js"
 import {
-  grantedCapabilitiesForScopes,
-  isSupportedMcpScope,
-  parseStoredScopes,
-  scopesImplyWriteAccess,
-} from "./capabilities.js"
-import { sha256Hex } from "./auth.js"
-import {
-  DEEPLINE_TOOL_IDS,
-  cleanDeeplinePayload,
-  deeplineStatusOk,
-  executeDeeplineTool,
-  isDeeplineDisabled,
-  listDeeplineTools,
-  type DeeplineEnvelope,
-  unwrapDeepline,
-} from "./deepline.js"
-import {
-  buildDeeplineSearchPayload,
-  deeplineSearchPayloadHasConstraint,
-} from "./deepline-search.js"
-import { UserFacingError } from "./errors.js"
-import { canonicalJson, canonicalSha256 } from "./canonical-json.js"
-import {
   AmbiguousInstagramContentDispatchError,
   buildInstagramContentSearchPlan,
   dispatchInstagramContentSearch,
   isInstagramContentSearchDisabled,
   normalizeInstagramContentSearch,
 } from "./instagram-content.js"
-import { FIELD_CONVENTIONS } from "./conventions.js"
 import { aggregatePopularValues } from "./popular-values.js"
+import {
+  evaluateRunCondition,
+  parseRunCondition,
+  type RunCondition,
+} from "./run-condition.js"
 import {
   FLOW_VERSION,
   applyFlowEdits as applyFlowEditsToGraph,
-  buildCampaignFlow,
   buildUpstreamContext,
   describeNodeTypes as describeFlowNodeTypes,
   flowEntryNodeIds,
@@ -68,14 +62,19 @@ import {
   type WorkflowFlows,
 } from "./surf-flow/index.js"
 import {
-  evaluateRunCondition,
-  parseRunCondition,
-  type RunCondition,
-} from "./run-condition.js"
-import {
   applyPublicTableTemplate,
   type PublicTableTemplate,
 } from "./table-templates.js"
+import type {
+  AccessRole,
+  DatabaseRow,
+  EntryRow,
+  JsonRecord,
+  SignalSurfContext,
+  SignalSurfProductContext,
+  SupabaseLike,
+  WorkflowRow,
+} from "./types.js"
 import {
   loadWorkspaceCapabilities,
   workspaceCapabilityEnabled,
@@ -1589,9 +1588,8 @@ export class SignalSurfRepository {
         .map((product) => product.organization_id)
         .filter((id): id is string => Boolean(id))
     )
-    const organizationsById = await this.resolveOrganizationsById(
-      organizationIds
-    )
+    const organizationsById =
+      await this.resolveOrganizationsById(organizationIds)
 
     return uniqueProductIds.map((productId) => {
       const product = productsById.get(productId)
@@ -1743,6 +1741,16 @@ export class SignalSurfRepository {
 
     if (input.includeInactive === false) {
       query = query.eq("is_active", true)
+    }
+
+    const workflowsEnabled = workspaceCapabilityEnabled(context, "workflows")
+    const listeningEnabled = workspaceCapabilityEnabled(context, "listening")
+    if (workflowsEnabled && !listeningEnabled) {
+      query = query.neq("kind", "listening")
+    } else if (!workflowsEnabled && listeningEnabled) {
+      query = query.eq("kind", "listening")
+    } else if (!workflowsEnabled && !listeningEnabled) {
+      return { workflows: [], totalCount: 0 }
     }
 
     const { data, error } = await query
@@ -2035,8 +2043,8 @@ export class SignalSurfRepository {
       typeof record.email === "string"
         ? record.email
         : typeof record.work_email === "string"
-        ? (record.work_email as string)
-        : null
+          ? (record.work_email as string)
+          : null
     return {
       toolId,
       email,
@@ -2644,10 +2652,7 @@ export class SignalSurfRepository {
     }
   }
 
-  async createWorkflow(
-    context: SignalSurfContext,
-    input: CreateWorkflowInput
-  ) {
+  async createWorkflow(context: SignalSurfContext, input: CreateWorkflowInput) {
     const databaseIds = await this.resolveDatabaseIds(
       context,
       input.databaseIds
@@ -2705,10 +2710,7 @@ export class SignalSurfRepository {
     return { workflow: formatWorkflow(data as WorkflowRow) }
   }
 
-  async updateWorkflow(
-    context: SignalSurfContext,
-    input: UpdateWorkflowInput
-  ) {
+  async updateWorkflow(context: SignalSurfContext, input: UpdateWorkflowInput) {
     await this.assertWorkflowBelongsToProduct(context, input.workflowId)
     if (input.projectId) {
       await this.assertDatabaseFolderBelongsToProduct(context, input.projectId)
@@ -2822,11 +2824,11 @@ export class SignalSurfRepository {
       const finalRubric =
         input.scoringRubric !== undefined
           ? input.scoringRubric
-          : existing?.scoring_rubric ?? null
+          : (existing?.scoring_rubric ?? null)
       const finalSurf =
         input.surfPrompt !== undefined
           ? input.surfPrompt
-          : existing?.surf_prompt ?? null
+          : (existing?.surf_prompt ?? null)
       updateData.prompt_template = joinPromptSections(finalRubric, finalSurf)
     }
 
@@ -2894,7 +2896,7 @@ export class SignalSurfRepository {
   }> {
     const { data, error } = await this.db
       .from("workflows")
-      .select("id, name, config")
+      .select("id, name, config, kind")
       .eq("id", workflowId)
       .eq("product_id", context.productId)
       .is("deleted_at", null)
@@ -2906,7 +2908,12 @@ export class SignalSurfRepository {
         status: 404,
       })
     }
-    const row = data as { name?: string | null; config?: unknown }
+    const row = data as {
+      name?: string | null
+      config?: unknown
+      kind?: unknown
+    }
+    this.assertWorkflowCapability(context, row.kind)
     const config = asRecord(row.config)
     const parsed = workflowFlowsSchema.safeParse(config.flows ?? [])
     if (!parsed.success) {
@@ -3104,14 +3111,15 @@ export class SignalSurfRepository {
   async createCampaign(
     context: SignalSurfContext,
     input: {
-      workflowId: string
-      contactTableId: string
+      name: string
+      goal: string
+      description?: string
+      audienceDatabaseId: string
       recipientField?: string
       mailbox?: string
       steps: Array<{ copy: string; delayDays?: number; gate?: string }>
     }
   ) {
-    const recipientField = input.recipientField?.trim() || "email"
     const mailbox = input.mailbox?.trim()
     if (!mailbox) {
       throw new UserFacingError(
@@ -3120,129 +3128,120 @@ export class SignalSurfRepository {
       )
     }
 
-    const steps = input.steps
-      .map((step) => ({
-        copy: step.copy?.trim() ?? "",
-        gate: (step.gate === "replied" || step.gate === "not_replied"
-          ? step.gate
-          : "none") as "none" | "replied" | "not_replied",
-        delaySeconds: Math.round(Math.max(0, step.delayDays ?? 0) * 86400),
-      }))
-      .filter((step) => step.copy.length > 0)
-    if (steps.length === 0) {
-      throw new UserFacingError(
-        "steps must be a non-empty array; each step needs copy (what that email says).",
-        { code: "BAD_REQUEST", status: 400 }
-      )
-    }
-
-    const loaded = await this.loadWorkflowFlow(context, input.workflowId)
-
     const { data: table, error: tableError } = await this.db
       .from("databases")
-      .select("id, item_type, name")
-      .eq("id", input.contactTableId)
+      .select("id, name, schema, data_model, folder_id")
+      .eq("id", input.audienceDatabaseId)
       .eq("product_id", context.productId)
-      .is("deleted_at", null)
       .maybeSingle()
-    requireNoDbError(tableError, "Failed to load contact table")
+    requireNoDbError(tableError, "Failed to load Campaign audience")
     if (!table) {
       throw new UserFacingError(
-        `Contact table "${input.contactTableId}" not found in this product.`,
+        `Audience Table or Object "${input.audienceDatabaseId}" not found in this Workspace.`,
         { code: "NOT_FOUND", status: 404 }
       )
     }
-    const contactTable = table as { item_type?: string; name?: string }
-    if (contactTable.item_type !== "contact") {
+    const audience = table as {
+      schema?: unknown
+      data_model?: string | null
+      folder_id?: string | null
+    }
+    if (audience.data_model !== "table" && audience.data_model !== "object") {
       throw new UserFacingError(
-        `"${
-          contactTable.name ?? input.contactTableId
-        }" is not a Contacts list (item_type=${
-          contactTable.item_type
-        }). A campaign enrols from a Contacts table.`,
+        "A Campaign audience must be a Table or Object.",
         { code: "BAD_REQUEST", status: 400 }
       )
     }
 
-    const { data: product, error: productError } = await this.db
-      .from("products")
-      .select("owner_id")
-      .eq("id", context.productId)
-      .single()
-    requireNoDbError(productError, "Failed to resolve product owner")
-    const ownerId = (product as { owner_id?: string } | null)?.owner_id
-    if (!ownerId) {
+    const fields = schemaFields(asRecord(audience.schema))
+    const explicitRecipient = input.recipientField?.trim()
+    const recipientField = explicitRecipient
+      ? fields.find(
+          (field) =>
+            field.key === explicitRecipient && field.type === "email"
+        )?.key
+      : fields.find(
+          (field) =>
+            field.type === "email" ||
+            (typeof field.key === "string" &&
+              field.key.toLowerCase().includes("email"))
+        )?.key
+    if (typeof recipientField !== "string") {
       throw new UserFacingError(
-        `Product not found (id: ${context.productId}).`,
-        {
-          code: "NOT_FOUND",
-          status: 404,
-        }
+        explicitRecipient
+          ? `Column "${explicitRecipient}" is not an email recipient field on this audience.`
+          : "The Campaign audience has no email recipient field.",
+        { code: "BAD_REQUEST", status: 400 }
       )
     }
 
-    const { data: toolRow, error: toolError } = await this.db
-      .from("product_tools")
-      .insert({
-        product_id: context.productId,
-        user_id: ownerId,
-        tool_type: "unipile_email",
-        config: {
-          unipile_account_id: mailbox,
-          recipient_field: recipientField,
-          recipient_table_id: input.contactTableId,
-          nickname: `${loaded.name ?? "Campaign"} mailbox`,
-          enabled: true,
+    const sequenceSteps = input.steps.flatMap((step, index) => {
+      const number = index + 1
+      const delayMinutes = Math.round(Math.max(0, step.delayDays ?? 0) * 1440)
+      return [
+        ...(delayMinutes > 0
+          ? [
+              {
+                id: `wait-${number}`,
+                type: "wait",
+                delayMinutes: Math.max(1, delayMinutes),
+              },
+            ]
+          : []),
+        {
+          id: `step-${number}`,
+          type: "external_touch",
+          channel: "email",
+          content: { mode: "generated", instruction: step.copy.trim() },
+          senderConstraints: {
+            senderMode: "all",
+            accountIds: [mailbox],
+            recipientField,
+          },
+          ...(step.gate === "not_replied"
+            ? { condition: { kind: "not_replied" } }
+            : {}),
         },
-        is_enabled: true,
+      ]
+    })
+    const campaignId = randomUUID()
+    const { data: campaign, error: campaignError } = await this.db
+      .from("campaigns")
+      .insert({
+        id: campaignId,
+        product_id: context.productId,
+        name: input.name.trim(),
+        description: input.description?.trim() || input.goal.trim(),
+        goal: input.goal.trim(),
+        steps: sequenceSteps,
+        generation_instructions: `Campaign goal: ${input.goal.trim()}\n\nGenerate each recipient's complete Campaign content before activation.`,
+        status: "draft",
+        audience_database_id: input.audienceDatabaseId,
+        recipient_field: recipientField,
+        audience_definition: {
+          databaseId: input.audienceDatabaseId,
+          dataModel: audience.data_model,
+          projectId: audience.folder_id ?? null,
+        },
+        strategy: { channels: ["email"] },
+        defaults: {
+          senderPoolByChannel: {
+            email: { senderMode: "all", accountIds: [mailbox] },
+          },
+          recipientFieldByChannel: { email: recipientField },
+        },
       })
-      .select("id")
+      .select("id, name, status, audience_database_id, recipient_field")
       .single()
-    requireNoDbError(toolError, "Failed to create the sending mailbox tool")
-    const toolId = (toolRow as { id: string }).id
-
-    // Authorize the mailbox tool on the Workflow pool before persisting the
-    // flow so the step agents' allowedToolIds resolve against it.
-    const existing = await this.getWorkflowForUpdate(context, input.workflowId)
-    const toolConfig = asRecord(existing?.tool_config)
-    const autoToolIds = uniqueStrings([
-      ...(Array.isArray(toolConfig.auto_tool_ids)
-        ? toolConfig.auto_tool_ids
-        : []),
-      toolId,
-    ])
-    const { error: linkError } = await this.db
-      .from("workflows")
-      .update({
-        tool_config: { ...toolConfig, auto_tool_ids: autoToolIds },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", input.workflowId)
-      .eq("product_id", context.productId)
-      .is("deleted_at", null)
-    requireNoDbError(linkError, "Failed to attach the mailbox tool")
-
-    const built = buildCampaignFlow(
-      { contactTableId: input.contactTableId, recipientField, toolId, steps },
-      (kind) => `${kind}-${randomUUID().slice(0, 8)}`
-    )
-    await this.persistWorkflowFlow(
-      context,
-      input.workflowId,
-      loaded.config,
-      built.flow,
-      loaded.flows
-    )
+    requireNoDbError(campaignError, "Failed to create Campaign")
 
     return {
-      workflowId: input.workflowId,
-      sequenceNodeId: built.sequenceNodeId,
-      stepAgentIds: built.stepAgentIds,
-      mailboxToolId: toolId,
+      campaign,
+      campaignId,
       mailboxAccountId: mailbox,
-      stepCount: steps.length,
+      stepCount: input.steps.length,
       message:
-        "Campaign built. It does NOT enrol contacts automatically — open the Workflow in SignalSurf and click Enroll to start the drip.",
+        "Campaign created as a draft. It does not enroll contacts automatically; open the Campaign in SignalSurf to review and activate it.",
     }
   }
 
@@ -3289,10 +3288,7 @@ export class SignalSurfRepository {
   }
 
   async runWorkflow(context: SignalSurfContext, input: RunWorkflowInput) {
-    const workflow = await this.getWorkflowRunTarget(
-      context,
-      input.workflowId
-    )
+    const workflow = await this.getWorkflowRunTarget(context, input.workflowId)
     if (!workflow.is_active && !input.allowInactive) {
       throw new UserFacingError(
         "Workflow is inactive. Pass allowInactive=true to queue it intentionally.",
@@ -3485,10 +3481,7 @@ export class SignalSurfRepository {
     return null
   }
 
-  async enableEnrich(
-    context: SignalSurfContext,
-    input: EnableEnrichInput
-  ) {
+  async enableEnrich(context: SignalSurfContext, input: EnableEnrichInput) {
     const database = await this.getDatabaseAndValidateProduct(
       context,
       input.databaseId
@@ -3609,10 +3602,7 @@ export class SignalSurfRepository {
     }
   }
 
-  async disableEnrich(
-    context: SignalSurfContext,
-    input: DisableEnrichInput
-  ) {
+  async disableEnrich(context: SignalSurfContext, input: DisableEnrichInput) {
     const existing = await this.findEnrichSource(
       context,
       input.databaseId,
@@ -4198,11 +4188,11 @@ export class SignalSurfRepository {
         name: input.name.trim(),
         description:
           input.description === undefined
-            ? template?.description ?? null
+            ? (template?.description ?? null)
             : input.description?.trim() || null,
         icon: input.icon ?? null,
         color:
-          input.color === undefined ? template?.color ?? null : input.color,
+          input.color === undefined ? (template?.color ?? null) : input.color,
         schema,
         item_type: (template?.itemType ?? input.itemType?.trim()) || null,
         system_type: null,
@@ -5476,11 +5466,11 @@ export class SignalSurfRepository {
           dataSchema:
             input.dataSchema !== undefined
               ? input.dataSchema
-              : source.data_schema ?? { fields: [] },
+              : (source.data_schema ?? { fields: [] }),
           isActive:
             input.isActive !== undefined
               ? input.isActive
-              : source.is_active ?? true,
+              : (source.is_active ?? true),
         },
         sourceDatabaseName
       )
@@ -5897,7 +5887,15 @@ export class SignalSurfRepository {
       .eq("kind", "listening")
       .is("deleted_at", null)
       .overlaps("database_ids", [...databaseIds])
-    if (error?.code === "42P01" || error?.code === "42703") return new Set()
+    if (error?.code === "42P01" || error?.code === "42703") {
+      const tablesEnabled = workspaceCapabilityEnabled(context, "tables")
+      const listeningEnabled = workspaceCapabilityEnabled(context, "listening")
+      if (tablesEnabled === listeningEnabled) return new Set()
+      throw new UserFacingError(
+        "This operation is unavailable in the current Workspace.",
+        { code: "FORBIDDEN", status: 403 }
+      )
+    }
     requireNoDbError(error, "Failed to classify database access")
     return new Set(
       ((data ?? []) as Array<{ database_ids?: unknown }>).flatMap((row) =>
@@ -6101,9 +6099,7 @@ export class SignalSurfRepository {
       .select("id, kind")
       .eq("product_id", context.productId)
     requireNoDbError(error, "Failed to resolve product Workflows")
-    return (
-      (data ?? []) as Array<{ id: string; kind?: unknown }>
-    )
+    return ((data ?? []) as Array<{ id: string; kind?: unknown }>)
       .filter((row) =>
         workspaceCapabilityEnabled(
           context,
@@ -6592,8 +6588,8 @@ function normalizeSavedViewFilters(raw: JsonRecord): TableFilterInput[] {
         "value" in record
           ? record.value
           : "values" in record
-          ? record.values
-          : undefined
+            ? record.values
+            : undefined
       filters.push({ field, op, value })
     }
   }
@@ -6608,8 +6604,8 @@ function normalizeSavedViewSorts(
   const rawSorts = Array.isArray(raw.sorts)
     ? raw.sorts
     : Array.isArray(raw.sort)
-    ? raw.sort
-    : []
+      ? raw.sort
+      : []
   const sorts = rawSorts
     .map((item) => {
       const record = asRecord(item)

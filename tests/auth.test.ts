@@ -274,6 +274,7 @@ describe("auth", () => {
       "workflows.write",
       "workflows.execute",
       "workflows.delete",
+      "campaigns.write",
       "tables.read",
       "tables.write",
       "tables.delete",

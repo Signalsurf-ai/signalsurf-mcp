@@ -164,13 +164,22 @@ describe("hosted MCP Workspace capability projection", () => {
 
     const listed = await client.callTool({
       name: "list_workflows",
-      arguments: {},
+      arguments: { limit: 1 },
     })
     const listedText =
       listed.content?.[0]?.type === "text" ? listed.content[0].text : ""
     expect(JSON.parse(listedText).data.workflows).toEqual([
       expect.objectContaining({ workflowId: listeningWorkflowId }),
     ])
+
+    const flowEdit = await client.callTool({
+      name: "edit_workflow_flows",
+      arguments: {
+        workflowId: ordinaryWorkflowId,
+        edits: [{ op: "add_node", node: { type: "trigger" } }],
+      },
+    })
+    expect(flowEdit.isError).toBe(true)
 
     const denied = await client.callTool({
       name: "get_workflow",
@@ -309,5 +318,42 @@ describe("hosted MCP Workspace capability projection", () => {
       denied.content?.[0]?.type === "text" ? denied.content[0].text : ""
     expect(denied.isError).toBe(true)
     expect(JSON.parse(deniedText)).toMatchObject({ code: "FORBIDDEN" })
+  })
+
+  it("fails closed when Listening database classification is unavailable", async () => {
+    const db = new FakeSupabase(
+      {
+        ...policyDb([
+          {
+            product_id: productId,
+            capability_key: "listening",
+            enabled: false,
+          },
+        ]).tables,
+        databases: [
+          {
+            id: hiddenTableId,
+            product_id: productId,
+            name: "Ambiguous table",
+            data_model: "table",
+            system_type: null,
+            display_order: 0,
+          },
+        ],
+      },
+      {
+        tableErrors: {
+          workflows: { code: "42703", message: "column kind does not exist" },
+        },
+      }
+    )
+    const client = await connect(db)
+    const listed = await client.callTool({
+      name: "list_tables",
+      arguments: {},
+    })
+
+    expect(listed.isError).toBe(true)
+    expect(db.tables.databases).toHaveLength(1)
   })
 })

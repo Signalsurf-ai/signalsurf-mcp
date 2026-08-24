@@ -5,7 +5,7 @@
     "add_table_field": "5ee37d59c4b987a8f86900e054b8157d44d718d9157a2f54c67bc3ad7dd29bb9",
     "edit_workflow_flows": "d900b5a83084ad5bcd96029217cbe5c9cd2fbff8f9a8e51b29f4ed1bbbedbd61",
     "cancel_surf_job": "b02ff66695c4cf150463bad231dbe365dd4b5f1c7286a85e492fd34b17a3a1c2",
-    "create_campaign": "c846b3a1a40b93dcab9e385ae19bdadbd2bce4d1c28c291da44a8785e5b58050",
+    "create_campaign": "aff1b741019b1e42c652838207cebfd5b235dc401a9e23f50af39b0b40c23eb4",
     "create_product": "64a712763bf80100c6fb0453e9ed54db1ec1d30e8896e9c9eb0b15e84d210f5e",
     "create_relation_field": "7e4c6ac06ed64e6d4c8edd490cdd6017c43e55f09e423ff3a9fe867292524836",
     "create_signal": "4f5af6284956da7a98c6f3a131466afa3fc317f4e7795a27dbd3942ab20e1d72",
@@ -97,8 +97,9 @@
     "create_campaign": {
       "valid": [
         {
-          "workflowId": "00000000-0000-4000-8000-000000000001",
-          "contactTableId": "00000000-0000-4000-8000-000000000002",
+          "name": "Founder outreach",
+          "goal": "Book product calls",
+          "audienceDatabaseId": "00000000-0000-4000-8000-000000000002",
           "steps": [
             { "copy": "Introduce SignalSurf and ask for a short call." }
           ]
@@ -106,8 +107,9 @@
       ],
       "invalid": [
         {
-          "workflowId": "00000000-0000-4000-8000-000000000001",
-          "contactTableId": "00000000-0000-4000-8000-000000000002",
+          "name": "Founder outreach",
+          "goal": "Book product calls",
+          "audienceDatabaseId": "00000000-0000-4000-8000-000000000002",
           "steps": []
         }
       ]
