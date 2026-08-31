@@ -38,25 +38,25 @@ Follow these steps in order:
 Never pass a null or guessed id — always resolve real ids in steps 1–2 first.`
 }
 
-export function buildSetUpSurfPointPrompt(args: PromptArgs): string {
-  return `You are setting up a new SignalSurf surf point (playbook). A surf point watches one or more signal sources and the server brain routes matches into target tables; your job is to create and configure it, then trigger a first run.
+export function buildSetUpWorkflowPrompt(args: PromptArgs): string {
+  return `You are setting up a new SignalSurf Workflow. A Workflow watches one or more signal sources and the server brain routes matches into target tables; your job is to create and configure it, then trigger a first run.
 
 ${productLine(args)}
 
-A surf point is a node graph (Flow V2): trigger → rule/agent/action/wait nodes, with branching edges. Simple ones can stay as a scoring rubric + surf prompt; multi-step or branching ones use the flow graph.
+A Workflow is a node graph (Flow V2): trigger → rule/agent/action/wait nodes, with branching edges. Simple ones can stay as a scoring rubric + surf prompt; multi-step or branching ones use the flow graph.
 
 Follow these steps in order:
 1. Call get_context${
     args.productId ? "" : " and pick the productId if multiple are returned"
   }.
-2. Decide the target table(s): call list_tables and pick the databaseId(s) this surf point should write into (use create_table first if the table does not exist yet).
-3. Call create_surf_point({ name, databaseIds }) to create the playbook. Keep the returned surfPointId.
-4. Attach a signal source: call create_signal({ surfPointId, type, ... }). Choose the type that matches the source (platform, custom-pull, rss, webhook, web-monitor, github, etc.). A webhook signal returns a callable webhookUrl.
-5. Simple surf point: tune behavior with update_surf_point — set scoring_rubric and surf_prompt, and attach product tools via toolConfigPatch.auto_tool_ids (ids from list_product_tools).
-6. Multi-step / branching surf point: call describe_node_types to learn the node types and legal edge conditions, then build the graph with update_surf_point_flow (whole graph) or apply_surf_point_edits (incremental, atomic). Before mapping a create_row/object_sink node's fields, call get_node_upstream_context so the keys are real columns. For a contact-list email drip, use create_campaign instead of hand-wiring a sequence.
-7. Trigger a first run with run_surf_point({ surfPointId }), then poll with wait_for_surf_job / list_surf_jobs and report the result.
+2. Decide the target table(s): call list_tables and pick the databaseId(s) this Workflow should write into (use create_table first if the table does not exist yet).
+3. Call create_workflow({ name, databaseIds }) to create the workflow. Keep the returned workflowId.
+4. Attach a signal source: call create_signal({ workflowId, type, ... }). Choose the type that matches the source (platform, custom-pull, rss, webhook, web-monitor, github, etc.). A webhook signal returns a callable webhookUrl.
+5. Simple Workflow: tune behavior with update_workflow — set scoring_rubric and surf_prompt, and attach product tools via toolConfigPatch.auto_tool_ids (ids from list_product_tools).
+6. Multi-step / branching Workflow: call describe_node_types to learn the node types and legal edge conditions, then build the graph with edit_workflow_flows (atomic). Before mapping a create_row/object_sink node's fields, call get_node_upstream_context so the keys are real columns. For a contact-list email drip, use create_campaign instead of hand-wiring a sequence.
+7. Trigger a first run with run_workflow({ workflowId }), then poll with wait_for_surf_job / list_surf_jobs and report the result.
 
-Never pass a null or guessed id — resolve productId, databaseId, surfPointId, and node ids from the calls above before using them.`
+Never pass a null or guessed id — resolve productId, databaseId, workflowId, and node ids from the calls above before using them.`
 }
 
 export function buildBuildLeadListPrompt(args: PromptArgs): string {
@@ -101,11 +101,11 @@ const PROMPTS: PromptDefinition[] = [
     build: buildEnrichTablePrompt,
   },
   {
-    name: "set_up_surf_point",
-    title: "Set up a surf point (playbook)",
+    name: "set_up_workflow",
+    title: "Set up a Workflow",
     description:
-      "Guided workflow to create a SignalSurf surf point, attach a signal source, configure scoring/tools, and trigger a first run.",
-    build: buildSetUpSurfPointPrompt,
+      "Guided workflow to create a SignalSurf Workflow, attach a signal source, configure scoring/tools, and trigger a first run.",
+    build: buildSetUpWorkflowPrompt,
   },
   {
     name: "build_lead_list",
@@ -122,8 +122,33 @@ export const PROMPT_CATALOG = PROMPTS.map(({ name, title, description }) => ({
   description,
 }))
 
-export function registerPrompts(server: McpServer): void {
-  for (const prompt of PROMPTS) {
+export type PromptWorkspaceCapabilities = {
+  tables: boolean
+  workflows: boolean
+}
+
+export function workspaceVisiblePromptCatalog(
+  capabilities: PromptWorkspaceCapabilities
+) {
+  return PROMPT_CATALOG.filter((prompt) => {
+    if (prompt.name === "set_up_workflow") return capabilities.workflows
+    return capabilities.tables
+  })
+}
+
+export function registerPrompts(
+  server: McpServer,
+  capabilities: PromptWorkspaceCapabilities = {
+    tables: true,
+    workflows: true,
+  }
+): void {
+  const visibleNames = new Set(
+    workspaceVisiblePromptCatalog(capabilities).map((prompt) => prompt.name)
+  )
+  for (const prompt of PROMPTS.filter((entry) =>
+    visibleNames.has(entry.name)
+  )) {
     server.registerPrompt(
       prompt.name,
       {

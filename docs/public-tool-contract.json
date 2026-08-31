@@ -3,22 +3,22 @@
   "canonicalization": "Recursively sort object keys, preserve array order, omit undefined object members, then SHA-256 the compact JSON.",
   "inputSchemaSha256": {
     "add_table_field": "5ee37d59c4b987a8f86900e054b8157d44d718d9157a2f54c67bc3ad7dd29bb9",
-    "apply_surf_point_edits": "2dd268408c89a3ffc5cded8571e618e4eab2ec65c30db60c2e69af698718c386",
+    "edit_workflow_flows": "d900b5a83084ad5bcd96029217cbe5c9cd2fbff8f9a8e51b29f4ed1bbbedbd61",
     "cancel_surf_job": "b02ff66695c4cf150463bad231dbe365dd4b5f1c7286a85e492fd34b17a3a1c2",
-    "create_campaign": "9c09b7f791fbb1808e95ce9947978230e5658d7720160bcb3a0f6d30ebf2e886",
+    "create_campaign": "aff1b741019b1e42c652838207cebfd5b235dc401a9e23f50af39b0b40c23eb4",
     "create_product": "64a712763bf80100c6fb0453e9ed54db1ec1d30e8896e9c9eb0b15e84d210f5e",
     "create_relation_field": "7e4c6ac06ed64e6d4c8edd490cdd6017c43e55f09e423ff3a9fe867292524836",
-    "create_signal": "037d5d4f58d456437e20e1c75df4f4c6998c2e5282bd540c60748430f5976000",
-    "create_surf_point": "9ced59ca51b3e73368e30cf129639b7f24d0db102fcd9f33dd9f8a0883cbfc30",
+    "create_signal": "4f5af6284956da7a98c6f3a131466afa3fc317f4e7795a27dbd3942ab20e1d72",
+    "create_workflow": "362f06d5a1752cf40e7ecd4038cb6016eb3adb8c171a37f7b9984b261b4f13b6",
     "create_table": "44d74dae377525151ccacd6ab6ab47399f2752f1410b27ea1e8e5d9384429125",
-    "create_table_row": "655f6146cdb35da8b68f90612d2077e7857f534b98a192ca1a9b5fbefe910ef9",
+    "create_table_row": "1599a24455715950f374c2699ea326f71645ebcf4ff3faf33083c3f3f5273e35",
     "deepline_enrich_contact": "3ca3cbf4f115edd6e7352711f3e5ec61766e5e4db8274c1b3bec7d09ef450184",
     "deepline_execute_tool": "ddc00d136b0b73d0373953f27d524d8aeb5f3040c3d95dc8b48070148e0c4efc",
     "deepline_search_catalog": "c0925c1d0a2285fbe3616059eea6f54f7141462723c223d448c09d6ac750a895",
     "deepline_search_companies": "e5c19945432b9796b008952bf919cb9ba7878bede571cfa809227c9ba9502bfc",
     "deepline_search_people": "e5c19945432b9796b008952bf919cb9ba7878bede571cfa809227c9ba9502bfc",
     "delete_signal": "410aa6abe17bb991e89937d0868633d9554c0c61a0039d67f4d419e7d98c1b08",
-    "delete_surf_point": "0584c8600d874ae3d633451f74cf4732e7a7292f96f5ca3205940cfba22311f9",
+    "delete_workflow": "dc6142399ca81abe7a1b5b3e2a728dbc2a88cf620f51156996c08f33abb967df",
     "delete_table": "c1cdbe19ad327e7c906830066d3b3d3620e4924b008b948c62717041a0217ef5",
     "delete_table_rows": "8a55c6e7e82b965b107232bfc9a38635f5f238f0c9ebc1fb98c6ca87facad153",
     "describe_node_types": "efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49",
@@ -28,17 +28,17 @@
     "get_brand_context": "7a047174577717786c80120c1b8bc26f318ccdfc9b393b9bbb1b8f7e694e2db9",
     "get_context": "efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49",
     "get_enrichment_context": "b6ef20f045607fa62e5b0071bf5e1ea9db3dd4bc4b30572dac9106301ba7fb5e",
-    "get_node_upstream_context": "6c9e26bfa6bdd2f0b2e4942eb1930c249c8c424c16bd1f0867086c89ef5a2c45",
+    "get_node_upstream_context": "68afcea39b68c229bd6a61a57b429bd0c0fc42b071741331b0bc03076cbe99ad",
     "get_surf_job": "b02ff66695c4cf150463bad231dbe365dd4b5f1c7286a85e492fd34b17a3a1c2",
-    "get_surf_point": "2d0e9780fa21d49900f941cca3af891b18b704fc47c0892302e085bbe897d8ab",
+    "get_workflow": "b1b7802d39add25cfa6dbcf1e3dd12c5304db24c08f90347d8611a9156a99871",
     "get_table_row": "988367254984fad8b057fd24324303cc08327029aca8e62b27a01207397bef59",
     "inspect_sender_infrastructure": "cfa6932d6b36f9cdb88600cb0cefe142efd17fb49f3ec5932db248b334f2f1f0",
     "list_product_tools": "42925c0fde10777e909e202b4f59f640135d2ed974030038c8854d8e0d7abb86",
     "list_enrich": "e52e394216932c43808150d7d4d05bbbdca77af82b8a498120cda38df6b055a6",
-    "list_signals": "2d0e9780fa21d49900f941cca3af891b18b704fc47c0892302e085bbe897d8ab",
-    "list_surf_jobs": "492f924446764c15926174bdb069747412a2e8b60ab9df5d59a5b539f512ffd2",
-    "list_surf_point_tools": "2d0e9780fa21d49900f941cca3af891b18b704fc47c0892302e085bbe897d8ab",
-    "list_surf_points": "d81df119b1c7c0afacf906a8194c2cc7eecd62bd2f1cbc61ce70c84f03c1677a",
+    "list_signals": "b1b7802d39add25cfa6dbcf1e3dd12c5304db24c08f90347d8611a9156a99871",
+    "list_surf_jobs": "8031f6c210e88b9c3170c39fca3e57ba5d99aa281c148c03b2e610e2b13db943",
+    "list_workflow_tools": "b1b7802d39add25cfa6dbcf1e3dd12c5304db24c08f90347d8611a9156a99871",
+    "list_workflows": "d81df119b1c7c0afacf906a8194c2cc7eecd62bd2f1cbc61ce70c84f03c1677a",
     "list_table_fields": "e52e394216932c43808150d7d4d05bbbdca77af82b8a498120cda38df6b055a6",
     "list_table_views": "e52e394216932c43808150d7d4d05bbbdca77af82b8a498120cda38df6b055a6",
     "list_tables": "8f453abdc62a10e58f9893531202670edfaef5f552afb6a4051811d336ae722c",
@@ -47,16 +47,15 @@
     "read_table_view": "f70116ef07702700fa64abe648ff0487bca64ddb2d0ffd56addd4ba150540004",
     "remove_table_field": "113b03a1ad01ac9b3b467b79ea37388d0bf39ba1cf78896af4ca1d77694ef066",
     "run_enrich": "28602e016977ee96d989ad142615e8256a4ba94bfd2fc6ddb98215e21067fa4d",
-    "run_surf_point": "800a3c8bfa52045238ced038a1f5538578681be21e249a2a7e7e60aec8350370",
+    "run_workflow": "7d3412d0f066effd1e0ea53fb457ba8f358f5738fcf7fea239965d960f54e28f",
     "search_instagram_content": "188f8857f184a6b505f3a8cb29321c66367fd0c6b2d1fbd02605f20c5ef14e07",
     "search_sender_domains": "07cc5714a2e4a3658a792f995b94b5fc1b1136c4628c92ad2b6053eed12f1690",
-    "test_surf_point_node": "745edec507f3408916196bf3ea368cfcc739776d4aa2e2cc4baaedb2b823faeb",
+    "test_workflow_node": "f353d9d3b56ba8fd919243bf31618ef1698300d1234e37d34e88ab1c1ed24f01",
     "update_signal": "240d95324ff776f807d375c05a9f05d556ff8b288067e7a3eb0d807f93efd2b8",
-    "update_surf_point": "44b139cdc5f2dfd7e738e1ab3d5900bc0e87a306c0a4456b9d5d176ce6b946b9",
-    "update_surf_point_flow": "ffe22203402f3c533e4ce32cec33d14c7e8fc3d0c1cfde0538661b932d303e82",
+    "update_workflow": "04feb7c31502f40080f82dfeda1e51e47aaa3a16afe10cbf2ddd0b412e18ce35",
     "update_table": "33a4dc6016ca396a7426f3d5c3a881f42bbe2862909048d83d57427ea82cdd21",
     "update_table_field": "163308439e0cf459ccf27101947e735a74dcfe64c710cc900b2c6ed15ca0a6d6",
-    "update_table_rows": "8f112935d8aedda0699c3262d7df9cf0def4c7def6325c2fe5ab66e1254dd8ef",
+    "update_table_rows": "97ac421b4817614e652e8205267a41ea73ddbe799356454c62ab178a105c163d",
     "wait_for_surf_job": "ed75b9d72cc36b4d40ce48206d7d90fef1d95cf87de5558ad89996aa1a070662"
   },
   "semanticFixtures": {
@@ -78,10 +77,10 @@
         }
       ]
     },
-    "apply_surf_point_edits": {
+    "edit_workflow_flows": {
       "valid": [
         {
-          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "workflowId": "00000000-0000-4000-8000-000000000001",
           "edits": [
             { "op": "add_node", "ref": "research", "node": { "type": "agent" } }
           ]
@@ -89,7 +88,7 @@
       ],
       "invalid": [
         {
-          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "workflowId": "00000000-0000-4000-8000-000000000001",
           "edits": []
         }
       ]
@@ -101,8 +100,9 @@
     "create_campaign": {
       "valid": [
         {
-          "playbookId": "00000000-0000-4000-8000-000000000001",
-          "contactTableId": "00000000-0000-4000-8000-000000000002",
+          "name": "Founder outreach",
+          "goal": "Book product calls",
+          "audienceDatabaseId": "00000000-0000-4000-8000-000000000002",
           "steps": [
             { "copy": "Introduce SignalSurf and ask for a short call." }
           ]
@@ -110,8 +110,9 @@
       ],
       "invalid": [
         {
-          "playbookId": "00000000-0000-4000-8000-000000000001",
-          "contactTableId": "00000000-0000-4000-8000-000000000002",
+          "name": "Founder outreach",
+          "goal": "Book product calls",
+          "audienceDatabaseId": "00000000-0000-4000-8000-000000000002",
           "steps": []
         }
       ]
@@ -139,19 +140,19 @@
     "create_signal": {
       "valid": [
         {
-          "surfPointId": "00000000-0000-4000-8000-000000000001",
+          "workflowId": "00000000-0000-4000-8000-000000000001",
           "sourceType": "rss",
           "name": "Industry news"
         }
       ],
       "invalid": [
         {
-          "surfPointId": "00000000-0000-4000-8000-000000000001",
+          "workflowId": "00000000-0000-4000-8000-000000000001",
           "sourceType": "unsupported"
         }
       ]
     },
-    "create_surf_point": {
+    "create_workflow": {
       "valid": [{ "name": "Research target accounts", "databaseIds": [] }],
       "invalid": [{ "name": "" }]
     },
@@ -262,9 +263,9 @@
       "valid": [{ "sourceId": "00000000-0000-4000-8000-000000000001" }],
       "invalid": [{ "sourceIds": [] }]
     },
-    "delete_surf_point": {
-      "valid": [{ "surfPointIds": ["00000000-0000-4000-8000-000000000001"] }],
-      "invalid": [{ "surfPointIds": [] }]
+    "delete_workflow": {
+      "valid": [{ "workflowIds": ["00000000-0000-4000-8000-000000000001"] }],
+      "invalid": [{ "workflowIds": [] }]
     },
     "delete_table": {
       "valid": [{ "databaseIds": ["00000000-0000-4000-8000-000000000001"] }],
@@ -332,13 +333,13 @@
     "get_node_upstream_context": {
       "valid": [
         {
-          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "workflowId": "00000000-0000-4000-8000-000000000001",
           "nodeId": "research-node"
         }
       ],
       "invalid": [
         {
-          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "workflowId": "00000000-0000-4000-8000-000000000001",
           "nodeId": ""
         }
       ]
@@ -347,9 +348,9 @@
       "valid": [{ "jobId": "00000000-0000-4000-8000-000000000001" }],
       "invalid": [{ "jobId": "not-a-uuid" }]
     },
-    "get_surf_point": {
-      "valid": [{ "surfPointId": "00000000-0000-4000-8000-000000000001" }],
-      "invalid": [{ "surfPointId": "not-a-uuid" }]
+    "get_workflow": {
+      "valid": [{ "workflowId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "workflowId": "not-a-uuid" }]
     },
     "get_table_row": {
       "valid": [{ "rowId": "00000000-0000-4000-8000-000000000001" }],
@@ -364,18 +365,18 @@
       "invalid": [{ "databaseId": "not-a-uuid" }]
     },
     "list_signals": {
-      "valid": [{ "surfPointId": "00000000-0000-4000-8000-000000000001" }],
-      "invalid": [{ "surfPointId": "not-a-uuid" }]
+      "valid": [{ "workflowId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "workflowId": "not-a-uuid" }]
     },
     "list_surf_jobs": {
       "valid": [{ "status": "completed", "limit": 50, "offset": 0 }],
       "invalid": [{ "limit": 0 }]
     },
-    "list_surf_point_tools": {
-      "valid": [{ "surfPointId": "00000000-0000-4000-8000-000000000001" }],
-      "invalid": [{ "surfPointId": "not-a-uuid" }]
+    "list_workflow_tools": {
+      "valid": [{ "workflowId": "00000000-0000-4000-8000-000000000001" }],
+      "invalid": [{ "workflowId": "not-a-uuid" }]
     },
-    "list_surf_points": {
+    "list_workflows": {
       "valid": [{ "includeInactive": true, "limit": 100 }],
       "invalid": [{ "limit": 0 }]
     },
@@ -452,14 +453,14 @@
         }
       ]
     },
-    "run_surf_point": {
+    "run_workflow": {
       "valid": [
         {
-          "surfPointId": "00000000-0000-4000-8000-000000000001",
+          "workflowId": "00000000-0000-4000-8000-000000000001",
           "idempotencyKey": "nightly-2026-07-12"
         }
       ],
-      "invalid": [{ "surfPointId": "not-a-uuid" }]
+      "invalid": [{ "workflowId": "not-a-uuid" }]
     },
     "search_instagram_content": {
       "valid": [
@@ -516,17 +517,17 @@
         { "seed": "Acme", "count": 11 }
       ]
     },
-    "test_surf_point_node": {
+    "test_workflow_node": {
       "valid": [
         {
-          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "workflowId": "00000000-0000-4000-8000-000000000001",
           "nodeId": "research-node",
           "sampleText": "Acme launched a new product."
         }
       ],
       "invalid": [
         {
-          "playbookId": "00000000-0000-4000-8000-000000000001",
+          "workflowId": "00000000-0000-4000-8000-000000000001",
           "nodeId": ""
         }
       ]
@@ -540,28 +541,14 @@
       ],
       "invalid": [{ "sourceId": "not-a-uuid" }]
     },
-    "update_surf_point": {
+    "update_workflow": {
       "valid": [
         {
-          "surfPointId": "00000000-0000-4000-8000-000000000001",
+          "workflowId": "00000000-0000-4000-8000-000000000001",
           "name": "Qualified accounts"
         }
       ],
-      "invalid": [{ "surfPointId": "not-a-uuid" }]
-    },
-    "update_surf_point_flow": {
-      "valid": [
-        {
-          "playbookId": "00000000-0000-4000-8000-000000000001",
-          "flow": { "version": 2, "nodes": [], "edges": [] }
-        }
-      ],
-      "invalid": [
-        {
-          "playbookId": "00000000-0000-4000-8000-000000000001",
-          "flow": { "version": 1, "nodes": [], "edges": [] }
-        }
-      ]
+      "invalid": [{ "workflowId": "not-a-uuid" }]
     },
     "update_table": {
       "valid": [

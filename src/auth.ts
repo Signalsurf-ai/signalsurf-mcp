@@ -1,18 +1,18 @@
 import { createHash, timingSafeEqual } from "node:crypto"
 
-import type { AppConfig, TokenEntry } from "./config.js"
 import {
-  type McpCapability,
   grantedCapabilitiesForScopes,
   requiredScopesForCapability,
   scopesGrantCapability,
+  type McpCapability,
 } from "./capabilities.js"
+import type { AppConfig, TokenEntry } from "./config.js"
+import { UserFacingError } from "./errors.js"
 import type {
   AccessRole,
   SignalSurfContext,
   SignalSurfProductContext,
 } from "./types.js"
-import { UserFacingError } from "./errors.js"
 
 const roleRank: Record<AccessRole, number> = {
   viewer: 1,
@@ -226,7 +226,7 @@ export function listContextCapabilities(
   return context.role === "viewer"
     ? [
         "context.read",
-        "surf_points.read",
+        "workflows.read",
         "tables.read",
         "schemas.read",
         "sources.read",
@@ -237,10 +237,11 @@ export function listContextCapabilities(
     : [
         "context.read",
         "products.write",
-        "surf_points.read",
-        "surf_points.write",
-        "surf_points.execute",
-        "surf_points.delete",
+        "workflows.read",
+        "workflows.write",
+        "workflows.execute",
+        "workflows.delete",
+        "campaigns.write",
         "tables.read",
         "tables.write",
         "tables.delete",

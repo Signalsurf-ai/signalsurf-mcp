@@ -1,7 +1,7 @@
 {
   "name": "@signalsurf/mcp",
   "version": "0.1.0",
-  "description": "SignalSurf MCP server for agent access to surf points and product tables.",
+  "description": "SignalSurf MCP server for agent access to Workflows and product tables.",
   "type": "module",
   "bin": {
     "signalsurf-mcp": "dist/index.js"

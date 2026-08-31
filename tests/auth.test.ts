@@ -147,11 +147,11 @@ describe("auth", () => {
     expect(() => assertCanUseCapability(context, "products.write")).toThrow(
       "Token scope does not allow"
     )
-    expect(() => assertCanUseCapability(context, "surf_points.write")).toThrow(
+    expect(() => assertCanUseCapability(context, "workflows.write")).toThrow(
       "Token scope does not allow"
     )
     expect(() =>
-      assertCanUseCapability(context, "surf_points.execute")
+      assertCanUseCapability(context, "workflows.execute")
     ).toThrow("Token scope does not allow")
     expect(() => assertCanUseCapability(context, "schemas.write")).toThrow(
       "Token scope does not allow"
@@ -289,10 +289,11 @@ describe("auth", () => {
     ).toEqual([
       "context.read",
       "products.write",
-      "surf_points.read",
-      "surf_points.write",
-      "surf_points.execute",
-      "surf_points.delete",
+      "workflows.read",
+      "workflows.write",
+      "workflows.execute",
+      "workflows.delete",
+      "campaigns.write",
       "tables.read",
       "tables.write",
       "tables.delete",

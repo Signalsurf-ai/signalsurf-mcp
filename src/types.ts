@@ -19,11 +19,12 @@ export type SignalSurfContext = {
   oauthTokenId?: string
   oauthGrantId?: string
   oauthClientId?: string
+  workspaceCapabilitiesByProduct?: Record<string, readonly string[]>
 }
 
 export type JsonRecord = Record<string, unknown>
 
-export type SurfPointRow = {
+export type WorkflowRow = {
   id: string
   product_id: string
   name: string
@@ -41,7 +42,8 @@ export type SurfPointRow = {
   tool_config: JsonRecord | null
   variables: JsonRecord | null
   config: JsonRecord | null
-  folder_id: string | null
+  kind: string | null
+  project_id: string | null
   display_order: number | null
   created_at: string
   updated_at: string | null
@@ -58,6 +60,7 @@ export type DatabaseRow = {
   schema: unknown
   item_type: string | null
   system_type: string | null
+  data_model: string | null
   view_configs: JsonRecord | null
   folder_id?: string | null
   display_order: number
@@ -67,7 +70,7 @@ export type DatabaseRow = {
 
 export type EntryRow = {
   id: string
-  playbook_id: string | null
+  workflow_id: string | null
   database_id: string | null
   data: JsonRecord
   data_cached?: JsonRecord

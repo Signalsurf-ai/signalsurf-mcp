@@ -1,6 +1,6 @@
 # SignalSurf MCP
 
-Standalone MCP server for controlled agent access to SignalSurf surf points and
+Standalone MCP server for controlled agent access to SignalSurf Workflows and
 product tables.
 
 This server is intentionally narrow. It gives external agents the core product
@@ -25,8 +25,8 @@ not need this repository, a Supabase key, or a local server.
    `get_context` first, choose from the returned `products[].name` list, and
    pass that product's `productId` to product-scoped tool calls.
 
-The hosted MCP currently supports product creation, product-scoped Surf Point
-CRUD, table create/update, table schema edits, Surf Point execution, signal
+The hosted MCP currently supports product creation, product-scoped Workflow
+CRUD, table create/update, table schema edits, Workflow execution, signal
 creation/configuration/deletion, signal toggles, tool attachment, and table row
 read/create/update/delete. It is a safe public subset of Surfer, the agent in
 SignalSurf Web's right panel; it does not expose every internal chat tool.
@@ -182,23 +182,23 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 ## What It Exposes
 
 - `get_context`, `get_brand_context`, `create_product`
-- `list_surf_points`, `get_surf_point`, `create_surf_point`, `update_surf_point`, `run_surf_point`, `get_surf_job`, `wait_for_surf_job`, `list_surf_jobs`, `cancel_surf_job`, `delete_surf_point`
+- `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `run_workflow`, `get_surf_job`, `wait_for_surf_job`, `list_surf_jobs`, `cancel_surf_job`, `delete_workflow`
 - `list_tables`, `create_table`, `update_table`, `delete_table`, `list_table_views`, `read_table`, `read_table_view`, `get_table_row`
 - `create_table_row`, `update_table_rows`, `delete_table_rows`
 - `list_table_fields`, `add_table_field`, `update_table_field`, `remove_table_field`, `create_relation_field`
 - `list_signals`, `create_signal`, `update_signal`, `delete_signal`
 - `enable_enrich`, `disable_enrich`, `list_enrich`, `run_enrich`
-- `list_product_tools`, `list_surf_point_tools` (attach/detach tools via `update_surf_point` `toolConfigPatch.auto_tool_ids`)
+- `list_product_tools`, `list_workflow_tools` (attach/detach tools via `update_workflow` `toolConfigPatch.auto_tool_ids`)
 - `search_instagram_content`
 - `deepline_search_people`, `deepline_search_companies`, `deepline_enrich_contact`, `deepline_search_catalog`, `deepline_execute_tool`
-- Resources for context; single-product tokens also expose surf point, database,
+- Resources for context; single-product tokens also expose Workflow, database,
   surf job, and database-row resources
 
 All product-scoped tools execute against one `productId`. A single-product token
 can omit `productId`; a multi-product OAuth token must pass `productId` to every
 product-scoped tool call. The server uses Supabase service-role credentials
 internally, so every operation explicitly validates product ownership before
-touching rows. Surf point deletion is a soft delete (`deleted_at`), matching the
+touching rows. Workflow deletion is a soft delete (`deleted_at`), matching the
 web app behavior.
 
 Chargeable creator discovery and Deepline calls use a two-step approval flow. This includes Instagram Content Search, curated
@@ -213,10 +213,10 @@ granular SignalSurf resource scopes so the consent screen can name each
 capability instead of hiding them behind broad write access:
 
 - `mcp:products.write`
-- `mcp:surf_points.read`
-- `mcp:surf_points.write`
-- `mcp:surf_points.execute`
-- `mcp:surf_points.delete`
+- `mcp:workflows.read`
+- `mcp:workflows.write`
+- `mcp:workflows.execute`
+- `mcp:workflows.delete`
 - `mcp:tables.read`
 - `mcp:tables.write`
 - `mcp:tables.delete`
@@ -287,18 +287,20 @@ Products:
   OAuth grant to include the returned `productId`. Follow-up calls should pass
   that returned `productId` explicitly.
 
-Surf points:
+Workflows:
 
-- `list_surf_points`: returns non-deleted surf points. Use
-  `includeInactive=false` to hide paused surf points.
-- `get_surf_point`: reads one surf point after product-scope validation.
-- `create_surf_point`: creates a playbook/surf point. If the product has exactly
-  one user-facing database, that database is used by default. If the product has
-  multiple databases, pass `databaseIds`. Pass `databaseIds: []` only for an
-  intentional action-only surf point.
-- `update_surf_point`: updates metadata, prompt fields, target databases, and
-  JSON config. Patch fields such as `toolConfigPatch` are shallow merges.
-- `run_surf_point`: queues an active surf point for asynchronous execution by
+- `list_workflows`: returns non-deleted Workflows. Use
+  `includeInactive=false` to hide paused Workflows.
+- `get_workflow`: reads one Workflow after product-scope validation.
+- `create_workflow`: creates a Workflow. Pass `projectId` to place it in an
+  existing Project. If the product has exactly one user-facing database, that
+  database is used by default. If the product has multiple databases, pass
+  `databaseIds`. Pass `databaseIds: []` only for an intentional action-only
+  Workflow.
+- `update_workflow`: updates metadata, Project placement, prompt fields, target
+  databases, and JSON config. Patch fields such as `toolConfigPatch` are shallow
+  merges.
+- `run_workflow`: queues an active Workflow for asynchronous execution by
   creating one pending `extract` surf job per active pull source, matching
   SignalSurf Web's Surf Now worker contract. Existing pending/processing jobs
   are deduplicated by source by default. Pass `idempotencyKey` when an agent may
@@ -310,7 +312,7 @@ Surf points:
   timeout expires. It does not run a worker itself.
 - `cancel_surf_job`: cancels a pending surf job. Running jobs are not forcefully
   interrupted through MCP.
-- `delete_surf_point`: soft-deletes surf points and cancels pending jobs.
+- `delete_workflow`: soft-deletes Workflows and cancels pending jobs.
 
 Tables:
 
@@ -331,7 +333,7 @@ Tables:
   to an existing table preserves additive legacy/custom fields; known legacy
   fields remain hidden, and legacy Tier is made non-automatable.
 - `delete_table`: hard-deletes one or more user-facing tables after product
-  scope validation, then removes those table ids from active Surf Points'
+  scope validation, then removes those table ids from active Workflows'
   `databaseIds`. System tables cannot be deleted through MCP.
 - `read_table`: reads rows with pagination and optional JSON containment filter.
   It also supports UI-style `filters`, `filterLogic`, and data-field `sorts`.
@@ -343,7 +345,7 @@ Tables:
   `viewConfigs` and reads rows using compatible saved-view filters/sorts.
 - `get_table_row`: reads one row after verifying its database belongs to the
   token product.
-- `create_table_row`: inserts a row. If `playbookId` is supplied, that surf point
+- `create_table_row`: inserts a row. If `workflowId` is supplied, that Workflow
   must target the row's database. The server stamps `origin="mcp"` and
   `origin_ref` from the token name; callers cannot forge provenance, triggered
   state, or dedupe keys.
@@ -365,10 +367,10 @@ Schema:
 - `create_relation_field`: adds an `item_ref` field after verifying the target
   table belongs to the same authorized product.
 
-Sources and surf point tools:
+Sources and Workflow tools:
 
 - `list_signals`: returns safe signal metadata only:
-  `sourceId`, `surfPointId`, name, database type, public `sourceType`,
+  `sourceId`, `workflowId`, name, database type, public `sourceType`,
   endpoint, schedule, URL, provider, event type, database id,
   `webhookUrl` for custom webhook signals, `webhookSecretConfigured`,
   `isActive`, and timestamps. Signal config, credentials, headers, bodies, auth
@@ -382,17 +384,17 @@ Sources and surf point tools:
   write `keywords` and `trackedAccounts` into the product search-config tables.
 - `update_signal`: updates signal name, active state, typed signal
   config, `pull_config`, `metadata`, or `data_schema`. Set the active state here
-  to enable or pause a signal after verifying its surf point belongs to the
+  to enable or pause a signal after verifying its Workflow belongs to the
   authorized product. Secret-bearing config such as headers, bodies, and auth
   may be written but is not returned by list responses.
 - `delete_signal`: deletes one or more signals after product-scope
   validation and removes non-terminal jobs for those source ids.
 - Internal trigger `sourceType` values (`item-created`, `item-updated`,
-  `manual-trigger`, `on-schedule`) are exclusive. A Surf Point can have one
+  `manual-trigger`, `on-schedule`) are exclusive. A Workflow can have one
   internal trigger and no external discovery signals alongside it. Pass
   `replaceExisting=true` only when intentionally replacing existing signals.
 - `enable_enrich` / `disable_enrich` / `list_enrich` / `run_enrich`:
-  per-column enrichment. Enable binds a hidden surf point plus an internal
+  per-column enrichment. Enable binds a hidden Workflow plus an internal
   `manual_trigger` source to one `(databaseId, fieldKey)` with a "what to do"
   instruction; the brain fills that single column from each row's context. Enable
   can also persist `auto: "on_created"` and an "only run if" `runCondition`
@@ -406,12 +408,12 @@ Sources and surf point tools:
   refresh. Runs return `queued`, `skipped`, `rawSignalIds`, jobs, and the touched `entryIds`;
   poll the returned jobs with `list_surf_jobs` / `wait_for_surf_job`. Credits
   are charged by the brain as each job runs. Enable needs `mcp:sources.write`,
-  list needs `mcp:sources.read`, and run needs `mcp:surf_points.execute`.
+  list needs `mcp:sources.read`, and run needs `mcp:workflows.execute`.
 - `list_product_tools`: returns safe product tool metadata from
   `product_tools`; config secrets are not exposed.
-- `list_surf_point_tools`: lists the tool ids in `tool_config.auto_tool_ids`
-  for a surf point. To attach or detach a tool, set
-  `toolConfigPatch.auto_tool_ids` via `update_surf_point` (shallow-merged).
+- `list_workflow_tools`: lists the tool ids in `tool_config.auto_tool_ids`
+  for a Workflow. To attach or detach a tool, set
+  `toolConfigPatch.auto_tool_ids` via `update_workflow` (shallow-merged).
 
 Roles:
 
@@ -421,17 +423,17 @@ Roles:
 
 OAuth scopes can narrow those role grants. For example, an editor OAuth token
 with `mcp:tables.write` can create and update rows but cannot delete rows or
-create Surf Points. Product creation additionally requires hosted OAuth because
+create Workflows. Product creation additionally requires hosted OAuth because
 the active grant must be expanded to the new product. Manual fallback tokens
 without `scopes` keep the legacy role-only behavior.
 
 Resources:
 
 - `signalsurf://context`
-- `signalsurf://surf-points` for single-product tokens
-- `signalsurf://surf-points/{surfPointId}` for single-product tokens
-- `signalsurf://surf-points/{surfPointId}/sources` for single-product tokens
-- `signalsurf://surf-points/{surfPointId}/tools` for single-product tokens
+- `signalsurf://workflows` for single-product tokens
+- `signalsurf://workflows/{workflowId}` for single-product tokens
+- `signalsurf://workflows/{workflowId}/sources` for single-product tokens
+- `signalsurf://workflows/{workflowId}/tools` for single-product tokens
 - `signalsurf://product-tools` for single-product tokens
 - `signalsurf://surf-jobs` for single-product tokens
 - `signalsurf://surf-jobs/{jobId}` for single-product tokens
@@ -445,7 +447,7 @@ an explicit `productId` to read or modify product data.
 Schema limits:
 
 - List/read limits are capped at 200 rows per call.
-- Surf point names are capped at 100 characters.
+- Workflow names are capped at 100 characters.
 - Prompt fields are capped at 10,000 characters each.
 - Table row notes are capped at 500,000 characters.
 
@@ -506,8 +508,8 @@ Plaintext `token` entries are supported for local development, but
 Each static token binds one MCP caller to one `productId`. OAuth tokens from
 SignalSurf Web may grant multiple `productIds`; static env tokens intentionally
 remain single-product for local and internal fallback use. `userId` is optional,
-but include it when you want surf point deletion to repair that user's
-`current_playbook_id`. `tokenName` appears in `get_context` and is used as the
+but include it when you want Workflow deletion to repair that user's
+`current_workflow_id`. `tokenName` appears in `get_context` and is used as the
 row-update source reference.
 
 `scopes` is optional for static tokens. When present, the server enforces both
@@ -615,8 +617,8 @@ git diff --check
 - The server does not expose arbitrary SQL write tools.
 - Row writes require the target database to belong to the token's product.
 - Rows with no `database_id` are not accessible through MCP.
-- Surf point reads and mutations filter `deleted_at IS NULL`.
-- Surf points attached to row writes must target that row's database.
+- Workflow reads and mutations filter `deleted_at IS NULL`.
+- Workflows attached to row writes must target that row's database.
 - Row `item_ref` values must reference entries in product-owned databases.
 - Row data updates call SignalSurf's `update_entry_with_source` RPC, preserving entry changelog behavior.
 - HTTP auth-disabled mode is rejected; direct context is stdio-only.

@@ -150,24 +150,24 @@ export const getBrandContextSchema = {
   ...productTargetSchema,
 }
 
-export const listSurfPointsSchema = {
+export const listWorkflowsSchema = {
   ...productTargetSchema,
   includeInactive: z.boolean().default(true).optional(),
   limit: z.number().int().min(1).max(200).default(100).optional(),
 }
 
-export const getSurfPointSchema = {
+export const getWorkflowSchema = {
   ...productTargetSchema,
-  surfPointId: uuidSchema,
+  workflowId: uuidSchema,
 }
 
-export const createSurfPointSchema = {
+export const createWorkflowSchema = {
   ...productTargetSchema,
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().max(500).optional(),
   color: z.string().trim().max(20).default("#5599FF").optional(),
   icon: z.string().trim().max(50).default("folder.fill").optional(),
-  folderId: uuidSchema.nullish(),
+  projectId: uuidSchema.nullish(),
   databaseIds: z.array(uuidSchema).optional(),
   promptTemplate: z.string().max(10000).optional(),
   scoringRubric: z.string().max(10000).optional(),
@@ -181,14 +181,14 @@ export const createSurfPointSchema = {
   config: jsonObjectSchema.optional(),
 }
 
-export const updateSurfPointSchema = {
+export const updateWorkflowSchema = {
   ...productTargetSchema,
-  surfPointId: uuidSchema,
+  workflowId: uuidSchema,
   name: z.string().trim().min(1).max(100).optional(),
   description: z.string().trim().max(500).nullable().optional(),
   color: z.string().trim().max(20).optional(),
   icon: z.string().trim().max(50).optional(),
-  folderId: uuidSchema.nullable().optional(),
+  projectId: uuidSchema.nullable().optional(),
   databaseIds: z.array(uuidSchema).optional(),
   promptTemplate: z.string().max(10000).nullable().optional(),
   scoringRubric: z.string().max(10000).nullable().optional(),
@@ -205,9 +205,9 @@ export const updateSurfPointSchema = {
   configPatch: jsonObjectSchema.optional(),
 }
 
-export const runSurfPointSchema = {
+export const runWorkflowSchema = {
   ...productTargetSchema,
-  surfPointId: uuidSchema,
+  workflowId: uuidSchema,
   idempotencyKey: z.string().trim().min(1).max(200).optional(),
   allowInactive: z.boolean().default(false).optional(),
   dedupePending: z.boolean().default(true).optional(),
@@ -227,7 +227,7 @@ export const waitForSurfJobSchema = {
 
 export const listSurfJobsSchema = {
   ...productTargetSchema,
-  surfPointId: uuidSchema.optional(),
+  workflowId: uuidSchema.optional(),
   status: z.string().trim().min(1).max(50).optional(),
   limit: z.number().int().min(1).max(200).default(50).optional(),
   offset: z.number().int().min(0).default(0).optional(),
@@ -239,7 +239,7 @@ export const cancelSurfJobSchema = {
 }
 
 // ─── Enrich (per-column enrichment) ──────────────────────────────────────────
-// A hidden surf point bound to one database column (target_field). enable/disable
+// A hidden Workflow bound to one database column (target_field). enable/disable
 // manage the binding; run queues per-row brain enrichment jobs.
 const enrichColumnTarget = {
   ...productTargetSchema,
@@ -290,9 +290,9 @@ export const runEnrichSchema = {
   overwriteExisting: z.boolean().default(false).optional(),
 }
 
-export const deleteSurfPointSchema = {
+export const deleteWorkflowSchema = {
   ...productTargetSchema,
-  surfPointIds: z.array(uuidSchema).min(1).max(50),
+  workflowIds: z.array(uuidSchema).min(1).max(50),
 }
 
 export const listDatabasesSchema = {
@@ -407,7 +407,7 @@ export const createTableRowSchema = {
   ...productTargetSchema,
   databaseId: uuidSchema,
   data: jsonObjectSchema,
-  playbookId: uuidSchema.nullish(),
+  workflowId: uuidSchema.nullish(),
   note: z.string().max(500000).nullish(),
 }
 
@@ -424,7 +424,7 @@ const updateTableRowEditSchema = z.object({
   data: jsonObjectSchema.optional(),
   dataPatch: jsonObjectSchema.optional(),
   note: z.string().max(500000).nullable().optional(),
-  playbookId: uuidSchema.nullable().optional(),
+  workflowId: uuidSchema.nullable().optional(),
 })
 
 export const updateTableRowsSchema = {
@@ -462,26 +462,6 @@ export const findCapabilitiesSchema = {
 }
 
 // ── Flow V2 node-graph + Campaign tools (SIG-977 / SIG-1023) ─────────────────
-// The `flow`/`edits` shapes are documented loosely here; the server re-validates
-// with the strict SurfPointFlowV2 schema and returns field-level errors/hints.
-const flowGraphInputSchema = z
-  .object({
-    version: z.literal(2),
-    nodes: z
-      .array(z.record(z.string(), z.unknown()))
-      .describe(
-        "Flow nodes. type is trigger | rule | agent | action | wait | sequence. Call describe_node_types for each type's fields."
-      ),
-    edges: z
-      .array(z.record(z.string(), z.unknown()))
-      .describe(
-        "Directed edges { id, source, target, condition }. condition: always | on_pass | on_fail | category:<label> | step:<index>."
-      ),
-  })
-  .describe(
-    "SurfPointFlowV2 graph: { version: 2, nodes: [...], edges: [...] }."
-  )
-
 const flowEditOpInputSchema = z.object({
   op: z.enum([
     "add_node",
@@ -520,28 +500,24 @@ const flowEditOpInputSchema = z.object({
   edgeId: z.string().optional().describe("remove_edge: edge id."),
 })
 
-export const updateSurfPointFlowSchema = {
+export const editWorkflowFlowsSchema = {
   ...productTargetSchema,
-  playbookId: uuidSchema,
-  flow: flowGraphInputSchema,
-}
-
-export const applyFlowEditsSchema = {
-  ...productTargetSchema,
-  playbookId: uuidSchema,
+  workflowId: uuidSchema,
   edits: z.array(flowEditOpInputSchema).min(1),
 }
 
 export const getNodeUpstreamContextSchema = {
   ...productTargetSchema,
-  playbookId: uuidSchema,
+  workflowId: uuidSchema,
   nodeId: z.string().min(1),
 }
 
 export const createCampaignSchema = {
   ...productTargetSchema,
-  playbookId: uuidSchema,
-  contactTableId: uuidSchema,
+  name: z.string().trim().min(1).max(120),
+  goal: z.string().trim().min(1).max(4000),
+  description: z.string().trim().max(500).optional(),
+  audienceDatabaseId: uuidSchema,
   recipientField: z.string().min(1).max(100).optional(),
   mailbox: z.string().min(1).optional(),
   steps: z
@@ -564,9 +540,9 @@ export const createCampaignSchema = {
     .min(1),
 }
 
-export const testSurfPointNodeSchema = {
+export const testWorkflowNodeSchema = {
   ...productTargetSchema,
-  playbookId: uuidSchema,
+  workflowId: uuidSchema,
   nodeId: z.string().min(1),
   sampleText: z.string().optional(),
 }
@@ -606,14 +582,14 @@ export const createRelationFieldSchema = {
   displayField: z.string().trim().max(100).optional(),
 }
 
-export const listSurfPointSourcesSchema = {
+export const listWorkflowSourcesSchema = {
   ...productTargetSchema,
-  surfPointId: uuidSchema,
+  workflowId: uuidSchema,
 }
 
-export const createSurfPointSourceSchema = {
+export const createWorkflowSourceSchema = {
   ...productTargetSchema,
-  surfPointId: uuidSchema,
+  workflowId: uuidSchema,
   sourceType: sourceTypeSchema,
   name: z.string().trim().min(1).max(200).optional(),
   config: jsonObjectSchema.optional(),
@@ -622,7 +598,7 @@ export const createSurfPointSourceSchema = {
   replaceExisting: z.boolean().default(false).optional(),
 }
 
-export const updateSurfPointSourceSchema = {
+export const updateWorkflowSourceSchema = {
   ...productTargetSchema,
   sourceId: uuidSchema,
   sourceType: sourceTypeSchema.optional(),
@@ -637,7 +613,7 @@ export const updateSurfPointSourceSchema = {
   replaceExisting: z.boolean().default(false).optional(),
 }
 
-export const deleteSurfPointSourceSchema = {
+export const deleteWorkflowSourceSchema = {
   ...productTargetSchema,
   sourceId: uuidSchema.optional(),
   sourceIds: z.array(uuidSchema).min(1).max(50).optional(),
@@ -649,9 +625,9 @@ export const listProductToolsSchema = {
   limit: z.number().int().min(1).max(200).default(100).optional(),
 }
 
-export const listSurfPointToolsSchema = {
+export const listWorkflowToolsSchema = {
   ...productTargetSchema,
-  surfPointId: uuidSchema,
+  workflowId: uuidSchema,
 }
 
 const numericRangeSchema = z
@@ -778,22 +754,21 @@ export const PUBLIC_MCP_TOOL_SCHEMAS = {
   get_enrichment_context: getEnrichmentContextSchema,
   find_capabilities: findCapabilitiesSchema,
   create_product: createProductSchema,
-  list_surf_points: listSurfPointsSchema,
-  get_surf_point: getSurfPointSchema,
-  create_surf_point: createSurfPointSchema,
-  update_surf_point: updateSurfPointSchema,
-  run_surf_point: runSurfPointSchema,
+  list_workflows: listWorkflowsSchema,
+  get_workflow: getWorkflowSchema,
+  create_workflow: createWorkflowSchema,
+  update_workflow: updateWorkflowSchema,
+  run_workflow: runWorkflowSchema,
   get_surf_job: getSurfJobSchema,
   wait_for_surf_job: waitForSurfJobSchema,
   list_surf_jobs: listSurfJobsSchema,
   cancel_surf_job: cancelSurfJobSchema,
-  delete_surf_point: deleteSurfPointSchema,
+  delete_workflow: deleteWorkflowSchema,
   describe_node_types: undefined,
-  update_surf_point_flow: updateSurfPointFlowSchema,
-  apply_surf_point_edits: applyFlowEditsSchema,
+  edit_workflow_flows: editWorkflowFlowsSchema,
   get_node_upstream_context: getNodeUpstreamContextSchema,
   create_campaign: createCampaignSchema,
-  test_surf_point_node: testSurfPointNodeSchema,
+  test_workflow_node: testWorkflowNodeSchema,
   list_tables: listDatabasesSchema,
   create_table: createTableSchema,
   update_table: updateTableSchema,
@@ -810,16 +785,16 @@ export const PUBLIC_MCP_TOOL_SCHEMAS = {
   update_table_field: updateDatabaseFieldSchema,
   remove_table_field: removeDatabaseFieldSchema,
   create_relation_field: createRelationFieldSchema,
-  list_signals: listSurfPointSourcesSchema,
-  create_signal: createSurfPointSourceSchema,
-  update_signal: updateSurfPointSourceSchema,
-  delete_signal: deleteSurfPointSourceSchema,
+  list_signals: listWorkflowSourcesSchema,
+  create_signal: createWorkflowSourceSchema,
+  update_signal: updateWorkflowSourceSchema,
+  delete_signal: deleteWorkflowSourceSchema,
   enable_enrich: enableEnrichSchema,
   disable_enrich: disableEnrichSchema,
   list_enrich: listEnrichSchema,
   run_enrich: runEnrichSchema,
   list_product_tools: listProductToolsSchema,
-  list_surf_point_tools: listSurfPointToolsSchema,
+  list_workflow_tools: listWorkflowToolsSchema,
   search_instagram_content: instagramContentSearchSchema,
   deepline_search_people: deeplineSearchPeopleSchema,
   deepline_search_companies: deeplineSearchCompaniesSchema,

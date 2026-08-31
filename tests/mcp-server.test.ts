@@ -14,7 +14,7 @@ const context: SignalSurfContext = {
 }
 const secondProductId = "00000000-0000-4000-8000-000000000002"
 const databaseId = "00000000-0000-4000-8000-000000000201"
-const surfPointId = "00000000-0000-4000-8000-000000000101"
+const workflowId = "00000000-0000-4000-8000-000000000101"
 
 let cleanup: Array<() => Promise<void>> = []
 
@@ -26,9 +26,9 @@ afterEach(async () => {
 describe("MCP server", () => {
   it("registers SignalSurf tools and executes read calls over MCP", async () => {
     const db = new FakeSupabase({
-      playbooks: [
+      workflows: [
         {
-          id: surfPointId,
+          id: workflowId,
           product_id: context.productId,
           name: "Active",
           description: null,
@@ -45,7 +45,7 @@ describe("MCP server", () => {
           tool_config: {},
           variables: {},
           config: {},
-          folder_id: null,
+          project_id: null,
           display_order: 0,
           created_at: "2026-06-01T00:00:00Z",
           updated_at: "2026-06-01T00:00:00Z",
@@ -75,7 +75,7 @@ describe("MCP server", () => {
       sources: [
         {
           id: "00000000-0000-4000-8000-000000000801",
-          playbook_id: surfPointId,
+          workflow_id: workflowId,
           name: "Threads search",
           type: "pull",
           pull_config: {
@@ -137,14 +137,14 @@ describe("MCP server", () => {
     )
 
     const result = await client.callTool({
-      name: "list_surf_points",
+      name: "list_workflows",
       arguments: {},
     })
 
     expect(result.isError).toBeFalsy()
     const text =
       result.content?.[0]?.type === "text" ? result.content[0].text : ""
-    expect(JSON.parse(text).data.surfPoints[0].name).toBe("Active")
+    expect(JSON.parse(text).data.workflows[0].name).toBe("Active")
 
     const brandResult = await client.callTool({
       name: "get_brand_context",
@@ -173,7 +173,7 @@ describe("MCP server", () => {
     expect(result.structuredContent).toMatchObject({
       ok: true,
       data: {
-        surfPoints: [{ name: "Active" }],
+        workflows: [{ name: "Active" }],
       },
     })
 
@@ -181,49 +181,49 @@ describe("MCP server", () => {
     expect(resources.resources.map((resource) => resource.uri)).toEqual(
       expect.arrayContaining([
         "signalsurf://context",
-        "signalsurf://surf-points",
-        `signalsurf://surf-points/${surfPointId}`,
-        `signalsurf://surf-points/${surfPointId}/sources`,
-        `signalsurf://surf-points/${surfPointId}/tools`,
+        "signalsurf://workflows",
+        `signalsurf://workflows/${workflowId}`,
+        `signalsurf://workflows/${workflowId}/sources`,
+        `signalsurf://workflows/${workflowId}/tools`,
         "signalsurf://product-tools",
         "signalsurf://databases",
         `signalsurf://databases/${databaseId}/rows`,
       ])
     )
 
-    const surfPointResource = await client.readResource({
-      uri: `signalsurf://surf-points/${surfPointId}`,
+    const workflowResource = await client.readResource({
+      uri: `signalsurf://workflows/${workflowId}`,
     })
-    const surfPointResourceText =
-      surfPointResource.contents?.[0]?.text?.toString() ?? ""
-    expect(JSON.parse(surfPointResourceText)).toMatchObject({
-      surfPoint: {
-        surfPointId,
+    const workflowResourceText =
+      workflowResource.contents?.[0]?.text?.toString() ?? ""
+    expect(JSON.parse(workflowResourceText)).toMatchObject({
+      workflow: {
+        workflowId,
         name: "Active",
       },
     })
 
     const sourcesResource = await client.readResource({
-      uri: `signalsurf://surf-points/${surfPointId}/sources`,
+      uri: `signalsurf://workflows/${workflowId}/sources`,
     })
     const sourcesResourceText =
       sourcesResource.contents?.[0]?.text?.toString() ?? ""
     const parsedSourcesResource = JSON.parse(sourcesResourceText)
     expect(parsedSourcesResource.sources).toMatchObject([
       {
-        surfPointId,
+        workflowId,
         isActive: true,
       },
     ])
     expect(parsedSourcesResource.sources[0]).not.toHaveProperty("credentials")
 
     const toolsResource = await client.readResource({
-      uri: `signalsurf://surf-points/${surfPointId}/tools`,
+      uri: `signalsurf://workflows/${workflowId}/tools`,
     })
     const toolsResourceText =
       toolsResource.contents?.[0]?.text?.toString() ?? ""
     expect(JSON.parse(toolsResourceText)).toMatchObject({
-      surfPointId,
+      workflowId,
       toolIds: [],
     })
 
@@ -244,7 +244,7 @@ describe("MCP server", () => {
 
   it("advertises the stable public tool contract and denies viewer writes", async () => {
     const db = new FakeSupabase({
-      playbooks: [],
+      workflows: [],
       databases: [],
       entries: [],
       surf_jobs: [],
@@ -272,7 +272,7 @@ describe("MCP server", () => {
     )
 
     const result = await client.callTool({
-      name: "create_surf_point",
+      name: "create_workflow",
       arguments: { name: "Denied" },
     })
     expect(result.isError).toBe(true)
@@ -281,12 +281,12 @@ describe("MCP server", () => {
     expect(JSON.parse(text)).toMatchObject({
       code: "FORBIDDEN",
     })
-    expect(db.tables.playbooks).toHaveLength(0)
+    expect(db.tables.workflows).toHaveLength(0)
   })
 
   it("honors granular scopes when evaluating public tools", async () => {
     const db = new FakeSupabase({
-      playbooks: [],
+      workflows: [],
       databases: [],
       entries: [],
       surf_jobs: [],
@@ -331,9 +331,9 @@ describe("MCP server", () => {
       create_table_row: true,
       update_table_rows: true,
       delete_table_rows: false,
-      get_surf_point: false,
-      create_surf_point: false,
-      run_surf_point: false,
+      get_workflow: false,
+      create_workflow: false,
+      run_workflow: false,
       cancel_surf_job: false,
       get_surf_job: false,
       wait_for_surf_job: false,
@@ -346,7 +346,7 @@ describe("MCP server", () => {
       update_signal: false,
       delete_signal: false,
       list_product_tools: false,
-      list_surf_point_tools: false,
+      list_workflow_tools: false,
       inspect_sender_infrastructure: false,
       plan_sender_capacity: false,
       search_sender_domains: false,
@@ -358,7 +358,7 @@ describe("MCP server", () => {
     )
 
     const denied = await client.callTool({
-      name: "create_surf_point",
+      name: "create_workflow",
       arguments: { name: "Denied" },
     })
     expect(denied.isError).toBe(true)
@@ -368,14 +368,14 @@ describe("MCP server", () => {
       code: "INSUFFICIENT_SCOPE",
       details: {
         oauthError: "insufficient_scope",
-        requiredScopes: ["mcp:surf_points.write"],
+        requiredScopes: ["mcp:workflows.write"],
       },
     })
 
     const deniedRun = await client.callTool({
-      name: "run_surf_point",
+      name: "run_workflow",
       arguments: {
-        surfPointId: "00000000-0000-4000-8000-000000000101",
+        workflowId: "00000000-0000-4000-8000-000000000101",
       },
     })
     expect(deniedRun.isError).toBe(true)
@@ -385,7 +385,7 @@ describe("MCP server", () => {
       code: "INSUFFICIENT_SCOPE",
       details: {
         oauthError: "insufficient_scope",
-        requiredScopes: ["mcp:surf_points.execute"],
+        requiredScopes: ["mcp:workflows.execute"],
       },
     })
 
@@ -406,16 +406,16 @@ describe("MCP server", () => {
       },
     })
 
-    expect(db.tables.playbooks).toHaveLength(0)
+    expect(db.tables.workflows).toHaveLength(0)
   })
 
   it("requires productId for product-scoped tools when context has multiple products", async () => {
     const db = new FakeSupabase({
-      playbooks: [
+      workflows: [
         {
           id: "00000000-0000-4000-8000-000000000101",
           product_id: context.productId,
-          name: "Primary Product Surf Point",
+          name: "Primary Product Workflow",
           description: null,
           is_default: false,
           is_active: true,
@@ -430,7 +430,7 @@ describe("MCP server", () => {
           tool_config: {},
           variables: {},
           config: {},
-          folder_id: null,
+          project_id: null,
           display_order: 0,
           created_at: "2026-06-01T00:00:00Z",
           updated_at: "2026-06-01T00:00:00Z",
@@ -439,7 +439,7 @@ describe("MCP server", () => {
         {
           id: "00000000-0000-4000-8000-000000000102",
           product_id: secondProductId,
-          name: "Second Product Surf Point",
+          name: "Second Product Workflow",
           description: null,
           is_default: false,
           is_active: true,
@@ -454,7 +454,7 @@ describe("MCP server", () => {
           tool_config: {},
           variables: {},
           config: {},
-          folder_id: null,
+          project_id: null,
           display_order: 0,
           created_at: "2026-06-01T00:00:00Z",
           updated_at: "2026-06-01T00:00:00Z",
@@ -525,7 +525,7 @@ describe("MCP server", () => {
     ])
 
     const missingProduct = await client.callTool({
-      name: "list_surf_points",
+      name: "list_workflows",
       arguments: {},
     })
     expect(missingProduct.isError).toBe(true)
@@ -538,14 +538,14 @@ describe("MCP server", () => {
     })
 
     const result = await client.callTool({
-      name: "list_surf_points",
+      name: "list_workflows",
       arguments: { productId: secondProductId },
     })
     expect(result.isError).toBeFalsy()
     const text =
       result.content?.[0]?.type === "text" ? result.content[0].text : ""
-    expect(JSON.parse(text).data.surfPoints).toMatchObject([
-      { name: "Second Product Surf Point" },
+    expect(JSON.parse(text).data.workflows).toMatchObject([
+      { name: "Second Product Workflow" },
     ])
 
     const resources = await client.listResources()

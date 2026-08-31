@@ -67,7 +67,7 @@ export function searchCapabilities(
       query,
       tools: [],
       prompts: catalog.prompts,
-      hint: "Describe what you want to do (e.g. \"enrich a table\", \"find leads\", \"set up a surf point\") to get the matching tools and prompts.",
+      hint: "Describe what you want to do (e.g. \"enrich a table\", \"find leads\", \"set up a Workflow\") to get the matching tools and prompts.",
     }
   }
 

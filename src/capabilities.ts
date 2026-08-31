@@ -4,10 +4,10 @@ export const MCP_OFFLINE_ACCESS_SCOPE = "offline_access"
 
 export const MCP_GRANULAR_SCOPES = [
   "mcp:products.write",
-  "mcp:surf_points.read",
-  "mcp:surf_points.write",
-  "mcp:surf_points.execute",
-  "mcp:surf_points.delete",
+  "mcp:workflows.read",
+  "mcp:workflows.write",
+  "mcp:workflows.execute",
+  "mcp:workflows.delete",
   "mcp:tables.read",
   "mcp:tables.write",
   "mcp:tables.delete",
@@ -62,10 +62,11 @@ export type McpScope = (typeof MCP_SUPPORTED_SCOPES)[number]
 export type McpCapability =
   | "context.read"
   | "products.write"
-  | "surf_points.read"
-  | "surf_points.write"
-  | "surf_points.execute"
-  | "surf_points.delete"
+  | "workflows.read"
+  | "workflows.write"
+  | "workflows.execute"
+  | "workflows.delete"
+  | "campaigns.write"
   | "tables.read"
   | "tables.write"
   | "tables.delete"
@@ -87,22 +88,21 @@ export type PublicMcpToolName =
   | "get_enrichment_context"
   | "find_capabilities"
   | "create_product"
-  | "list_surf_points"
-  | "get_surf_point"
-  | "create_surf_point"
-  | "update_surf_point"
-  | "run_surf_point"
+  | "list_workflows"
+  | "get_workflow"
+  | "create_workflow"
+  | "update_workflow"
+  | "run_workflow"
   | "get_surf_job"
   | "wait_for_surf_job"
   | "list_surf_jobs"
   | "cancel_surf_job"
-  | "delete_surf_point"
+  | "delete_workflow"
   | "describe_node_types"
-  | "update_surf_point_flow"
-  | "apply_surf_point_edits"
+  | "edit_workflow_flows"
   | "get_node_upstream_context"
   | "create_campaign"
-  | "test_surf_point_node"
+  | "test_workflow_node"
   | "list_tables"
   | "create_table"
   | "update_table"
@@ -128,7 +128,7 @@ export type PublicMcpToolName =
   | "list_enrich"
   | "run_enrich"
   | "list_product_tools"
-  | "list_surf_point_tools"
+  | "list_workflow_tools"
   | "search_instagram_content"
   | "deepline_search_people"
   | "deepline_search_companies"
@@ -223,7 +223,7 @@ export const PUBLIC_MCP_TOOLS = {
   find_capabilities: {
     title: "Find Capabilities",
     description:
-      'Search this MCP\'s tools and guided prompts by intent (e.g. "enrich a table", "find leads", "set up a surf point") instead of scanning the whole tool list. Returns the best-matching tools and prompts (filtered to what your token can use) plus a hint on how to proceed. Start here when you are unsure which tool or prompt fits the task. Pass an empty query to see the available guided workflows.',
+      'Search this MCP\'s tools and guided prompts by intent (e.g. "enrich a table", "find leads", "set up a Workflow") instead of scanning the whole tool list. Returns the best-matching tools and prompts (filtered to what your token can use) plus a hint on how to proceed. Start here when you are unsure which tool or prompt fits the task. Pass an empty query to see the available guided workflows.',
     requiredCapability: "context.read",
     surferSurface: "tool discovery",
     publicStatus: "supported",
@@ -238,57 +238,57 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: CREATE_ANNOTATIONS,
   },
-  list_surf_points: {
-    title: "List Surf Points",
+  list_workflows: {
+    title: "List Workflows",
     description:
-      "List SignalSurf surf points for an authorized product. Pass productId when this connection can access multiple products. Soft-deleted rows are never returned; pass includeInactive=false to hide paused surf points.",
-    requiredCapability: "surf_points.read",
-    surferSurface: "manage_surf_points",
+      "List SignalSurf Workflows for an authorized product. Pass productId when this connection can access multiple products. Soft-deleted rows are never returned; pass includeInactive=false to hide paused Workflows.",
+    requiredCapability: "workflows.read",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
-  get_surf_point: {
-    title: "Get Surf Point",
+  get_workflow: {
+    title: "Get Workflow",
     description:
-      "Read one SignalSurf surf point after verifying it belongs to an authorized product.",
-    requiredCapability: "surf_points.read",
-    surferSurface: "manage_surf_points",
+      "Read one SignalSurf Workflow after verifying it belongs to an authorized product.",
+    requiredCapability: "workflows.read",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
-  create_surf_point: {
-    title: "Create Surf Point",
+  create_workflow: {
+    title: "Create Workflow",
     description:
-      "Create a surf point/playbook in an authorized product. Pass productId when this connection can access multiple products, and pass databaseIds when the product has multiple databases.",
-    requiredCapability: "surf_points.write",
-    surferSurface: "manage_surf_points",
+      "Create a Workflow in an authorized product. Pass productId when this connection can access multiple products, projectId to place it in an existing Project, and databaseIds when the product has multiple databases.",
+    requiredCapability: "workflows.write",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: CREATE_ANNOTATIONS,
   },
-  update_surf_point: {
-    title: "Update Surf Point",
+  update_workflow: {
+    title: "Update Workflow",
     description:
-      "Modify surf point metadata, prompt fields, target tables, and JSON config for an authorized product. To attach or detach product integration tools, set toolConfigPatch.auto_tool_ids using tool ids from list_product_tools/list_surf_point_tools (shallow-merged). Pass productId when this connection can access multiple products.",
-    requiredCapability: "surf_points.write",
-    surferSurface: "manage_surf_points",
+      "Modify Workflow metadata, Project placement, prompt fields, target tables, and JSON config for an authorized product. To attach or detach product integration tools, set toolConfigPatch.auto_tool_ids using tool ids from list_product_tools/list_workflow_tools (shallow-merged). Pass productId when this connection can access multiple products.",
+    requiredCapability: "workflows.write",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
-  run_surf_point: {
-    title: "Run Surf Point",
+  run_workflow: {
+    title: "Run Workflow",
     description:
-      "Queue an authorized surf point for execution by creating a pending SignalSurf surf job. Pass productId when this connection can access multiple products.",
-    requiredCapability: "surf_points.execute",
-    surferSurface: "run_surf_point",
+      "Queue an authorized Workflow for execution by creating a pending SignalSurf surf job. Pass productId when this connection can access multiple products.",
+    requiredCapability: "workflows.execute",
+    surferSurface: "run_workflow",
     publicStatus: "supported",
     annotations: CREATE_ANNOTATIONS,
   },
   get_surf_job: {
     title: "Get Surf Job",
     description:
-      "Read one SignalSurf surf job after verifying the job belongs to a surf point in an authorized product.",
-    requiredCapability: "surf_points.read",
-    surferSurface: "run_surf_point",
+      "Read one SignalSurf surf job after verifying the job belongs to a Workflow in an authorized product.",
+    requiredCapability: "workflows.read",
+    surferSurface: "run_workflow",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
@@ -296,17 +296,17 @@ export const PUBLIC_MCP_TOOLS = {
     title: "Wait For Surf Job",
     description:
       "Poll one SignalSurf surf job until it leaves an active status or the timeout expires.",
-    requiredCapability: "surf_points.read",
-    surferSurface: "run_surf_point",
+    requiredCapability: "workflows.read",
+    surferSurface: "run_workflow",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
   list_surf_jobs: {
     title: "List Surf Jobs",
     description:
-      "List SignalSurf surf jobs for an authorized product, optionally filtered by surfPointId or status.",
-    requiredCapability: "surf_points.read",
-    surferSurface: "run_surf_point",
+      "List SignalSurf surf jobs for an authorized product, optionally filtered by workflowId or status.",
+    requiredCapability: "workflows.read",
+    surferSurface: "run_workflow",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
@@ -314,71 +314,62 @@ export const PUBLIC_MCP_TOOLS = {
     title: "Cancel Surf Job",
     description:
       "Cancel a pending SignalSurf surf job after verifying it belongs to an authorized product.",
-    requiredCapability: "surf_points.execute",
-    surferSurface: "run_surf_point",
+    requiredCapability: "workflows.execute",
+    surferSurface: "run_workflow",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
-  delete_surf_point: {
-    title: "Delete Surf Point",
+  delete_workflow: {
+    title: "Delete Workflow",
     description:
-      "Soft-delete one or more surf points in an authorized product and cancel pending jobs. Pass productId when this connection can access multiple products. This does not hard-delete historical rows.",
-    requiredCapability: "surf_points.delete",
-    surferSurface: "manage_surf_points",
+      "Soft-delete one or more Workflows in an authorized product and cancel pending jobs. Pass productId when this connection can access multiple products. This does not hard-delete historical rows.",
+    requiredCapability: "workflows.delete",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: DELETE_ANNOTATIONS,
   },
   describe_node_types: {
     title: "Describe Flow Node Types",
     description:
-      "List the SurfPoint Flow V2 node types (trigger, rule, agent, action, wait, sequence), their fields, and the legal edge conditions. A SurfPoint is now a node graph (DAG); call this before building or editing a flow so you shape nodes and wire edges correctly. No args.",
-    requiredCapability: "surf_points.read",
-    surferSurface: "manage_surf_points",
+      "List the Workflow Flow V2 node types (trigger, rule, agent, action, wait, sequence), their fields, and the legal edge conditions. A Workflow is now a node graph (DAG); call this before building or editing a flow so you shape nodes and wire edges correctly. No args.",
+    requiredCapability: "workflows.read",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
-  update_surf_point_flow: {
-    title: "Update Surf Point Flow",
+  edit_workflow_flows: {
+    title: "Edit Workflow Flows",
     description:
-      "Create or replace a surf point's multi-step Flow V2 graph (stored at config.flow). Input { playbookId, flow } where flow is { version: 2, nodes, edges }. Validates the graph (rejects cycles and dangling edges) and blocks create_row/object_sink fields that map to non-existent columns. Use this for a whole-graph build; use apply_surf_point_edits for incremental edits. Call describe_node_types first if unsure of node shapes.",
-    requiredCapability: "surf_points.write",
-    surferSurface: "manage_surf_points",
-    publicStatus: "supported",
-    annotations: MUTATE_ANNOTATIONS,
-  },
-  apply_surf_point_edits: {
-    title: "Apply Surf Point Edits",
-    description:
-      "Apply several Flow V2 edits to a surf point in one atomic call — prefer this for multi-step builds/edits. Input { playbookId, edits }. edits is an ordered list of ops: {op:'add_node', ref?, node}, {op:'connect', source, target, condition?}, {op:'update_node', nodeId, patch}, {op:'remove_node', nodeId}, {op:'remove_edge', edgeId}. An add_node may set a ref so later ops reference the new node before its id exists. If any op is invalid the whole batch is rejected (applied:false with the failing op). For create_row/object_sink nodes call get_node_upstream_context first.",
-    requiredCapability: "surf_points.write",
-    surferSurface: "manage_surf_points",
+      "Edit the Flows inside one Workflow in a single atomic call. Input { workflowId, edits }. A disconnected Node chain becomes its own Flow; connected Nodes remain in the same Flow. edits is an ordered list of ops: {op:'add_node', ref?, node}, {op:'connect', source, target, condition?}, {op:'update_node', nodeId, patch}, {op:'remove_node', nodeId}, {op:'remove_edge', edgeId}. If any edit is invalid, the whole batch is rejected.",
+    requiredCapability: "workflows.write",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
   get_node_upstream_context: {
     title: "Get Node Upstream Context",
     description:
-      "Resolve what data is in scope at a flow node before you configure it: the upstream node chain, upstream triggers and their sources, upstream agent write targets (databaseId + columns), this node's own target-table columns (for create_row/object_sink), and signal fields you can reference as {{signal.<field>}}. Always call this before mapping a create_row/object_sink node's fields. Input { playbookId, nodeId }.",
-    requiredCapability: "surf_points.read",
-    surferSurface: "manage_surf_points",
+      "Resolve what data is in scope at a flow node before you configure it: the upstream node chain, upstream triggers and their sources, upstream agent write targets (databaseId + columns), this node's own target-table columns (for create_row/object_sink), and signal fields you can reference as {{signal.<field>}}. Always call this before mapping a create_row/object_sink node's fields. Input { workflowId, nodeId }.",
+    requiredCapability: "workflows.read",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
   create_campaign: {
     title: "Create Campaign",
     description:
-      "Build a native cold-email Campaign (a contact-list drip) on a surf point: a sequence node enrolling from a Contacts table, then one agent per step sending through a connected mailbox, wired correct-by-construction. Input { playbookId, contactTableId, mailbox, steps:[{copy, delayDays?, gate?}] }. The contact table must have item_type=contact. You MUST pass mailbox (a connected Unipile email account id) — this MCP does not list Unipile accounts. Replaces the surf point's flow. Does NOT enrol contacts; the user enrols from the app.",
-    requiredCapability: "surf_points.write",
-    surferSurface: "manage_surf_points",
+      "Create a first-class draft cold-email Campaign for a Table or Object audience. Input { name, goal, description?, audienceDatabaseId, recipientField?, mailbox, steps:[{copy, delayDays?, gate?}] }. You MUST pass mailbox (a connected Unipile email account id). The Campaign is independent from Workflows and does not enroll contacts automatically.",
+    requiredCapability: "campaigns.write",
+    surferSurface: "manage_campaigns",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
-  test_surf_point_node: {
-    title: "Test Surf Point Node",
+  test_workflow_node: {
+    title: "Test Workflow Node",
     description:
-      "Dry-run one flow node via the surf-flow-debug runner (no commit). Input { playbookId, nodeId, sampleText? }. Returns the node result (rule pass/fail + score, classify branch, or an agent's proposed writes). Requires the surf-flow-debug edge function to be reachable from this deployment.",
-    requiredCapability: "surf_points.read",
-    surferSurface: "manage_surf_points",
+      "Dry-run one flow node via the surf-flow-debug runner (no commit). Input { workflowId, nodeId, sampleText? }. Returns the node result (rule pass/fail + score, classify branch, or an agent's proposed writes). Requires the surf-flow-debug edge function to be reachable from this deployment.",
+    requiredCapability: "workflows.read",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
@@ -412,7 +403,7 @@ export const PUBLIC_MCP_TOOLS = {
   delete_table: {
     title: "Delete Table",
     description:
-      "Delete one or more user-facing SignalSurf tables after product-scope verification, then unlink the deleted table ids from active Surf Points. Pass productId when this connection can access multiple products.",
+      "Delete one or more user-facing SignalSurf tables after product-scope verification, then unlink the deleted table ids from active Workflows. Pass productId when this connection can access multiple products.",
     requiredCapability: "tables.delete",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -466,7 +457,7 @@ export const PUBLIC_MCP_TOOLS = {
   update_table_rows: {
     title: "Update Table Rows",
     description:
-      "Modify one or more rows/items in an authorized product in a single call — always pass `edits` as an array, length 1 for a single row, N to apply distinct edits to several rows at once (e.g. after enrichment); one atomic write for the data/dataPatch part. Input { productId, edits }. Each edit is { rowId, databaseId?, data?, dataPatch?, note?, playbookId? } — use dataPatch for shallow field updates or data to replace the row's data object (exactly one of the two), note to set the row's note, playbookId to reassign its surf point, and databaseId as an optional ownership check. rowIds must be unique. If any rowId is not found/authorized or any edit is invalid, the whole call is rejected and nothing is written.",
+      "Modify one or more rows/items in an authorized product in a single call — always pass `edits` as an array, length 1 for a single row, N to apply distinct edits to several rows at once (e.g. after enrichment); one atomic write for the data/dataPatch part. Input { productId, edits }. Each edit is { rowId, databaseId?, data?, dataPatch?, note?, workflowId? } — use dataPatch for shallow field updates or data to replace the row's data object (exactly one of the two), note to set the row's note, workflowId to reassign its Workflow, and databaseId as an optional ownership check. rowIds must be unique. If any rowId is not found/authorized or any edit is invalid, the whole call is rejected and nothing is written.",
     requiredCapability: "tables.write",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -528,27 +519,27 @@ export const PUBLIC_MCP_TOOLS = {
   list_signals: {
     title: "List Signals",
     description:
-      "List safe signal metadata for an authorized surf point. Signal config and credentials are not exposed.",
+      "List safe signal metadata for an authorized Workflow. Signal config and credentials are not exposed.",
     requiredCapability: "sources.read",
-    surferSurface: "manage_surf_points",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
   create_signal: {
     title: "Create Signal",
     description:
-      "Create a SignalSurf signal for an authorized surf point. Supports platform, custom-pull, RSS, webhook, web-monitor, GitHub, CoinGecko, Hacker News, Product Hunt, and the four exclusive internal trigger types. Webhook signals return the callable SignalSurf webhookUrl.",
+      "Create a SignalSurf signal for an authorized Workflow. Supports platform, custom-pull, RSS, webhook, web-monitor, GitHub, CoinGecko, Hacker News, Product Hunt, and the four exclusive internal trigger types. Webhook signals return the callable SignalSurf webhookUrl.",
     requiredCapability: "sources.write",
-    surferSurface: "manage_surf_points",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: CREATE_ANNOTATIONS,
   },
   update_signal: {
     title: "Update Signal",
     description:
-      "Update one signal after verifying its surf point belongs to an authorized product. Supports signal name, active state (enable/pause via isActive), typed config rebuilds, and safe pull_config/metadata/data_schema replacements or shallow patches.",
+      "Update one signal after verifying its Workflow belongs to an authorized product. Supports signal name, active state (enable/pause via isActive), typed config rebuilds, and safe pull_config/metadata/data_schema replacements or shallow patches.",
     requiredCapability: "sources.write",
-    surferSurface: "manage_surf_points",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
@@ -557,25 +548,25 @@ export const PUBLIC_MCP_TOOLS = {
     description:
       "Hard-delete one or more signals after product-scope validation and remove non-terminal jobs for those signal ids.",
     requiredCapability: "sources.write",
-    surferSurface: "manage_surf_points",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: DELETE_ANNOTATIONS,
   },
   list_product_tools: {
     title: "List Product Tools",
     description:
-      "List safe product tool metadata that can be attached to surf points. Tool config secrets are not exposed.",
-    requiredCapability: "surf_points.read",
-    surferSurface: "manage_surf_points",
+      "List safe product tool metadata that can be attached to Workflows. Tool config secrets are not exposed.",
+    requiredCapability: "workflows.read",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
-  list_surf_point_tools: {
-    title: "List Surf Point Tools",
+  list_workflow_tools: {
+    title: "List Workflow Tools",
     description:
-      "List tool ids attached to a surf point through toolConfig.auto_tool_ids.",
-    requiredCapability: "surf_points.read",
-    surferSurface: "manage_surf_points",
+      "List tool ids attached to a Workflow through toolConfig.auto_tool_ids.",
+    requiredCapability: "workflows.read",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
@@ -636,9 +627,9 @@ export const PUBLIC_MCP_TOOLS = {
   enable_enrich: {
     title: "Enable Enrich",
     description:
-      "Enable Enrich on one table column: bind a hidden surf point + manual-trigger source to (databaseId, fieldKey) with a 'what to do' instruction the brain uses to fill that single column from each row's context. Optionally pass auto ('on_created' to auto-fill new rows, 'off' to clear auto-fill) and runCondition for the column's 'only run if' gate. Re-enabling an off column restores it and updates the instruction. Pass productId when this connection can access multiple products.",
+      "Enable Enrich on one table column: bind a hidden Workflow + manual-trigger source to (databaseId, fieldKey) with a 'what to do' instruction the brain uses to fill that single column from each row's context. Optionally pass auto ('on_created' to auto-fill new rows, 'off' to clear auto-fill) and runCondition for the column's 'only run if' gate. Re-enabling an off column restores it and updates the instruction. Pass productId when this connection can access multiple products.",
     requiredCapability: "sources.write",
-    surferSurface: "manage_surf_points",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
@@ -647,16 +638,16 @@ export const PUBLIC_MCP_TOOLS = {
     description:
       "Turn off Enrich for a column without deleting it — the 'what to do' instruction is kept so re-enabling restores it.",
     requiredCapability: "sources.write",
-    surferSurface: "manage_surf_points",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: MUTATE_ANNOTATIONS,
   },
   list_enrich: {
     title: "List Enrich",
     description:
-      "List the columns in a database that have Enrich enabled, each with its 'what to do' instruction and bound surf point id.",
+      "List the columns in a database that have Enrich enabled, each with its 'what to do' instruction and bound Workflow id.",
     requiredCapability: "sources.read",
-    surferSurface: "manage_surf_points",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
   },
@@ -664,8 +655,8 @@ export const PUBLIC_MCP_TOOLS = {
     title: "Run Enrich",
     description:
       "Queue Enrich for a column. Pass exactly one mode: scope ('first10' | 'first100' | 'all', capped at 1000 rows) to backfill across rows, entryIds for a specific row subset, or entryId for a single cell. Populated cells are skipped by default and reported as skippedExisting; pass overwriteExisting=true only with explicit user consent to refresh them. Column/subset runs also apply the persisted runCondition gate. Poll returned jobs with list_surf_jobs / wait_for_surf_job. Credits are charged by the brain as each job runs.",
-    requiredCapability: "surf_points.execute",
-    surferSurface: "manage_surf_points",
+    requiredCapability: "workflows.execute",
+    surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: CREATE_ANNOTATIONS,
   },
@@ -712,7 +703,7 @@ export function requiredCapabilitiesForTool(
 const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   [MCP_LEGACY_READ_SCOPE]: [
     "context.read",
-    "surf_points.read",
+    "workflows.read",
     "tables.read",
     "schemas.read",
     "sources.read",
@@ -724,10 +715,11 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   [MCP_LEGACY_WRITE_SCOPE]: [
     "context.read",
     "products.write",
-    "surf_points.read",
-    "surf_points.write",
-    "surf_points.execute",
-    "surf_points.delete",
+    "workflows.read",
+    "workflows.write",
+    "workflows.execute",
+    "workflows.delete",
+    "campaigns.write",
     "tables.read",
     "tables.write",
     "tables.delete",
@@ -745,21 +737,22 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   ],
   [MCP_OFFLINE_ACCESS_SCOPE]: [],
   "mcp:products.write": ["context.read", "products.write"],
-  "mcp:surf_points.read": ["context.read", "surf_points.read"],
-  "mcp:surf_points.write": [
+  "mcp:workflows.read": ["context.read", "workflows.read"],
+  "mcp:workflows.write": [
     "context.read",
-    "surf_points.read",
-    "surf_points.write",
+    "workflows.read",
+    "workflows.write",
+    "campaigns.write",
   ],
-  "mcp:surf_points.execute": [
+  "mcp:workflows.execute": [
     "context.read",
-    "surf_points.read",
-    "surf_points.execute",
+    "workflows.read",
+    "workflows.execute",
   ],
-  "mcp:surf_points.delete": [
+  "mcp:workflows.delete": [
     "context.read",
-    "surf_points.read",
-    "surf_points.delete",
+    "workflows.read",
+    "workflows.delete",
   ],
   "mcp:tables.read": ["context.read", "tables.read"],
   "mcp:tables.write": ["context.read", "tables.read", "tables.write"],
@@ -793,10 +786,11 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
 const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "context.read": [MCP_LEGACY_READ_SCOPE],
   "products.write": ["mcp:products.write"],
-  "surf_points.read": ["mcp:surf_points.read"],
-  "surf_points.write": ["mcp:surf_points.write"],
-  "surf_points.execute": ["mcp:surf_points.execute"],
-  "surf_points.delete": ["mcp:surf_points.delete"],
+  "workflows.read": ["mcp:workflows.read"],
+  "workflows.write": ["mcp:workflows.write"],
+  "workflows.execute": ["mcp:workflows.execute"],
+  "workflows.delete": ["mcp:workflows.delete"],
+  "campaigns.write": ["mcp:workflows.write"],
   "tables.read": ["mcp:tables.read"],
   "tables.write": ["mcp:tables.write"],
   "tables.delete": ["mcp:tables.delete"],

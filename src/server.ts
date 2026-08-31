@@ -17,69 +17,76 @@ import {
   requiredCapabilitiesForTool,
   type PublicMcpToolName,
 } from "./capabilities.js"
-import { jsonResource, runJsonTool } from "./mcp-results.js"
-import { PROMPT_CATALOG, registerPrompts } from "./prompts.js"
+import { jsonErrorResult, jsonResource, runJsonTool } from "./mcp-results.js"
+import { registerPrompts, workspaceVisiblePromptCatalog } from "./prompts.js"
 import { SignalSurfRepository } from "./repository.js"
-import { searchCapabilities } from "./tool-search.js"
 import {
-  createSurfPointSourceSchema,
-  createProductSchema,
-  createSurfPointSchema,
-  createTableSchema,
-  createTableRowSchema,
+  PUBLIC_MCP_TOOL_SCHEMAS,
   addDatabaseFieldSchema,
   cancelSurfJobSchema,
-  createRelationFieldSchema,
-  deleteSurfPointSourceSchema,
-  deleteSurfPointSchema,
-  deleteTableSchema,
-  deleteTableRowsSchema,
-  applyFlowEditsSchema,
   createCampaignSchema,
+  createProductSchema,
+  createRelationFieldSchema,
+  createTableRowSchema,
+  createTableSchema,
+  createWorkflowSchema,
+  createWorkflowSourceSchema,
+  deeplineEnrichContactSchema,
+  deeplineExecuteToolSchema,
+  deeplineSearchCatalogSchema,
+  deeplineSearchCompaniesSchema,
+  deeplineSearchPeopleSchema,
+  deleteTableRowsSchema,
+  deleteTableSchema,
+  deleteWorkflowSchema,
+  deleteWorkflowSourceSchema,
+  disableEnrichSchema,
+  editWorkflowFlowsSchema,
+  enableEnrichSchema,
   findCapabilitiesSchema,
   getBrandContextSchema,
   getEnrichmentContextSchema,
   getNodeUpstreamContextSchema,
-  getSurfPointSchema,
-  testSurfPointNodeSchema,
-  updateSurfPointFlowSchema,
   getSurfJobSchema,
   getTableRowSchema,
-  listDatabasesSchema,
-  listDatabaseViewsSchema,
+  getWorkflowSchema,
+  instagramContentSearchSchema,
   listDatabaseFieldsSchema,
+  listDatabaseViewsSchema,
+  listDatabasesSchema,
+  listEnrichSchema,
   listProductToolsSchema,
-  listSurfPointSourcesSchema,
-  listSurfPointToolsSchema,
-  removeDatabaseFieldSchema,
   listSurfJobsSchema,
-  listSurfPointsSchema,
+  listWorkflowSourcesSchema,
+  listWorkflowToolsSchema,
+  listWorkflowsSchema,
   readTableSchema,
   readTableViewSchema,
-  runSurfPointSchema,
-  deeplineSearchPeopleSchema,
-  deeplineSearchCompaniesSchema,
-  deeplineEnrichContactSchema,
-  deeplineSearchCatalogSchema,
-  deeplineExecuteToolSchema,
   inspectSenderInfrastructureSchema,
   planSenderCapacitySchema,
   searchSenderDomainsSchema,
-  instagramContentSearchSchema,
-  enableEnrichSchema,
-  disableEnrichSchema,
-  listEnrichSchema,
+  removeDatabaseFieldSchema,
   runEnrichSchema,
-  updateDatabaseFieldSchema,
-  updateSurfPointSourceSchema,
+  runWorkflowSchema,
+  testWorkflowNodeSchema,
   toolOutputSchema,
-  updateSurfPointSchema,
-  updateTableSchema,
+  updateDatabaseFieldSchema,
   updateTableRowsSchema,
+  updateTableSchema,
+  updateWorkflowSchema,
+  updateWorkflowSourceSchema,
   waitForSurfJobSchema,
-  PUBLIC_MCP_TOOL_SCHEMAS,
 } from "./schemas.js"
+import { searchCapabilities } from "./tool-search.js"
 import type { SignalSurfContext } from "./types.js"
+import {
+  WORKSPACE_CAPABILITIES,
+  assertWorkspaceToolAllowed,
+  isToolVisibleAcrossProducts,
+  projectMcpCapabilitiesForWorkspace,
+  workspaceCapabilityEnabled,
+  workspaceCapabilityForTool,
+} from "./workspace-capabilities.js"
 
 export type CreateServerOptions = {
   context: SignalSurfContext
@@ -88,23 +95,55 @@ export type CreateServerOptions = {
 
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
 
-Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter — productId from get_context (when multiple products), databaseId from list_tables, surfPointId from list_surf_points. Never pass a null or guessed id.
+Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter — productId from get_context (when multiple products), databaseId from list_tables, workflowId from list_workflows. Never pass a null or guessed id.
 
-Execution model: enrichment runs on the SignalSurf server brain via Enrich and surf points. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
+Execution model: enrichment runs on the SignalSurf server brain via Enrich and Workflows. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
 
 I want to… →
 - Not sure which tool or prompt fits → call find_capabilities(query) to search by intent.
 - Enrich a whole table → use the enrich_table prompt; it scripts get_enrichment_context → enable_enrich → run_enrich(scope="all") → wait_for_surf_job.
-- Set up a new surf point (playbook) → use the set_up_surf_point prompt.
+- Set up a new Workflow → use the set_up_workflow prompt.
 - Build a lead list with Deepline → use the build_lead_list prompt.
-- Build a multi-step / branching surf point → a surf point is a node graph (Flow V2). Call describe_node_types first, then update_surf_point_flow (whole graph) or apply_surf_point_edits (incremental); get_node_upstream_context before mapping create_row fields.
+- Build a multi-step / branching Workflow → a Workflow is a node graph (Flow V2). Call describe_node_types first, then edit_workflow_flows (atomic); get_node_upstream_context before mapping create_row fields.
 - Build a contact-list email drip → use create_campaign (do not hand-wire it); pass a connected Unipile mailbox id.
 - Decide what to write into a column → call get_enrichment_context(databaseId[, fieldKey]) for brand context, schema, popular existing values, and field conventions.
-- Run or monitor a surf point → run_surf_point, then list_surf_jobs / wait_for_surf_job.
+- Run or monitor a Workflow → run_workflow, then list_surf_jobs / wait_for_surf_job.
 - Inspect data → list_tables, read_table, list_database_fields.
 - Plan or inspect sender infrastructure → inspect_sender_infrastructure, then plan_sender_capacity; use search_sender_domains for exact live Domain quotes. Purchases and secrets stay in the secure SignalSurf app.
 
 When multiple products are authorized, pass products[].productId (from get_context) on every product-scoped call.`
+
+export function workspaceProjectedServerInstructions(
+  context: SignalSurfContext
+): string {
+  const sections = [
+    "SignalSurf MCP — operating manual.",
+    "Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter; never pass a null or guessed id.",
+    "Not sure which available capability fits → call find_capabilities(query).",
+  ]
+  if (isToolVisibleAcrossProducts(context, "list_tables")) {
+    sections.push(
+      "For available Table work, resolve databaseId with list_tables before reading or changing rows, fields, views, or Enrich configuration.",
+      "Use the enrich_table prompt for guided whole-column enrichment and get_enrichment_context before choosing column instructions."
+    )
+  }
+  if (isToolVisibleAcrossProducts(context, "create_workflow")) {
+    sections.push(
+      "For available Workflow work, resolve workflowId with list_workflows; use set_up_workflow for guided setup and poll jobs after execution."
+    )
+  }
+  if (isToolVisibleAcrossProducts(context, "create_campaign")) {
+    sections.push(
+      "For available Campaign work, use create_campaign instead of hand-wiring a sending flow."
+    )
+  }
+  if (authorizedProductIds(context).length > 1) {
+    sections.push(
+      "When multiple products are authorized, pass products[].productId from get_context on every product-scoped call."
+    )
+  }
+  return sections.join("\n\n")
+}
 
 export async function createSignalSurfMcpServer(
   options: CreateServerOptions
@@ -123,6 +162,10 @@ export async function createSignalSurfMcpServer(
       // Name resolution is best-effort; fall back to UUID display on failure.
     }
   }
+  context.workspaceCapabilitiesByProduct = await loadRepositoryCapabilities(
+    repository,
+    authorizedProductIds(context)
+  )
   const server = new McpServer(
     {
       name: "signalsurf-mcp",
@@ -134,14 +177,29 @@ export async function createSignalSurfMcpServer(
         tools: {},
         prompts: {},
       },
-      instructions: SERVER_INSTRUCTIONS,
+      instructions: workspaceProjectedServerInstructions(context),
     }
   )
 
   registerResources(server, repository, context)
   registerTools(server, repository, context)
-  registerPrompts(server)
+  registerPrompts(server, {
+    tables: isToolVisibleAcrossProducts(context, "list_tables"),
+    workflows: isToolVisibleAcrossProducts(context, "create_workflow"),
+  })
   return server
+}
+
+async function loadRepositoryCapabilities(
+  repository: SignalSurfRepository,
+  productIds: readonly string[]
+) {
+  if (typeof repository.loadWorkspaceCapabilities === "function") {
+    return repository.loadWorkspaceCapabilities(productIds)
+  }
+  return Object.fromEntries(
+    productIds.map((productId) => [productId, [...WORKSPACE_CAPABILITIES]])
+  )
 }
 
 function registerTools(
@@ -150,6 +208,14 @@ function registerTools(
   context: SignalSurfContext
 ) {
   const registeredTools = new Set<PublicMcpToolName>()
+  const visibleToolNames = PUBLIC_MCP_TOOL_NAMES.filter((name) =>
+    isToolVisibleAcrossProducts(context, name)
+  )
+  const visibleToolNameSet = new Set(visibleToolNames)
+  const visiblePromptCatalog = workspaceVisiblePromptCatalog({
+    tables: isToolVisibleAcrossProducts(context, "list_tables"),
+    workflows: isToolVisibleAcrossProducts(context, "create_workflow"),
+  })
 
   function toolConfig(name: PublicMcpToolName, inputSchema?: any) {
     const definition = PUBLIC_MCP_TOOLS[name]
@@ -180,6 +246,7 @@ function registerTools(
     inputSchema: any,
     handler: (args: any) => Promise<any>
   ) {
+    if (!visibleToolNameSet.has(name)) return
     if (inputSchema !== PUBLIC_MCP_TOOL_SCHEMAS[name]) {
       throw new Error(
         `Public MCP tool ${name} was registered with a non-canonical input schema.`
@@ -189,7 +256,29 @@ function registerTools(
       throw new Error(`Public MCP tool ${name} was registered more than once.`)
     }
     registeredTools.add(name)
-    server.registerTool(name, toolConfig(name, inputSchema), handler)
+    server.registerTool(
+      name,
+      toolConfig(name, inputSchema),
+      async (args: any) => {
+        if (workspaceCapabilityForTool(name) !== null) {
+          try {
+            const selectedContext = toolContext(args)
+            selectedContext.workspaceCapabilitiesByProduct =
+              await loadRepositoryCapabilities(repository, [
+                selectedContext.productId,
+              ])
+            context.workspaceCapabilitiesByProduct = {
+              ...context.workspaceCapabilitiesByProduct,
+              ...selectedContext.workspaceCapabilitiesByProduct,
+            }
+            assertWorkspaceToolAllowed(selectedContext, name)
+          } catch (error) {
+            return jsonErrorResult(error)
+          }
+        }
+        return handler(args)
+      }
+    )
   }
 
   registerPublicTool("get_context", undefined, async () =>
@@ -206,9 +295,12 @@ function registerTools(
         tokenName: context.tokenName ?? null,
         scopes: context.scopes ?? null,
         capabilities: {
-          effective: listContextCapabilities(context),
+          effective: projectMcpCapabilitiesForWorkspace(
+            context,
+            listContextCapabilities(context)
+          ),
           tools: Object.fromEntries(
-            PUBLIC_MCP_TOOL_NAMES.map((toolName) => [
+            visibleToolNames.map((toolName) => [
               toolName,
               requiredCapabilitiesForTool(toolName).every((capability) =>
                 canUseCapability(context, capability)
@@ -217,13 +309,13 @@ function registerTools(
           ),
           read: canUseCapability(context, "context.read"),
           execute:
-            canUseCapability(context, "surf_points.execute") ||
+            canUseCapability(context, "workflows.execute") ||
             canUseCapability(context, "deepline.execute"),
           write:
             canUseCapability(context, "products.write") ||
-            canUseCapability(context, "surf_points.execute") ||
-            canUseCapability(context, "surf_points.write") ||
-            canUseCapability(context, "surf_points.delete") ||
+            canUseCapability(context, "workflows.execute") ||
+            canUseCapability(context, "workflows.write") ||
+            canUseCapability(context, "workflows.delete") ||
             canUseCapability(context, "tables.write") ||
             canUseCapability(context, "tables.delete") ||
             canUseCapability(context, "schemas.write") ||
@@ -265,18 +357,23 @@ function registerTools(
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("find_capabilities")
-        const tools = PUBLIC_MCP_TOOL_NAMES.filter(
-          (name) =>
-            name !== "find_capabilities" &&
-            canUseCapability(context, PUBLIC_MCP_TOOLS[name].requiredCapability)
-        ).map((name) => ({
-          name,
-          title: PUBLIC_MCP_TOOLS[name].title,
-          description: PUBLIC_MCP_TOOLS[name].description,
-        }))
+        const tools = visibleToolNames
+          .filter(
+            (name) =>
+              name !== "find_capabilities" &&
+              canUseCapability(
+                context,
+                PUBLIC_MCP_TOOLS[name].requiredCapability
+              )
+          )
+          .map((name) => ({
+            name,
+            title: PUBLIC_MCP_TOOLS[name].title,
+            description: PUBLIC_MCP_TOOLS[name].description,
+          }))
         return searchCapabilities(
           typeof args?.query === "string" ? args.query : "",
-          { tools, prompts: PROMPT_CATALOG }
+          { tools, prompts: visiblePromptCatalog }
         )
       })
   )
@@ -288,47 +385,44 @@ function registerTools(
     })
   )
 
-  registerPublicTool(
-    "list_surf_points",
-    listSurfPointsSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("list_surf_points")
-        return repository.listSurfPoints(toolContext(args), args)
-      })
+  registerPublicTool("list_workflows", listWorkflowsSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("list_workflows")
+      return repository.listWorkflows(toolContext(args), args)
+    })
   )
 
-  registerPublicTool("get_surf_point", getSurfPointSchema, async (args: any) =>
+  registerPublicTool("get_workflow", getWorkflowSchema, async (args: any) =>
     runJsonTool(async () => {
-      assertToolAllowed("get_surf_point")
-      return repository.getSurfPoint(toolContext(args), args.surfPointId)
+      assertToolAllowed("get_workflow")
+      return repository.getWorkflow(toolContext(args), args.workflowId)
     })
   )
 
   registerPublicTool(
-    "create_surf_point",
-    createSurfPointSchema,
+    "create_workflow",
+    createWorkflowSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("create_surf_point")
-        return repository.createSurfPoint(toolContext(args), args)
+        assertToolAllowed("create_workflow")
+        return repository.createWorkflow(toolContext(args), args)
       })
   )
 
   registerPublicTool(
-    "update_surf_point",
-    updateSurfPointSchema,
+    "update_workflow",
+    updateWorkflowSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("update_surf_point")
-        return repository.updateSurfPoint(toolContext(args), args)
+        assertToolAllowed("update_workflow")
+        return repository.updateWorkflow(toolContext(args), args)
       })
   )
 
-  registerPublicTool("run_surf_point", runSurfPointSchema, async (args: any) =>
+  registerPublicTool("run_workflow", runWorkflowSchema, async (args: any) =>
     runJsonTool(async () => {
-      assertToolAllowed("run_surf_point")
-      return repository.runSurfPoint(toolContext(args), args)
+      assertToolAllowed("run_workflow")
+      return repository.runWorkflow(toolContext(args), args)
     })
   )
 
@@ -367,12 +461,12 @@ function registerTools(
   )
 
   registerPublicTool(
-    "delete_surf_point",
-    deleteSurfPointSchema,
+    "delete_workflow",
+    deleteWorkflowSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("delete_surf_point")
-        return repository.deleteSurfPoints(toolContext(args), args.surfPointIds)
+        assertToolAllowed("delete_workflow")
+        return repository.deleteWorkflows(toolContext(args), args.workflowIds)
       })
   )
 
@@ -384,26 +478,13 @@ function registerTools(
   )
 
   registerPublicTool(
-    "update_surf_point_flow",
-    updateSurfPointFlowSchema,
+    "edit_workflow_flows",
+    editWorkflowFlowsSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("update_surf_point_flow")
-        return repository.updateSurfPointFlow(toolContext(args), {
-          playbookId: args.playbookId,
-          flow: args.flow,
-        })
-      })
-  )
-
-  registerPublicTool(
-    "apply_surf_point_edits",
-    applyFlowEditsSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("apply_surf_point_edits")
+        assertToolAllowed("edit_workflow_flows")
         return repository.applyFlowEdits(toolContext(args), {
-          playbookId: args.playbookId,
+          workflowId: args.workflowId,
           edits: args.edits,
         })
       })
@@ -416,7 +497,7 @@ function registerTools(
       runJsonTool(async () => {
         assertToolAllowed("get_node_upstream_context")
         return repository.getNodeUpstreamContext(toolContext(args), {
-          playbookId: args.playbookId,
+          workflowId: args.workflowId,
           nodeId: args.nodeId,
         })
       })
@@ -429,8 +510,10 @@ function registerTools(
       runJsonTool(async () => {
         assertToolAllowed("create_campaign")
         return repository.createCampaign(toolContext(args), {
-          playbookId: args.playbookId,
-          contactTableId: args.contactTableId,
+          name: args.name,
+          goal: args.goal,
+          description: args.description,
+          audienceDatabaseId: args.audienceDatabaseId,
           recipientField: args.recipientField,
           mailbox: args.mailbox,
           steps: args.steps,
@@ -439,13 +522,13 @@ function registerTools(
   )
 
   registerPublicTool(
-    "test_surf_point_node",
-    testSurfPointNodeSchema,
+    "test_workflow_node",
+    testWorkflowNodeSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("test_surf_point_node")
-        return repository.testSurfPointNode(toolContext(args), {
-          playbookId: args.playbookId,
+        assertToolAllowed("test_workflow_node")
+        return repository.testWorkflowNode(toolContext(args), {
+          workflowId: args.workflowId,
           nodeId: args.nodeId,
           sampleText: args.sampleText,
         })
@@ -596,75 +679,66 @@ function registerTools(
 
   registerPublicTool(
     "list_signals",
-    listSurfPointSourcesSchema,
+    listWorkflowSourcesSchema,
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("list_signals")
-        return repository.listSurfPointSources(
+        return repository.listWorkflowSources(
           toolContext(args),
-          args.surfPointId
+          args.workflowId
         )
       })
   )
 
   registerPublicTool(
     "create_signal",
-    createSurfPointSourceSchema,
+    createWorkflowSourceSchema,
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("create_signal")
-        return repository.createSurfPointSource(toolContext(args), args)
+        return repository.createWorkflowSource(toolContext(args), args)
       })
   )
 
   registerPublicTool(
     "update_signal",
-    updateSurfPointSourceSchema,
+    updateWorkflowSourceSchema,
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("update_signal")
-        return repository.updateSurfPointSource(toolContext(args), args)
+        return repository.updateWorkflowSource(toolContext(args), args)
       })
   )
 
   registerPublicTool(
     "delete_signal",
-    deleteSurfPointSourceSchema,
+    deleteWorkflowSourceSchema,
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("delete_signal")
-        return repository.deleteSurfPointSource(toolContext(args), args)
+        return repository.deleteWorkflowSource(toolContext(args), args)
       })
   )
 
-  registerPublicTool(
-    "enable_enrich",
-    enableEnrichSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("enable_enrich")
-        return repository.enableEnrich(toolContext(args), args)
-      })
+  registerPublicTool("enable_enrich", enableEnrichSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("enable_enrich")
+      return repository.enableEnrich(toolContext(args), args)
+    })
   )
 
-  registerPublicTool(
-    "disable_enrich",
-    disableEnrichSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("disable_enrich")
-        return repository.disableEnrich(toolContext(args), args)
-      })
+  registerPublicTool("disable_enrich", disableEnrichSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("disable_enrich")
+      return repository.disableEnrich(toolContext(args), args)
+    })
   )
 
-  registerPublicTool(
-    "list_enrich",
-    listEnrichSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("list_enrich")
-        return repository.listEnrich(toolContext(args), args)
-      })
+  registerPublicTool("list_enrich", listEnrichSchema, async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("list_enrich")
+      return repository.listEnrich(toolContext(args), args)
+    })
   )
 
   registerPublicTool("run_enrich", runEnrichSchema, async (args: any) =>
@@ -685,15 +759,12 @@ function registerTools(
   )
 
   registerPublicTool(
-    "list_surf_point_tools",
-    listSurfPointToolsSchema,
+    "list_workflow_tools",
+    listWorkflowToolsSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("list_surf_point_tools")
-        return repository.listSurfPointTools(
-          toolContext(args),
-          args.surfPointId
-        )
+        assertToolAllowed("list_workflow_tools")
+        return repository.listWorkflowTools(toolContext(args), args.workflowId)
       })
   )
 
@@ -787,7 +858,7 @@ function registerTools(
       })
   )
 
-  const missingTools = PUBLIC_MCP_TOOL_NAMES.filter(
+  const missingTools = visibleToolNames.filter(
     (name) => !registeredTools.has(name)
   )
   if (missingTools.length > 0) {
@@ -825,163 +896,171 @@ function registerResources(
         role: context.role,
         tokenName: context.tokenName ?? null,
         scopes: context.scopes ?? null,
-        capabilities: listContextCapabilities(context),
+        capabilities: projectMcpCapabilitiesForWorkspace(
+          context,
+          listContextCapabilities(context)
+        ),
       })
     }
   )
 
   if (contextProductIds.length > 1) return
 
-  server.registerResource(
-    "signalsurf_surf_points",
-    "signalsurf://surf-points",
-    {
-      title: "SignalSurf Surf Points",
-      description: "Non-deleted surf points for the current product.",
-      mimeType: "application/json",
-    },
-    async (uri) => {
-      assertCanUseCapability(context, "surf_points.read")
-      return jsonResource(
-        uri.href,
-        await repository.listSurfPoints(resolveProductContext(context), {
-          limit: 200,
-        })
-      )
-    }
-  )
-
-  server.registerResource(
-    "signalsurf_surf_point",
-    new ResourceTemplate("signalsurf://surf-points/{surfPointId}", {
-      list: async () => {
-        if (!canUseCapability(context, "surf_points.read")) {
-          return { resources: [] }
-        }
-        const { surfPoints } = await repository.listSurfPoints(
-          resolveProductContext(context),
-          {
-            limit: 200,
-          }
-        )
-        return {
-          resources: surfPoints.map(
-            (surfPoint: { surfPointId: string; name: string }) => ({
-              uri: `signalsurf://surf-points/${surfPoint.surfPointId}`,
-              name: `Surf Point: ${surfPoint.name}`,
-              title: surfPoint.name,
-              description: `SignalSurf surf point ${surfPoint.name}`,
-              mimeType: "application/json",
-            })
-          ),
-        }
+  if (
+    workspaceCapabilityEnabled(context, "workflows") ||
+    workspaceCapabilityEnabled(context, "listening")
+  ) {
+    server.registerResource(
+      "signalsurf_workflows",
+      "signalsurf://workflows",
+      {
+        title: "SignalSurf Workflows",
+        description: "Non-deleted Workflows for the current product.",
+        mimeType: "application/json",
       },
-    }),
-    {
-      title: "SignalSurf Surf Point",
-      description: "One surf point by surfPointId.",
-      mimeType: "application/json",
-    },
-    async (uri, variables) => {
-      assertCanUseCapability(context, "surf_points.read")
-      return jsonResource(
-        uri.href,
-        await repository.getSurfPoint(
-          resolveProductContext(context),
-          String(variables.surfPointId ?? "")
-        )
-      )
-    }
-  )
-
-  server.registerResource(
-    "signalsurf_surf_point_sources",
-    new ResourceTemplate("signalsurf://surf-points/{surfPointId}/sources", {
-      list: async () => {
-        if (
-          !canUseCapability(context, "sources.read") ||
-          !canUseCapability(context, "surf_points.read")
-        ) {
-          return { resources: [] }
-        }
-        const { surfPoints } = await repository.listSurfPoints(
-          resolveProductContext(context),
-          {
+      async (uri) => {
+        assertCanUseCapability(context, "workflows.read")
+        return jsonResource(
+          uri.href,
+          await repository.listWorkflows(resolveProductContext(context), {
             limit: 200,
-          }
+          })
         )
-        return {
-          resources: surfPoints.map(
-            (surfPoint: { surfPointId: string; name: string }) => ({
-              uri: `signalsurf://surf-points/${surfPoint.surfPointId}/sources`,
-              name: `Sources: ${surfPoint.name}`,
-              title: `${surfPoint.name} Sources`,
-              description: `Safe source metadata for SignalSurf surf point ${surfPoint.name}`,
-              mimeType: "application/json",
-            })
-          ),
-        }
-      },
-    }),
-    {
-      title: "SignalSurf Surf Point Sources",
-      description: "Safe source metadata for one surf point.",
-      mimeType: "application/json",
-    },
-    async (uri, variables) => {
-      assertCanUseCapability(context, "sources.read")
-      return jsonResource(
-        uri.href,
-        await repository.listSurfPointSources(
-          resolveProductContext(context),
-          String(variables.surfPointId ?? "")
-        )
-      )
-    }
-  )
+      }
+    )
 
-  server.registerResource(
-    "signalsurf_surf_point_tools",
-    new ResourceTemplate("signalsurf://surf-points/{surfPointId}/tools", {
-      list: async () => {
-        if (!canUseCapability(context, "surf_points.read")) {
-          return { resources: [] }
-        }
-        const { surfPoints } = await repository.listSurfPoints(
-          resolveProductContext(context),
-          {
-            limit: 200,
+    server.registerResource(
+      "signalsurf_workflow",
+      new ResourceTemplate("signalsurf://workflows/{workflowId}", {
+        list: async () => {
+          if (!canUseCapability(context, "workflows.read")) {
+            return { resources: [] }
           }
-        )
-        return {
-          resources: surfPoints.map(
-            (surfPoint: { surfPointId: string; name: string }) => ({
-              uri: `signalsurf://surf-points/${surfPoint.surfPointId}/tools`,
-              name: `Tools: ${surfPoint.name}`,
-              title: `${surfPoint.name} Tools`,
-              description: `Tool ids attached to SignalSurf surf point ${surfPoint.name}`,
-              mimeType: "application/json",
-            })
-          ),
-        }
+          const { workflows } = await repository.listWorkflows(
+            resolveProductContext(context),
+            {
+              limit: 200,
+            }
+          )
+          return {
+            resources: workflows.map(
+              (workflow: { workflowId: string; name: string }) => ({
+                uri: `signalsurf://workflows/${workflow.workflowId}`,
+                name: `Workflow: ${workflow.name}`,
+                title: workflow.name,
+                description: `SignalSurf Workflow ${workflow.name}`,
+                mimeType: "application/json",
+              })
+            ),
+          }
+        },
+      }),
+      {
+        title: "SignalSurf Workflow",
+        description: "One Workflow by workflowId.",
+        mimeType: "application/json",
       },
-    }),
-    {
-      title: "SignalSurf Surf Point Tools",
-      description: "Tool ids attached to one surf point.",
-      mimeType: "application/json",
-    },
-    async (uri, variables) => {
-      assertCanUseCapability(context, "surf_points.read")
-      return jsonResource(
-        uri.href,
-        await repository.listSurfPointTools(
-          resolveProductContext(context),
-          String(variables.surfPointId ?? "")
+      async (uri, variables) => {
+        assertCanUseCapability(context, "workflows.read")
+        return jsonResource(
+          uri.href,
+          await repository.getWorkflow(
+            resolveProductContext(context),
+            String(variables.workflowId ?? "")
+          )
         )
-      )
-    }
-  )
+      }
+    )
+
+    server.registerResource(
+      "signalsurf_workflow_sources",
+      new ResourceTemplate("signalsurf://workflows/{workflowId}/sources", {
+        list: async () => {
+          if (
+            !canUseCapability(context, "sources.read") ||
+            !canUseCapability(context, "workflows.read")
+          ) {
+            return { resources: [] }
+          }
+          const { workflows } = await repository.listWorkflows(
+            resolveProductContext(context),
+            {
+              limit: 200,
+            }
+          )
+          return {
+            resources: workflows.map(
+              (workflow: { workflowId: string; name: string }) => ({
+                uri: `signalsurf://workflows/${workflow.workflowId}/sources`,
+                name: `Sources: ${workflow.name}`,
+                title: `${workflow.name} Sources`,
+                description: `Safe source metadata for SignalSurf Workflow ${workflow.name}`,
+                mimeType: "application/json",
+              })
+            ),
+          }
+        },
+      }),
+      {
+        title: "SignalSurf Workflow Sources",
+        description: "Safe source metadata for one Workflow.",
+        mimeType: "application/json",
+      },
+      async (uri, variables) => {
+        assertCanUseCapability(context, "sources.read")
+        return jsonResource(
+          uri.href,
+          await repository.listWorkflowSources(
+            resolveProductContext(context),
+            String(variables.workflowId ?? "")
+          )
+        )
+      }
+    )
+
+    server.registerResource(
+      "signalsurf_workflow_tools",
+      new ResourceTemplate("signalsurf://workflows/{workflowId}/tools", {
+        list: async () => {
+          if (!canUseCapability(context, "workflows.read")) {
+            return { resources: [] }
+          }
+          const { workflows } = await repository.listWorkflows(
+            resolveProductContext(context),
+            {
+              limit: 200,
+            }
+          )
+          return {
+            resources: workflows.map(
+              (workflow: { workflowId: string; name: string }) => ({
+                uri: `signalsurf://workflows/${workflow.workflowId}/tools`,
+                name: `Tools: ${workflow.name}`,
+                title: `${workflow.name} Tools`,
+                description: `Tool ids attached to SignalSurf Workflow ${workflow.name}`,
+                mimeType: "application/json",
+              })
+            ),
+          }
+        },
+      }),
+      {
+        title: "SignalSurf Workflow Tools",
+        description: "Tool ids attached to one Workflow.",
+        mimeType: "application/json",
+      },
+      async (uri, variables) => {
+        assertCanUseCapability(context, "workflows.read")
+        return jsonResource(
+          uri.href,
+          await repository.listWorkflowTools(
+            resolveProductContext(context),
+            String(variables.workflowId ?? "")
+          )
+        )
+      }
+    )
+  }
 
   server.registerResource(
     "signalsurf_product_tools",
@@ -992,7 +1071,7 @@ function registerResources(
       mimeType: "application/json",
     },
     async (uri) => {
-      assertCanUseCapability(context, "surf_points.read")
+      assertCanUseCapability(context, "workflows.read")
       return jsonResource(
         uri.href,
         await repository.listProductTools(resolveProductContext(context), {
@@ -1002,127 +1081,134 @@ function registerResources(
     }
   )
 
-  server.registerResource(
-    "signalsurf_surf_jobs",
-    "signalsurf://surf-jobs",
-    {
-      title: "SignalSurf Surf Jobs",
-      description: "Recent surf point execution jobs for the current product.",
-      mimeType: "application/json",
-    },
-    async (uri) => {
-      assertCanUseCapability(context, "surf_points.read")
-      return jsonResource(
-        uri.href,
-        await repository.listSurfJobs(resolveProductContext(context), {
-          limit: 100,
-        })
-      )
-    }
-  )
-
-  server.registerResource(
-    "signalsurf_surf_job",
-    new ResourceTemplate("signalsurf://surf-jobs/{jobId}", {
-      list: async () => {
-        if (!canUseCapability(context, "surf_points.read")) {
-          return { resources: [] }
-        }
-        const { jobs } = await repository.listSurfJobs(
-          resolveProductContext(context),
-          {
+  if (
+    workspaceCapabilityEnabled(context, "workflows") ||
+    workspaceCapabilityEnabled(context, "listening")
+  ) {
+    server.registerResource(
+      "signalsurf_surf_jobs",
+      "signalsurf://surf-jobs",
+      {
+        title: "SignalSurf Surf Jobs",
+        description: "Recent Workflow execution jobs for the current product.",
+        mimeType: "application/json",
+      },
+      async (uri) => {
+        assertCanUseCapability(context, "workflows.read")
+        return jsonResource(
+          uri.href,
+          await repository.listSurfJobs(resolveProductContext(context), {
             limit: 100,
-          }
+          })
         )
-        return {
-          resources: jobs.map((job: { jobId: string; status: string }) => ({
-            uri: `signalsurf://surf-jobs/${job.jobId}`,
-            name: `Surf Job: ${job.jobId}`,
-            title: `Surf Job ${job.jobId}`,
-            description: `SignalSurf surf job with status ${job.status}`,
-            mimeType: "application/json",
-          })),
-        }
-      },
-    }),
-    {
-      title: "SignalSurf Surf Job",
-      description: "One surf point execution job by job id.",
-      mimeType: "application/json",
-    },
-    async (uri, variables) => {
-      assertCanUseCapability(context, "surf_points.read")
-      return jsonResource(
-        uri.href,
-        await repository.getSurfJob(
-          resolveProductContext(context),
-          String(variables.jobId ?? "")
-        )
-      )
-    }
-  )
+      }
+    )
 
-  server.registerResource(
-    "signalsurf_databases",
-    "signalsurf://databases",
-    {
-      title: "SignalSurf Databases",
-      description: "Databases/tables for the current product.",
-      mimeType: "application/json",
-    },
-    async (uri) => {
-      assertCanUseCapability(context, "tables.read")
-      return jsonResource(
-        uri.href,
-        await repository.listDatabases(resolveProductContext(context), {
-          limit: 200,
-        })
-      )
-    }
-  )
-
-  server.registerResource(
-    "signalsurf_database_rows",
-    new ResourceTemplate("signalsurf://databases/{databaseId}/rows", {
-      list: async () => {
-        if (!canUseCapability(context, "tables.read")) {
-          return { resources: [] }
-        }
-        const { databases } = await repository.listDatabases(
-          resolveProductContext(context),
-          {
-            limit: 200,
+    server.registerResource(
+      "signalsurf_surf_job",
+      new ResourceTemplate("signalsurf://surf-jobs/{jobId}", {
+        list: async () => {
+          if (!canUseCapability(context, "workflows.read")) {
+            return { resources: [] }
           }
-        )
-        return {
-          resources: databases.map(
-            (database: { databaseId: string; name: string }) => ({
-              uri: `signalsurf://databases/${database.databaseId}/rows`,
-              name: `Rows: ${database.name}`,
-              title: `${database.name} Rows`,
-              description: `Rows for SignalSurf database ${database.name}`,
+          const { jobs } = await repository.listSurfJobs(
+            resolveProductContext(context),
+            {
+              limit: 100,
+            }
+          )
+          return {
+            resources: jobs.map((job: { jobId: string; status: string }) => ({
+              uri: `signalsurf://surf-jobs/${job.jobId}`,
+              name: `Surf Job: ${job.jobId}`,
+              title: `Surf Job ${job.jobId}`,
+              description: `SignalSurf surf job with status ${job.status}`,
               mimeType: "application/json",
-            })
-          ),
-        }
+            })),
+          }
+        },
+      }),
+      {
+        title: "SignalSurf Surf Job",
+        description: "One Workflow execution job by job id.",
+        mimeType: "application/json",
       },
-    }),
-    {
-      title: "SignalSurf Database Rows",
-      description:
-        "Rows for one SignalSurf database. Use the databaseId template variable.",
-      mimeType: "application/json",
-    },
-    async (uri, variables) => {
-      assertCanUseCapability(context, "tables.read")
-      const databaseId = String(variables.databaseId ?? "")
-      return jsonResource(
-        uri.href,
-        await repository.readTable(resolveProductContext(context), {
-          databaseId,
-          limit: 100,
-        })
-      )
-    }
-  )
+      async (uri, variables) => {
+        assertCanUseCapability(context, "workflows.read")
+        return jsonResource(
+          uri.href,
+          await repository.getSurfJob(
+            resolveProductContext(context),
+            String(variables.jobId ?? "")
+          )
+        )
+      }
+    )
+  }
+
+  if (workspaceCapabilityEnabled(context, "tables")) {
+    server.registerResource(
+      "signalsurf_databases",
+      "signalsurf://databases",
+      {
+        title: "SignalSurf Databases",
+        description: "Databases/tables for the current product.",
+        mimeType: "application/json",
+      },
+      async (uri) => {
+        assertCanUseCapability(context, "tables.read")
+        return jsonResource(
+          uri.href,
+          await repository.listDatabases(resolveProductContext(context), {
+            limit: 200,
+          })
+        )
+      }
+    )
+
+    server.registerResource(
+      "signalsurf_database_rows",
+      new ResourceTemplate("signalsurf://databases/{databaseId}/rows", {
+        list: async () => {
+          if (!canUseCapability(context, "tables.read")) {
+            return { resources: [] }
+          }
+          const { databases } = await repository.listDatabases(
+            resolveProductContext(context),
+            {
+              limit: 200,
+            }
+          )
+          return {
+            resources: databases.map(
+              (database: { databaseId: string; name: string }) => ({
+                uri: `signalsurf://databases/${database.databaseId}/rows`,
+                name: `Rows: ${database.name}`,
+                title: `${database.name} Rows`,
+                description: `Rows for SignalSurf database ${database.name}`,
+                mimeType: "application/json",
+              })
+            ),
+          }
+        },
+      }),
+      {
+        title: "SignalSurf Database Rows",
+        description:
+          "Rows for one SignalSurf database. Use the databaseId template variable.",
+        mimeType: "application/json",
+      },
+      async (uri, variables) => {
+        assertCanUseCapability(context, "tables.read")
+        const databaseId = String(variables.databaseId ?? "")
+        return jsonResource(
+          uri.href,
+          await repository.readTable(resolveProductContext(context), {
+            databaseId,
+            limit: 100,
+          })
+        )
+      }
+    )
+  }
 }

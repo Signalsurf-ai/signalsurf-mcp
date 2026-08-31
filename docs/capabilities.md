@@ -18,13 +18,13 @@ agent-facing capabilities should have a public MCP equivalent.
 
 | Scope                        | Capability grant                                                                                   |
 | ---------------------------- | -------------------------------------------------------------------------------------------------- |
-| `mcp:read`                   | `context.read`, `surf_points.read`, `tables.read`, `schemas.read`, `sources.read`, `deepline.read` |
+| `mcp:read`                   | `context.read`, `workflows.read`, `tables.read`, `schemas.read`, `sources.read`, `deepline.read` |
 | `mcp:write`                  | All current read, write, execute, and delete capabilities                                          |
 | `mcp:products.write`         | `context.read`, `products.write`                                                                   |
-| `mcp:surf_points.read`       | `context.read`, `surf_points.read`                                                                 |
-| `mcp:surf_points.write`      | `context.read`, `surf_points.read`, `surf_points.write`                                            |
-| `mcp:surf_points.execute`    | `context.read`, `surf_points.read`, `surf_points.execute`                                          |
-| `mcp:surf_points.delete`     | `context.read`, `surf_points.read`, `surf_points.delete`                                           |
+| `mcp:workflows.read`       | `context.read`, `workflows.read`                                                                 |
+| `mcp:workflows.write`      | `context.read`, `workflows.read`, `workflows.write`                                            |
+| `mcp:workflows.execute`    | `context.read`, `workflows.read`, `workflows.execute`                                          |
+| `mcp:workflows.delete`     | `context.read`, `workflows.read`, `workflows.delete`                                           |
 | `mcp:tables.read`            | `context.read`, `tables.read`                                                                      |
 | `mcp:tables.write`           | `context.read`, `tables.read`, `tables.write`                                                      |
 | `mcp:tables.delete`          | `context.read`, `tables.read`, `tables.delete`                                                     |
@@ -58,26 +58,26 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `get_context`               | `context.read`           | No          | Returns authorized product ids/names, workspace names, user, role, scopes, and per-tool access booleans               |
 | `get_brand_context`         | `context.read`           | No          | Reads the active product's brand/positioning context from product goals (empty fields before brand setup)             |
 | `create_product`            | `products.write`         | No          | Creates a product through hosted OAuth and expands the active grant                                                   |
-| `list_surf_points`          | `surf_points.read`       | No          | Lists non-deleted Surf Points for one authorized product                                                              |
-| `get_surf_point`            | `surf_points.read`       | No          | Reads one product-scoped Surf Point                                                                                   |
-| `create_surf_point`         | `surf_points.write`      | No          | Creates a Surf Point in one authorized product                                                                        |
-| `update_surf_point`         | `surf_points.write`      | No          | Mutates Surf Point metadata, prompts, targets, or JSON config                                                         |
-| `run_surf_point`            | `surf_points.execute`    | No          | Queues an active Surf Point for asynchronous execution                                                                |
-| `get_surf_job`              | `surf_points.read`       | No          | Reads one product-scoped Surf Point execution job                                                                     |
-| `wait_for_surf_job`         | `surf_points.read`       | No          | Polls one Surf Point execution job until terminal status or timeout                                                   |
-| `list_surf_jobs`            | `surf_points.read`       | No          | Lists product-scoped Surf Point execution jobs                                                                        |
-| `cancel_surf_job`           | `surf_points.execute`    | No          | Cancels a pending Surf Point execution job                                                                            |
-| `delete_surf_point`         | `surf_points.delete`     | Yes         | Soft-deletes Surf Points and cancels pending jobs                                                                     |
+| `list_workflows`          | `workflows.read`       | No          | Lists non-deleted Workflows for one authorized product                                                              |
+| `get_workflow`            | `workflows.read`       | No          | Reads one product-scoped Workflow                                                                                   |
+| `create_workflow`         | `workflows.write`      | No          | Creates a Workflow in one authorized product                                                                        |
+| `update_workflow`         | `workflows.write`      | No          | Mutates Workflow metadata, prompts, targets, or JSON config                                                         |
+| `run_workflow`            | `workflows.execute`    | No          | Queues an active Workflow for asynchronous execution                                                                |
+| `get_surf_job`              | `workflows.read`       | No          | Reads one product-scoped Workflow execution job                                                                     |
+| `wait_for_surf_job`         | `workflows.read`       | No          | Polls one Workflow execution job until terminal status or timeout                                                   |
+| `list_surf_jobs`            | `workflows.read`       | No          | Lists product-scoped Workflow execution jobs                                                                        |
+| `cancel_surf_job`           | `workflows.execute`    | No          | Cancels a pending Workflow execution job                                                                            |
+| `delete_workflow`         | `workflows.delete`     | Yes         | Soft-deletes Workflows and cancels pending jobs                                                                     |
 | `list_tables`               | `tables.read`            | No          | Lists product tables                                                                                                  |
 | `create_table`              | `schemas.write`          | No          | Creates a table from the provider-first 13-field Accounts baseline, Contacts baseline, or custom schema               |
 | `update_table`              | `schemas.write`          | No          | Applies template upgrades while preserving additive fields/data and hiding known legacy Accounts fields               |
-| `delete_table`              | `tables.delete`          | Yes         | Deletes user-facing tables and unlinks them from active Surf Points after product-scope verification                  |
+| `delete_table`              | `tables.delete`          | Yes         | Deletes user-facing tables and unlinks them from active Workflows after product-scope verification                  |
 | `list_table_views`          | `tables.read`            | No          | Lists saved table views from view configuration                                                                       |
 | `read_table`                | `tables.read`            | No          | Reads rows with pagination, containment filters, and UI-style filters/sorts                                           |
 | `read_table_view`           | `tables.read`            | No          | Reads rows using compatible saved-view filters/sorts                                                                  |
 | `get_table_row`             | `tables.read`            | No          | Reads one product-scoped row                                                                                          |
 | `create_table_row`          | `tables.write`           | No          | Creates rows with server-side MCP provenance                                                                          |
-| `update_table_rows`         | `tables.write`           | No          | Edits 1-100 rows (array-based, single or batch) with distinct data/note/playbookId per row, changelog-preserving RPCs |
+| `update_table_rows`         | `tables.write`           | No          | Edits 1-100 rows (array-based, single or batch) with distinct data/note/workflowId per row, changelog-preserving RPCs |
 | `delete_table_rows`         | `tables.delete`          | Yes         | Hard-deletes rows after product-scope verification                                                                    |
 | `list_table_fields`         | `schemas.read`           | No          | Lists schema fields and relation definitions                                                                          |
 | `add_table_field`           | `schemas.write`          | No          | Adds one schema field without backfilling row data                                                                    |
@@ -85,15 +85,15 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `remove_table_field`        | `schemas.write`          | No          | Removes one schema field without deleting row data                                                                    |
 | `create_relation_field`     | `schemas.write`          | No          | Adds an `item_ref` relation field to a product-owned target database                                                  |
 | `list_signals`              | `sources.read`           | No          | Lists safe signal metadata only; config and credentials are not exposed                                               |
-| `create_signal`             | `sources.write`          | No          | Creates a signal for a Surf Point with typed config and product-scope validation                                      |
+| `create_signal`             | `sources.write`          | No          | Creates a signal for a Workflow with typed config and product-scope validation                                      |
 | `update_signal`             | `sources.write`          | No          | Updates signal name, active state (enable/pause), typed config, `pull_config`, `metadata`, or `data_schema`           |
 | `delete_signal`             | `sources.write`          | Yes         | Deletes signals after product-scope validation and removes non-terminal jobs for those source ids                     |
-| `enable_enrich`         | `sources.write`          | No          | Binds a hidden manual-trigger source to one table column with instruction, optional auto-fill, and optional run gate  |
-| `disable_enrich`        | `sources.write`          | No          | Turns off a column binding while preserving its instruction and gate                                                  |
-| `list_enrich`           | `sources.read`           | No          | Lists Enrich-enabled columns for a table with their instructions                                                  |
-| `run_enrich`            | `surf_points.execute`    | No          | Queues enrichment, skips populated cells by default, and requires explicit overwrite consent for refreshes            |
-| `list_product_tools`        | `surf_points.read`       | No          | Lists safe product tool metadata; config secrets are not exposed                                                      |
-| `list_surf_point_tools`     | `surf_points.read`       | No          | Lists tool ids from `tool_config.auto_tool_ids` (attach/detach via `update_surf_point` toolConfigPatch)               |
+| `enable_enrich`             | `sources.write`          | No          | Binds a hidden manual-trigger source to one table column with instruction, optional auto-fill, and optional run gate  |
+| `disable_enrich`            | `sources.write`          | No          | Turns off a column binding while preserving its instruction and gate                                                  |
+| `list_enrich`               | `sources.read`           | No          | Lists Enrich-enabled columns for a table with their instructions                                                      |
+| `run_enrich`                | `workflows.execute`      | No          | Queues enrichment, skips populated cells by default, and requires explicit overwrite consent for refreshes           |
+| `list_product_tools`        | `workflows.read`         | No          | Lists safe product tool metadata; config secrets are not exposed                                                      |
+| `list_workflow_tools`       | `workflows.read`         | No          | Lists tool ids from `tool_config.auto_tool_ids` (attach/detach via `update_workflow` toolConfigPatch)                 |
 | `search_instagram_content`  | `creator_discovery.read` | No          | Searches public Instagram posts after one-time Web approval; three credits per page, no Reels fallback                |
 | `deepline_search_people`    | `deepline.read`          | No          | Runs a bounded managed Crustdata V3 people search after one-time Web approval; Apollo is an explicit BYOC override    |
 | `deepline_search_companies` | `deepline.read`          | No          | Runs a bounded managed Crustdata V3 company search after one-time Web approval; Apollo is an explicit BYOC override   |

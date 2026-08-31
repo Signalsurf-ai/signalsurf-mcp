@@ -39,7 +39,7 @@ function makeDb() {
         schema: { fields: [{ key: "work_email", type: "string" }] },
       },
     ],
-    playbooks: [],
+    workflows: [],
     sources: [],
     entries: [
       {
@@ -65,7 +65,7 @@ function makeRepo(db: FakeSupabase) {
 }
 
 describe("Enrich column enrichment", () => {
-  it("enables Enrich by creating a product-scoped surf point + manual_trigger source", async () => {
+  it("enables Enrich by creating a product-scoped Workflow + manual_trigger source", async () => {
     const db = makeDb()
     const repo = makeRepo(db)
 
@@ -77,18 +77,18 @@ describe("Enrich column enrichment", () => {
 
     expect(result.success).toBe(true)
     expect(result.reused).toBe(false)
-    expect(result.surfPointId).toBeTruthy()
+    expect(result.workflowId).toBeTruthy()
 
-    const playbook = db.tables.playbooks.find(
-      (p) => p.id === result.surfPointId
+    const workflow = db.tables.workflows.find(
+      (p) => p.id === result.workflowId
     )
-    expect(playbook?.product_id).toBe(context.productId)
-    expect(playbook?.surf_prompt).toContain("work email")
-    expect(playbook?.relevance_threshold).toBe(0)
+    expect(workflow?.product_id).toBe(context.productId)
+    expect(workflow?.surf_prompt).toContain("work email")
+    expect(workflow?.relevance_threshold).toBe(0)
 
     const source = db.tables.sources.find((s) => s.id === result.sourceId)
     expect(source?.type).toBe("internal")
-    expect(source?.playbook_id).toBe(result.surfPointId)
+    expect(source?.workflow_id).toBe(result.workflowId)
     expect(source?.metadata).toMatchObject({
       event_type: "manual_trigger",
       database_id: db1,
@@ -159,8 +159,8 @@ describe("Enrich column enrichment", () => {
     expect(second.reused).toBe(true)
     expect(second.sourceId).toBe(first.sourceId)
     expect(db.tables.sources).toHaveLength(1)
-    const playbook = db.tables.playbooks.find((p) => p.id === first.surfPointId)
-    expect(playbook?.surf_prompt).toBe("Updated instruction.")
+    const workflow = db.tables.workflows.find((p) => p.id === first.workflowId)
+    expect(workflow?.surf_prompt).toBe("Updated instruction.")
   })
 
   it("disable keeps the instruction (off-but-remembered) and list hides it; re-enable restores", async () => {
@@ -184,8 +184,8 @@ describe("Enrich column enrichment", () => {
     // surf_prompt is preserved even while disabled.
     const source = db.tables.sources[0]
     expect(source.metadata.disabled).toBe(true)
-    const playbook = db.tables.playbooks[0]
-    expect(playbook.surf_prompt).toBe("Keep me.")
+    const workflow = db.tables.workflows[0]
+    expect(workflow.surf_prompt).toBe("Keep me.")
 
     const restored = await repo.enableEnrich(context, {
       databaseId: db1,
