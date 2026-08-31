@@ -73,11 +73,18 @@ const TABLE_TOOLS = new Set<PublicMcpToolName>([
   "run_enrich",
 ])
 
+const SENDER_INFRASTRUCTURE_TOOLS = new Set<PublicMcpToolName>([
+  "inspect_sender_infrastructure",
+  "plan_sender_capacity",
+  "search_sender_domains",
+])
+
 export function workspaceCapabilityForTool(
   toolName: PublicMcpToolName
 ): WorkspaceCapability | null {
   if (WORKFLOW_TOOLS.has(toolName)) return "workflows"
   if (TABLE_TOOLS.has(toolName)) return "tables"
+  if (SENDER_INFRASTRUCTURE_TOOLS.has(toolName)) return "inbox"
   if (toolName === "create_campaign") return "campaigns"
   return null
 }
@@ -102,6 +109,9 @@ function workspaceCapabilityRequirementForTool(
     return { anyOf: ["tables", "objects", "listening"] }
   }
   if (toolName === "create_campaign") return { allOf: ["campaigns"] }
+  if (SENDER_INFRASTRUCTURE_TOOLS.has(toolName)) {
+    return { allOf: ["inbox"] }
+  }
   return null
 }
 
@@ -343,6 +353,7 @@ function workspaceCapabilitiesForMcpCapability(
     return ["tables", "objects", "listening"]
   }
   if (capability.startsWith("account_lists.")) return ["lists"]
+  if (capability.startsWith("sender_infrastructure.")) return ["inbox"]
   return []
 }
 

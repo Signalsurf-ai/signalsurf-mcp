@@ -681,7 +681,7 @@ export const PUBLIC_MCP_TOOLS = {
   search_sender_domains: {
     title: "Search Sender Domains",
     description:
-      "Check exact live availability and annual retail prices for requested managed Email Domains, or generate typeahead-style candidates from a brand seed. This is read-only: purchasing and registrant details stay in SignalSurf's secure in-app flow.",
+      "Check live availability for requested managed Email Domains, or generate typeahead-style candidates from a brand seed. This hosted read never computes customer pricing or authorizes purchase; exact retail price, plan-credit use, registrant details, and purchase confirmation stay in SignalSurf's secure in-app flow.",
     requiredCapability: "sender_infrastructure.read",
     surferSurface: "sender infrastructure",
     publicStatus: "supported",

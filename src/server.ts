@@ -109,7 +109,7 @@ I want to… →
 - Decide what to write into a column → call get_enrichment_context(databaseId[, fieldKey]) for brand context, schema, popular existing values, and field conventions.
 - Run or monitor a Workflow → run_workflow, then list_surf_jobs / wait_for_surf_job.
 - Inspect data → list_tables, read_table, list_database_fields.
-- Plan or inspect sender infrastructure → inspect_sender_infrastructure, then plan_sender_capacity; use search_sender_domains for exact live Domain quotes. Purchases and secrets stay in the secure SignalSurf app.
+- Plan or inspect sender infrastructure → inspect_sender_infrastructure, then plan_sender_capacity; use search_sender_domains for live Domain availability. Exact pricing, purchases, registrant details, and secrets stay in the secure SignalSurf app.
 
 When multiple products are authorized, pass products[].productId (from get_context) on every product-scoped call.`
 

@@ -1,9 +1,30 @@
 import type { SignalSurfContext, SupabaseLike } from "./types.js"
 import { UserFacingError } from "./errors.js"
 
-const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/
-const DOMAIN_PREFIXES = ["my", "go", "use", "try", "get", "the", "join", "hey", "with", "meet"]
-const DOMAIN_SUFFIXES = ["mail", "hq", "team", "hub", "app", "inbox", "mailer", "outreach"]
+const DOMAIN_PATTERN =
+  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/
+const DOMAIN_PREFIXES = [
+  "my",
+  "go",
+  "use",
+  "try",
+  "get",
+  "the",
+  "join",
+  "hey",
+  "with",
+  "meet",
+]
+const DOMAIN_SUFFIXES = [
+  "mail",
+  "hq",
+  "team",
+  "hub",
+  "app",
+  "inbox",
+  "mailer",
+  "outreach",
+]
 
 export type InfrastructureInput = {
   productId?: string
@@ -39,8 +60,9 @@ function cleanRecord(value: unknown): Record<string, unknown> {
 function stringMap(value: unknown): Record<string, string | number | boolean> {
   const record = cleanRecord(value)
   return Object.fromEntries(
-    Object.entries(record).filter((entry): entry is [string, string | number | boolean] =>
-      ["string", "number", "boolean"].includes(typeof entry[1])
+    Object.entries(record).filter(
+      (entry): entry is [string, string | number | boolean] =>
+        ["string", "number", "boolean"].includes(typeof entry[1])
     )
   )
 }
@@ -80,10 +102,22 @@ function activeManagedMailbox(row: Record<string, unknown>) {
   return row.desired_state !== "retired" && row.lifecycle_status !== "retired"
 }
 
-function fallbackMailboxSlots(planKey: string) {
-  if (planKey === "enterprise") return 25
-  if (planKey === "team") return 10
-  return 3
+function nonNegativeNumber(value: unknown): number | null {
+  const number = Number(value)
+  return Number.isFinite(number) && number >= 0 ? number : null
+}
+
+function activeAt(row: Record<string, unknown>, observedAtMs: number): boolean {
+  const startsAt =
+    typeof row.starts_at === "string" ? Date.parse(row.starts_at) : null
+  const expiresAt =
+    typeof row.expires_at === "string" ? Date.parse(row.expires_at) : null
+  return (
+    (startsAt === null ||
+      (Number.isFinite(startsAt) && startsAt <= observedAtMs)) &&
+    (expiresAt === null ||
+      (Number.isFinite(expiresAt) && expiresAt > observedAtMs))
+  )
 }
 
 export async function inspectSenderInfrastructure(
@@ -94,65 +128,74 @@ export async function inspectSenderInfrastructure(
   const productId = context.productId
   const excludedDomainIds = new Set(input.excludedDomainIds ?? [])
   const excludedAccountIds = new Set(input.excludedAccountIds ?? [])
-  const [domains, mailboxes, warmup, bindings, tools, productRows, grants] = await Promise.all([
-    rows(
-      db
-        .from("managed_email_domains")
-        .select(
-          "id, domain_name, provider, infrastructure_class, desired_state, provider_status, lifecycle_status, dns_status, dns_reason_codes, dns_observed_at, autorenew_enabled, provider_expires_at, renewal_state, custody_state, updated_at"
-        )
-        .eq("workspace_id", productId),
-      "Managed Domain inventory"
-    ),
-    rows(
-      db
-        .from("managed_email_mailboxes")
-        .select(
-          "id, domain_id, email_address, provider, infrastructure_class, desired_state, provider_status, lifecycle_status, infrastructure_status, transport_status, real_send_status, synthetic_warmup_status, health_status, campaign_eligibility_status, readiness_reason_codes, readiness_source_observed_at, forwarding_status, credential_handoff_status, warmup_connection_status, unipile_account_id, updated_at"
-        )
-        .eq("workspace_id", productId),
-      "Managed mailbox inventory"
-    ),
-    rows(
-      db
-        .from("email_sender_warmup_profiles")
-        .select(
-          "id, unipile_account_id, managed_mailbox_id, email_address, provider_connection_status, warmup_mode, warmup_daily_limit, maintenance_enabled, automated_sending_enabled, automated_daily_limit, warmup_started_at, verified_warmup_days, heat_score, heat_score_observed_at, placement_primary_percent, placement_promotions_percent, placement_spam_percent, placement_missing_percent, placement_observed_at, placement_test_status, placement_test_due_at, updated_at"
-        )
-        .eq("workspace_id", productId),
-      "Warm-up and Placement evidence"
-    ),
-    rows(
-      db
-        .from("product_unipile_accounts")
-        .select("unipile_account_id, provider, connected_at")
-        .eq("workspace_id", productId),
-      "Sender bindings"
-    ),
-    rows(
-      db
-        .from("product_tools")
-        .select("id, user_id, config, updated_at")
-        .eq("workspace_id", productId)
-        .eq("tool_type", "unipile"),
-      "Sender settings"
-    ),
-    rows(
-      db.from("products").select("id, organization_id").eq("id", productId).limit(1),
-      "Product billing scope"
-    ),
-    rows(
-      db
-        .from("managed_sender_entitlements")
-        .select("kind, quantity, capacity_floor, status, starts_at, expires_at")
-        .eq("workspace_id", productId)
-        .eq("status", "active"),
-      "Sender entitlement"
-    ),
-  ])
+  const [domains, mailboxes, warmup, bindings, tools, productRows, grants] =
+    await Promise.all([
+      rows(
+        db
+          .from("managed_email_domains")
+          .select(
+            "id, domain_name, provider, infrastructure_class, desired_state, provider_status, lifecycle_status, dns_status, dns_reason_codes, dns_observed_at, autorenew_enabled, provider_expires_at, renewal_state, custody_state, updated_at"
+          )
+          .eq("workspace_id", productId),
+        "Managed Domain inventory"
+      ),
+      rows(
+        db
+          .from("managed_email_mailboxes")
+          .select(
+            "id, domain_id, email_address, provider, infrastructure_class, desired_state, provider_status, lifecycle_status, infrastructure_status, transport_status, real_send_status, synthetic_warmup_status, health_status, campaign_eligibility_status, readiness_reason_codes, readiness_source_observed_at, forwarding_status, credential_handoff_status, warmup_connection_status, unipile_account_id, updated_at"
+          )
+          .eq("workspace_id", productId),
+        "Managed mailbox inventory"
+      ),
+      rows(
+        db
+          .from("email_sender_warmup_profiles")
+          .select(
+            "id, unipile_account_id, managed_mailbox_id, email_address, provider_connection_status, warmup_mode, warmup_daily_limit, maintenance_enabled, automated_sending_enabled, automated_daily_limit, warmup_started_at, verified_warmup_days, heat_score, heat_score_observed_at, placement_primary_percent, placement_promotions_percent, placement_spam_percent, placement_missing_percent, placement_observed_at, placement_test_status, placement_test_due_at, updated_at"
+          )
+          .eq("workspace_id", productId),
+        "Warm-up and Placement evidence"
+      ),
+      rows(
+        db
+          .from("product_unipile_accounts")
+          .select("unipile_account_id, provider, connected_at")
+          .eq("workspace_id", productId),
+        "Sender bindings"
+      ),
+      rows(
+        db
+          .from("product_tools")
+          .select("id, user_id, config, updated_at")
+          .eq("workspace_id", productId)
+          .eq("tool_type", "unipile"),
+        "Sender settings"
+      ),
+      rows(
+        db
+          .from("products")
+          .select("id, organization_id")
+          .eq("id", productId)
+          .limit(1),
+        "Product billing scope"
+      ),
+      rows(
+        db
+          .from("managed_sender_entitlements")
+          .select(
+            "kind, quantity, capacity_floor, status, starts_at, expires_at"
+          )
+          .eq("workspace_id", productId)
+          .eq("status", "active"),
+        "Sender entitlement"
+      ),
+    ])
 
   const visibleDomains = domains.filter(
-    (domain) => domain.desired_state !== "transferred" && !excludedDomainIds.has(String(domain.id))
+    (domain) =>
+      domain.desired_state !== "transferred" &&
+      !excludedDomainIds.has(String(domain.id))
   )
   const visibleMailboxes = mailboxes.filter(
     (mailbox) =>
@@ -165,7 +208,8 @@ export async function inspectSenderInfrastructure(
       .filter((value): value is string => typeof value === "string" && !!value)
   )
   const visibleBindings = bindings.filter(
-    (binding) => !excludedAccountIds.has(String(binding.unipile_account_id ?? ""))
+    (binding) =>
+      !excludedAccountIds.has(String(binding.unipile_account_id ?? ""))
   )
 
   const organizationId = String(productRows[0]?.organization_id ?? "")
@@ -181,26 +225,38 @@ export async function inspectSenderInfrastructure(
         "Billing plan"
       )
     : []
-  const planKey = String(subscriptions[0]?.plan_name ?? "individual")
-  const catalog = await rows(
-    db
-      .from("billing_plan_catalog")
-      .select(
-        "plan_key, managed_mailbox_slots, connected_email_senders, linkedin_senders, instagram_senders"
-      )
-      .eq("plan_key", planKey)
-      .limit(1),
-    "Billing plan catalog"
-  ).catch(() => [])
+  const planKey =
+    typeof subscriptions[0]?.plan_name === "string"
+      ? subscriptions[0].plan_name
+      : null
+  const catalog = planKey
+    ? await rows(
+        db
+          .from("billing_plan_catalog")
+          .select(
+            "plan_key, managed_mailbox_slots, connected_email_senders, linkedin_senders, instagram_senders"
+          )
+          .eq("plan_key", planKey)
+          .limit(1),
+        "Billing plan catalog"
+      ).catch(() => [])
+    : []
   const catalogRow = catalog[0]
-  const included = Number(catalogRow?.managed_mailbox_slots ?? fallbackMailboxSlots(planKey))
-  const additional = grants
+  const included = nonNegativeNumber(catalogRow?.managed_mailbox_slots)
+  const observedAtMs = Date.now()
+  const activeGrants = grants.filter((grant) => activeAt(grant, observedAtMs))
+  const additional = activeGrants
     .filter((grant) => grant.kind === "sender_seat")
     .reduce((sum, grant) => sum + Math.max(0, Number(grant.quantity ?? 0)), 0)
-  const dedicatedFloor = grants
+  const dedicatedFloor = activeGrants
     .filter((grant) => grant.kind === "dedicated_infrastructure")
     .reduce((max, grant) => Math.max(max, Number(grant.capacity_floor ?? 0)), 0)
-  const emailLimit = Math.max(included + additional, dedicatedFloor)
+  const emailLimit =
+    included === null
+      ? dedicatedFloor > 0
+        ? dedicatedFloor
+        : null
+      : Math.max(included + additional, dedicatedFloor)
   const connectedEmailUsed = visibleBindings.filter(
     (binding) =>
       providerKind(binding.provider) === "email" &&
@@ -208,8 +264,21 @@ export async function inspectSenderInfrastructure(
   ).length
   const managedEmailUsed = visibleMailboxes.length
 
-  const mergedSettings: Record<string, Record<string, string | number | boolean>> = {}
-  for (const tool of tools) {
+  const mergedSettings: Record<
+    string,
+    Record<string, string | number | boolean>
+  > = {}
+  const orderedTools = [...tools].sort((a, b) => {
+    const aOwn = Boolean(context.userId) && a.user_id === context.userId
+    const bOwn = Boolean(context.userId) && b.user_id === context.userId
+    if (aOwn !== bOwn) return aOwn ? 1 : -1
+    const byUpdatedAt = String(a.updated_at ?? "").localeCompare(
+      String(b.updated_at ?? "")
+    )
+    if (byUpdatedAt !== 0) return byUpdatedAt
+    return String(a.id ?? "").localeCompare(String(b.id ?? ""))
+  })
+  for (const tool of orderedTools) {
     const config = cleanRecord(tool.config)
     for (const key of [
       "openTracking",
@@ -250,7 +319,6 @@ export async function inspectSenderInfrastructure(
     domains: visibleDomains.map((domain) => ({
       id: domain.id,
       domainName: domain.domain_name,
-      provider: domain.provider,
       infrastructureClass: domain.infrastructure_class,
       desiredState: domain.desired_state,
       providerStatus: domain.provider_status,
@@ -268,7 +336,6 @@ export async function inspectSenderInfrastructure(
       id: mailbox.id,
       domainId: mailbox.domain_id,
       emailAddress: mailbox.email_address,
-      provider: mailbox.provider,
       infrastructureClass: mailbox.infrastructure_class,
       desiredState: mailbox.desired_state,
       providerStatus: mailbox.provider_status,
@@ -289,7 +356,6 @@ export async function inspectSenderInfrastructure(
     })),
     connectedAccounts: visibleBindings.map((binding) => ({
       accountId: binding.unipile_account_id,
-      provider: binding.provider,
       channel: providerKind(binding.provider),
       connectionStatus: "bound_unverified",
       connectedAt: binding.connected_at,
@@ -304,22 +370,27 @@ export async function inspectSenderInfrastructure(
       email: {
         used: managedEmailUsed + connectedEmailUsed,
         limit: emailLimit,
-        remaining: Math.max(0, emailLimit - managedEmailUsed - connectedEmailUsed),
+        remaining:
+          emailLimit === null
+            ? null
+            : Math.max(0, emailLimit - managedEmailUsed - connectedEmailUsed),
       },
       managedEmail: { used: managedEmailUsed, included },
       connectedEmail: {
         used: connectedEmailUsed,
-        planLimit: Number(catalogRow?.connected_email_senders ?? 0),
+        planLimit: nonNegativeNumber(catalogRow?.connected_email_senders),
       },
       linkedin: {
-        used: visibleBindings.filter((binding) => providerKind(binding.provider) === "linkedin")
-          .length,
-        planLimit: Number(catalogRow?.linkedin_senders ?? 0),
+        used: visibleBindings.filter(
+          (binding) => providerKind(binding.provider) === "linkedin"
+        ).length,
+        planLimit: nonNegativeNumber(catalogRow?.linkedin_senders),
       },
       instagram: {
-        used: visibleBindings.filter((binding) => providerKind(binding.provider) === "instagram")
-          .length,
-        planLimit: Number(catalogRow?.instagram_senders ?? 0),
+        used: visibleBindings.filter(
+          (binding) => providerKind(binding.provider) === "instagram"
+        ).length,
+        planLimit: nonNegativeNumber(catalogRow?.instagram_senders),
       },
       managedDomains: { used: visibleDomains.length, limit: null },
       additionalSenderSeats: additional,
@@ -343,21 +414,32 @@ export async function planSenderCapacity(
   input: CapacityInput
 ) {
   const recipients = positiveInteger(input.recipients, "recipients")
-  const touches = positiveInteger(input.touchesPerRecipient ?? 3, "touchesPerRecipient")
+  const touches = positiveInteger(
+    input.touchesPerRecipient ?? 3,
+    "touchesPerRecipient"
+  )
   const sendingDays = positiveInteger(input.sendingDays, "sendingDays")
-  const dailyLimit = positiveInteger(input.dailyLimitPerMailbox ?? 30, "dailyLimitPerMailbox")
+  const dailyLimit = positiveInteger(
+    input.dailyLimitPerMailbox ?? 30,
+    "dailyLimitPerMailbox"
+  )
   const utilizationPercent = input.utilizationPercent ?? 80
   if (utilizationPercent < 1 || utilizationPercent > 100)
     throw new UserFacingError("utilizationPercent must be between 1 and 100.", {
       code: "INVALID_CAPACITY_INPUT",
       status: 400,
     })
-  const mailboxesPerDomain = positiveInteger(input.mailboxesPerDomain ?? 3, "mailboxesPerDomain")
+  const mailboxesPerDomain = positiveInteger(
+    input.mailboxesPerDomain ?? 3,
+    "mailboxesPerDomain"
+  )
   const infrastructure = await inspectSenderInfrastructure(db, context, input)
   const plannedMessages = recipients * touches
   const targetDailyMessages = Math.ceil(plannedMessages / sendingDays)
   const effectiveMailboxDaily = dailyLimit * (utilizationPercent / 100)
-  const requiredMailboxes = Math.ceil(targetDailyMessages / effectiveMailboxDaily)
+  const requiredMailboxes = Math.ceil(
+    targetDailyMessages / effectiveMailboxDaily
+  )
   const requiredDomains = Math.ceil(requiredMailboxes / mailboxesPerDomain)
   const existingUsableMailboxes = infrastructure.mailboxes.filter(
     (mailbox) => mailbox.campaignEligibilityStatus === "eligible"
@@ -372,6 +454,7 @@ export async function planSenderCapacity(
     : null
 
   return {
+    calculationVersion: "sender-capacity-hosted-2026-09-01.v1",
     assumptions: {
       recipients,
       touchesPerRecipient: touches,
@@ -387,7 +470,8 @@ export async function planSenderCapacity(
         "Worst-case planned messages per recipient, including follow-ups; replies and stops are not deducted.",
       sendingDays:
         "Sending days available, not elapsed calendar days. Extending the timeline reduces the required capacity.",
-      dailyLimitPerMailbox: "Editable planning default, not a provider or product limit.",
+      dailyLimitPerMailbox:
+        "Editable planning default, not a provider or product limit.",
       utilizationPercent:
         "Editable safety factor for uneven delivery windows, ramping and operational headroom.",
       mailboxesPerDomain:
@@ -411,10 +495,15 @@ export async function planSenderCapacity(
         note: "Hosted MCP cannot verify current provider health and daily usage, so it shows existing inventory but conservatively credits zero capacity. Open the in-app Sender planner for live subtraction.",
       },
       meetTarget: {
-        totalMailboxes: requiredMailboxes,
-        totalDomains: requiredDomains,
+        requiredNewMailboxes: requiredMailboxes,
+        requiredNewDomains: requiredDomains,
         additionalMailboxes,
         additionalDomains,
+        projectedInventoryAfterPurchase: {
+          mailboxes: infrastructure.mailboxes.length + additionalMailboxes,
+          domains: infrastructure.domains.length + additionalDomains,
+        },
+        note: "Because hosted MCP credits zero unverified live capacity, requiredNew and additional are the same conservative purchase quantities. projectedInventoryAfterPurchase adds those quantities to the visible inventory; it is not a claim that existing senders are usable.",
       },
       custom,
     },
@@ -475,11 +564,9 @@ function providerItems(value: unknown): unknown[] {
   for (const key of ["items", "data", "results", "domains"]) {
     if (Array.isArray(record[key])) return record[key]
   }
-  throw new Error("Domain provider response does not match the expected contract")
-}
-
-function retailPrice(providerMinor: number) {
-  return Math.ceil(Math.max(providerMinor + 500, providerMinor * 1.25) / 100) * 100
+  throw new Error(
+    "Domain provider response does not match the expected contract"
+  )
 }
 
 export async function searchSenderDomains(input: DomainSearchInput) {
@@ -494,12 +581,19 @@ export async function searchSenderDomains(input: DomainSearchInput) {
       "Live managed Domain availability is not configured on this hosted MCP deployment.",
       { code: "DOMAIN_AVAILABILITY_UNAVAILABLE", status: 503 }
     )
-  const requested = [...new Set((input.domains ?? []).map((value) => value.trim().toLowerCase()))]
+  const requested = [
+    ...new Set(
+      (input.domains ?? []).map((value) => value.trim().toLowerCase())
+    ),
+  ]
   if (requested.some((domain) => !DOMAIN_PATTERN.test(domain)))
-    throw new UserFacingError("Every requested Domain must be a valid public hostname.", {
-      code: "INVALID_DOMAIN",
-      status: 400,
-    })
+    throw new UserFacingError(
+      "Every requested Domain must be a valid public hostname.",
+      {
+        code: "INVALID_DOMAIN",
+        status: 400,
+      }
+    )
   const count = Math.max(0, Math.min(10, input.count ?? 5))
   const seed = seedLabel(input.seed)
   const excluded = new Set([
@@ -516,10 +610,9 @@ export async function searchSenderDomains(input: DomainSearchInput) {
       suggested: [],
       observedAt: new Date().toISOString(),
     }
-  const baseUrl = (process.env.MAILFORGE_API_BASE_URL ?? "https://api.mailforge.ai/public").replace(
-    /\/+$/,
-    ""
-  )
+  const baseUrl = (
+    process.env.MAILFORGE_API_BASE_URL ?? "https://api.mailforge.ai/public"
+  ).replace(/\/+$/, "")
   const response = await fetch(`${baseUrl}/check-domain-availability-bulk`, {
     method: "POST",
     headers: {
@@ -544,31 +637,19 @@ export async function searchSenderDomains(input: DomainSearchInput) {
         record.domain ?? record.domainName ?? record.domain_name ?? ""
       ).toLowerCase()
       const available =
-        typeof record.available === "boolean" ? record.available : record.isAvailable === true
-      const providerMinor =
-        typeof record.priceMinor === "number"
-          ? record.priceMinor
-          : typeof record.price_minor === "number"
-            ? record.price_minor
-            : typeof record.price === "number"
-              ? Math.round(record.price * 100)
-              : null
-      const currency = String(record.currency ?? record.currencyCode ?? "USD").toUpperCase()
-      const exact =
-        available &&
-        currency === "USD" &&
-        providerMinor !== null &&
-        Number.isSafeInteger(providerMinor) &&
-        providerMinor >= 0
+        typeof record.available === "boolean"
+          ? record.available
+          : record.isAvailable === true
+      const pending = response.status === 202
       return [
         domain,
         {
           domain,
-          available,
-          priceMinor: exact ? retailPrice(providerMinor) : null,
-          currency: exact ? "USD" : null,
-          purchasable: exact,
-          pending: response.status === 202,
+          available: pending ? null : available,
+          priceMinor: null,
+          currency: null,
+          purchasable: false,
+          pending,
           warnings: warnings(domain),
         },
       ] as const
@@ -589,10 +670,10 @@ export async function searchSenderDomains(input: DomainSearchInput) {
     requested: requested.map(present),
     suggested: generated
       .map(present)
-      .filter((quote) => quote.purchasable)
+      .filter((quote) => quote.available === true && !quote.pending)
       .slice(0, count),
     priceDefinition:
-      "Exact annual customer retail price: max(provider cost + USD 5.00, provider cost × 1.25), rounded up to the next whole USD, computed per Domain.",
+      "Hosted MCP returns live availability only. Exact customer retail prices, plan-credit use, registrant details, and purchase confirmation remain in the secure in-app Domain card.",
     observedAt: new Date().toISOString(),
   }
 }

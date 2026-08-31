@@ -102,10 +102,11 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `deepline_execute_tool`     | `deepline.execute`       | No          | Executes one selected Deepline tool only after atomically consuming an exact, unexpired Web approval                  |
 | `inspect_sender_infrastructure` | `sender_infrastructure.read` | No | Reads product-scoped Domain, mailbox, health, Warm-up, Placement, settings, and entitlement evidence without credentials |
 | `plan_sender_capacity` | `sender_infrastructure.read` | No | Shows editable assumptions, worst-case formulas, upward rounding, conservative existing-capacity credit, and pricing sources |
-| `search_sender_domains` | `sender_infrastructure.read` | No | Checks live Domain availability and exact annual retail quotes; purchase and registrant PII remain in secure Web UI |
+| `search_sender_domains` | `sender_infrastructure.read` | No | Checks live Domain availability; exact pricing, purchase, and registrant PII remain in secure Web UI |
 
-The sender-infrastructure scope is read-only and included in default hosted
-authorization. `30` messages per mailbox per day, `80%` utilization, and `3`
+The sender-infrastructure scope is read-only, included in default hosted
+authorization, and projected behind the Workspace `inbox` capability. `30`
+messages per mailbox per day, `80%` utilization, and `3`
 mailboxes per Domain are editable planning defaults, not quotas. Hosted MCP
 does not have verified live provider usage, so the planner shows inventory but
 credits zero existing capacity rather than overstating readiness.
