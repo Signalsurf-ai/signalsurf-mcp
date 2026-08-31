@@ -73,6 +73,14 @@ import {
   applyPublicTableTemplate,
   type PublicTableTemplate,
 } from "./table-templates.js"
+import {
+  inspectSenderInfrastructure,
+  planSenderCapacity,
+  searchSenderDomains,
+  type CapacityInput,
+  type DomainSearchInput,
+  type InfrastructureInput,
+} from "./sender-infrastructure.js"
 
 export const POPULAR_VALUES_SCAN_LIMIT = 1000
 export const POPULAR_VALUES_TOP_N = 30
@@ -1431,6 +1439,27 @@ function readSourceEndpointId(source: SourceRow): string | null {
 
 export class SignalSurfRepository {
   constructor(private readonly db: SupabaseLike) {}
+
+  async inspectSenderInfrastructure(
+    context: SignalSurfContext,
+    input: InfrastructureInput = {}
+  ) {
+    return inspectSenderInfrastructure(this.db, context, input)
+  }
+
+  async planSenderCapacity(
+    context: SignalSurfContext,
+    input: CapacityInput
+  ) {
+    return planSenderCapacity(this.db, context, input)
+  }
+
+  async searchSenderDomains(
+    _context: SignalSurfContext,
+    input: DomainSearchInput
+  ) {
+    return searchSenderDomains(input)
+  }
 
   async resolveMcpToken(
     token: string,

@@ -32,6 +32,7 @@
     "get_surf_job": "b02ff66695c4cf150463bad231dbe365dd4b5f1c7286a85e492fd34b17a3a1c2",
     "get_surf_point": "2d0e9780fa21d49900f941cca3af891b18b704fc47c0892302e085bbe897d8ab",
     "get_table_row": "988367254984fad8b057fd24324303cc08327029aca8e62b27a01207397bef59",
+    "inspect_sender_infrastructure": "cfa6932d6b36f9cdb88600cb0cefe142efd17fb49f3ec5932db248b334f2f1f0",
     "list_product_tools": "42925c0fde10777e909e202b4f59f640135d2ed974030038c8854d8e0d7abb86",
     "list_enrich": "e52e394216932c43808150d7d4d05bbbdca77af82b8a498120cda38df6b055a6",
     "list_signals": "2d0e9780fa21d49900f941cca3af891b18b704fc47c0892302e085bbe897d8ab",
@@ -41,12 +42,14 @@
     "list_table_fields": "e52e394216932c43808150d7d4d05bbbdca77af82b8a498120cda38df6b055a6",
     "list_table_views": "e52e394216932c43808150d7d4d05bbbdca77af82b8a498120cda38df6b055a6",
     "list_tables": "8f453abdc62a10e58f9893531202670edfaef5f552afb6a4051811d336ae722c",
+    "plan_sender_capacity": "e7e95e38de6734442490ad6f5c1a7e70259f7964bad6c6f566c29588305f92a0",
     "read_table": "4bfe23e9f6b2a3a115a2bca2b5a824c279b34657db35500c83b41558f266a6f9",
     "read_table_view": "f70116ef07702700fa64abe648ff0487bca64ddb2d0ffd56addd4ba150540004",
     "remove_table_field": "113b03a1ad01ac9b3b467b79ea37388d0bf39ba1cf78896af4ca1d77694ef066",
     "run_enrich": "28602e016977ee96d989ad142615e8256a4ba94bfd2fc6ddb98215e21067fa4d",
     "run_surf_point": "800a3c8bfa52045238ced038a1f5538578681be21e249a2a7e7e60aec8350370",
     "search_instagram_content": "188f8857f184a6b505f3a8cb29321c66367fd0c6b2d1fbd02605f20c5ef14e07",
+    "search_sender_domains": "07cc5714a2e4a3658a792f995b94b5fc1b1136c4628c92ad2b6053eed12f1690",
     "test_surf_point_node": "745edec507f3408916196bf3ea368cfcc739776d4aa2e2cc4baaedb2b823faeb",
     "update_signal": "240d95324ff776f807d375c05a9f05d556ff8b288067e7a3eb0d807f93efd2b8",
     "update_surf_point": "44b139cdc5f2dfd7e738e1ab3d5900bc0e87a306c0a4456b9d5d176ce6b946b9",
@@ -469,6 +472,48 @@
       "invalid": [
         { "query": "", "pages": 1 },
         { "query": "KATSEYE", "pages": 11 }
+      ]
+    },
+    "inspect_sender_infrastructure": {
+      "valid": [
+        {},
+        {
+          "productId": "00000000-0000-4000-8000-000000000001",
+          "excludedDomainIds": [
+            "00000000-0000-4000-8000-000000000002"
+          ]
+        }
+      ],
+      "invalid": [{ "excludedDomainIds": ["not-a-uuid"] }]
+    },
+    "plan_sender_capacity": {
+      "valid": [
+        {
+          "recipients": 10000,
+          "touchesPerRecipient": 3,
+          "sendingDays": 20,
+          "dailyLimitPerMailbox": 30,
+          "utilizationPercent": 80,
+          "mailboxesPerDomain": 5
+        }
+      ],
+      "invalid": [
+        { "recipients": 0, "sendingDays": 20 },
+        {
+          "recipients": 10000,
+          "sendingDays": 20,
+          "utilizationPercent": 101
+        }
+      ]
+    },
+    "search_sender_domains": {
+      "valid": [
+        { "domains": ["goacme.com"], "count": 5 },
+        { "seed": "Acme", "infrastructureClass": "standard" }
+      ],
+      "invalid": [
+        { "domains": ["not a domain"] },
+        { "seed": "Acme", "count": 11 }
       ]
     },
     "test_surf_point_node": {

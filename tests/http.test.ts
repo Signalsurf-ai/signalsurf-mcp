@@ -372,6 +372,9 @@ describe("HTTP transport", () => {
       MCP_OFFLINE_ACCESS_SCOPE
     )
     expect(MCP_DEFAULT_RESOURCE_SCOPES).toContain("mcp:deepline.read")
+    expect(MCP_DEFAULT_RESOURCE_SCOPES).toContain(
+      "mcp:sender_infrastructure.read"
+    )
     expect(MCP_DEFAULT_RESOURCE_SCOPES).not.toContain("mcp:deepline.enrich")
     expect(MCP_DEFAULT_RESOURCE_SCOPES).not.toContain("mcp:deepline.execute")
   })

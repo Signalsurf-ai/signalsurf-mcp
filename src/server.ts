@@ -62,6 +62,9 @@ import {
   deeplineEnrichContactSchema,
   deeplineSearchCatalogSchema,
   deeplineExecuteToolSchema,
+  inspectSenderInfrastructureSchema,
+  planSenderCapacitySchema,
+  searchSenderDomainsSchema,
   instagramContentSearchSchema,
   enableEnrichSchema,
   disableEnrichSchema,
@@ -99,6 +102,7 @@ I want to… →
 - Decide what to write into a column → call get_enrichment_context(databaseId[, fieldKey]) for brand context, schema, popular existing values, and field conventions.
 - Run or monitor a surf point → run_surf_point, then list_surf_jobs / wait_for_surf_job.
 - Inspect data → list_tables, read_table, list_database_fields.
+- Plan or inspect sender infrastructure → inspect_sender_infrastructure, then plan_sender_capacity; use search_sender_domains for exact live Domain quotes. Purchases and secrets stay in the secure SignalSurf app.
 
 When multiple products are authorized, pass products[].productId (from get_context) on every product-scoped call.`
 
@@ -690,6 +694,36 @@ function registerTools(
           toolContext(args),
           args.surfPointId
         )
+      })
+  )
+
+  registerPublicTool(
+    "inspect_sender_infrastructure",
+    inspectSenderInfrastructureSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("inspect_sender_infrastructure")
+        return repository.inspectSenderInfrastructure(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "plan_sender_capacity",
+    planSenderCapacitySchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("plan_sender_capacity")
+        return repository.planSenderCapacity(toolContext(args), args)
+      })
+  )
+
+  registerPublicTool(
+    "search_sender_domains",
+    searchSenderDomainsSchema,
+    async (args: any) =>
+      runJsonTool(async () => {
+        assertToolAllowed("search_sender_domains")
+        return repository.searchSenderDomains(toolContext(args), args)
       })
   )
 

@@ -9,6 +9,70 @@ const productTargetSchema = {
   productId: uuidSchema.optional(),
 }
 
+const senderInfrastructureExclusionsSchema = {
+  excludedDomainIds: z.array(uuidSchema).max(500).default([]).optional(),
+  excludedAccountIds: z
+    .array(z.string().trim().min(1).max(255))
+    .max(500)
+    .default([])
+    .optional(),
+}
+
+export const inspectSenderInfrastructureSchema = {
+  ...productTargetSchema,
+  ...senderInfrastructureExclusionsSchema,
+}
+
+export const planSenderCapacitySchema = {
+  ...productTargetSchema,
+  ...senderInfrastructureExclusionsSchema,
+  recipients: z.number().int().min(1).max(100_000_000),
+  touchesPerRecipient: z.number().int().min(1).max(100).default(3).optional(),
+  sendingDays: z.number().int().min(1).max(3650),
+  dailyLimitPerMailbox: z
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .default(30)
+    .optional(),
+  utilizationPercent: z.number().min(1).max(100).default(80).optional(),
+  mailboxesPerDomain: z
+    .number()
+    .int()
+    .min(1)
+    .max(1000)
+    .default(3)
+    .optional(),
+  custom: z
+    .object({
+      additionalMailboxes: z.number().int().min(0).max(1_000_000),
+      additionalDomains: z.number().int().min(0).max(1_000_000),
+    })
+    .optional(),
+}
+
+const publicDomainSchema = z
+  .string()
+  .trim()
+  .min(4)
+  .max(253)
+  .regex(
+    /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i
+  )
+
+export const searchSenderDomainsSchema = {
+  ...productTargetSchema,
+  domains: z.array(publicDomainSchema).max(100).default([]).optional(),
+  seed: z.string().trim().min(1).max(253).optional(),
+  count: z.number().int().min(1).max(10).default(5).optional(),
+  exclude: z.array(publicDomainSchema).max(500).default([]).optional(),
+  infrastructureClass: z
+    .enum(["standard", "isolated"])
+    .default("standard")
+    .optional(),
+}
+
 // Deepline curated search defaults to managed Crustdata V3. It accepts both
 // provider-neutral nested fields and the established Apollo-shaped names;
 // Apollo remains an explicit deployment-level BYOC override.
@@ -762,6 +826,9 @@ export const PUBLIC_MCP_TOOL_SCHEMAS = {
   deepline_enrich_contact: deeplineEnrichContactSchema,
   deepline_search_catalog: deeplineSearchCatalogSchema,
   deepline_execute_tool: deeplineExecuteToolSchema,
+  inspect_sender_infrastructure: inspectSenderInfrastructureSchema,
+  plan_sender_capacity: planSenderCapacitySchema,
+  search_sender_domains: searchSenderDomainsSchema,
 } as const satisfies Record<
   PublicMcpToolName,
   Record<string, z.ZodTypeAny> | undefined

@@ -19,6 +19,7 @@ export const MCP_GRANULAR_SCOPES = [
   "mcp:deepline.read",
   "mcp:deepline.enrich",
   "mcp:deepline.execute",
+  "mcp:sender_infrastructure.read",
 ] as const
 
 // account_lists scopes are understood and enforced by this MCP server, but the
@@ -78,6 +79,7 @@ export type McpCapability =
   | "deepline.read"
   | "deepline.enrich"
   | "deepline.execute"
+  | "sender_infrastructure.read"
 
 export type PublicMcpToolName =
   | "get_context"
@@ -133,6 +135,9 @@ export type PublicMcpToolName =
   | "deepline_enrich_contact"
   | "deepline_search_catalog"
   | "deepline_execute_tool"
+  | "inspect_sender_infrastructure"
+  | "plan_sender_capacity"
+  | "search_sender_domains"
 
 type PublicMcpToolDefinition = {
   title: string
@@ -664,6 +669,33 @@ export const PUBLIC_MCP_TOOLS = {
     publicStatus: "supported",
     annotations: CREATE_ANNOTATIONS,
   },
+  inspect_sender_infrastructure: {
+    title: "Inspect Sender Infrastructure",
+    description:
+      "Read the active product's managed Domain inventory, mailbox lifecycle and health evidence, Warm-up and Placement metrics, editable sender settings, connected Email/LinkedIn/Instagram bindings, and sender entitlement. Secrets and mailbox credentials are never returned.",
+    requiredCapability: "sender_infrastructure.read",
+    surferSurface: "sender infrastructure",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  plan_sender_capacity: {
+    title: "Plan Sender Capacity",
+    description:
+      "Build a transparent worst-case Email sending plan from recipients, touches, sending days, mailbox daily volume, utilization, and mailboxes per Domain. Every input is editable; 30/day, 80%, and 3 mailboxes/Domain are planning defaults, never hard limits. Hosted MCP conservatively credits zero unverified live capacity.",
+    requiredCapability: "sender_infrastructure.read",
+    surferSurface: "sender infrastructure",
+    publicStatus: "supported",
+    annotations: READ_ANNOTATIONS,
+  },
+  search_sender_domains: {
+    title: "Search Sender Domains",
+    description:
+      "Check exact live availability and annual retail prices for requested managed Email Domains, or generate typeahead-style candidates from a brand seed. This is read-only: purchasing and registrant details stay in SignalSurf's secure in-app flow.",
+    requiredCapability: "sender_infrastructure.read",
+    surferSurface: "sender infrastructure",
+    publicStatus: "supported",
+    annotations: EXTERNAL_READ_ANNOTATIONS,
+  },
 } as const satisfies Record<PublicMcpToolName, PublicMcpToolDefinition>
 
 export const PUBLIC_MCP_TOOL_NAMES = Object.keys(
@@ -687,6 +719,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "account_lists.read",
     "creator_discovery.read",
     "deepline.read",
+    "sender_infrastructure.read",
   ],
   [MCP_LEGACY_WRITE_SCOPE]: [
     "context.read",
@@ -708,6 +741,7 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "deepline.read",
     "deepline.enrich",
     "deepline.execute",
+    "sender_infrastructure.read",
   ],
   [MCP_OFFLINE_ACCESS_SCOPE]: [],
   "mcp:products.write": ["context.read", "products.write"],
@@ -744,6 +778,10 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   "mcp:deepline.read": ["context.read", "deepline.read"],
   "mcp:deepline.enrich": ["context.read", "deepline.read", "deepline.enrich"],
   "mcp:deepline.execute": ["context.read", "deepline.read", "deepline.execute"],
+  "mcp:sender_infrastructure.read": [
+    "context.read",
+    "sender_infrastructure.read",
+  ],
   "mcp:deepline.write": [
     "context.read",
     "deepline.read",
@@ -772,6 +810,7 @@ const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "deepline.read": ["mcp:deepline.read"],
   "deepline.enrich": ["mcp:deepline.enrich"],
   "deepline.execute": ["mcp:deepline.execute"],
+  "sender_infrastructure.read": ["mcp:sender_infrastructure.read"],
 }
 
 export function parseStoredScopes(scope: string | undefined | null): string[] {
