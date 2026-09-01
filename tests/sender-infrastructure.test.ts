@@ -112,9 +112,16 @@ function seed() {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  delete process.env.MAILFORGE_API_KEY
-  delete process.env.MAILFORGE_API_BASE_URL
 })
+
+function controlPlane(fetchImpl: typeof fetch = vi.fn()) {
+  return {
+    workspaceId: PRODUCT_ID,
+    authorizationServerUrl: "https://app.signalsurf.ai",
+    accessToken: "ssmcp_at_test",
+    fetchImpl,
+  }
+}
 
 describe("hosted sender infrastructure", () => {
   it("keeps inventory product-scoped and strips credentials and signature text", async () => {
@@ -268,27 +275,38 @@ describe("hosted sender infrastructure", () => {
   })
 
   it("returns availability without duplicating customer pricing authority", async () => {
-    process.env.MAILFORGE_API_KEY = "test-key"
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            data: [
-              {
-                domain: "goacme.com",
-                available: true,
-                priceMinor: 1200,
-                currency: "USD",
-              },
-            ],
-          }),
-          { status: 200, headers: { "content-type": "application/json" } }
-        )
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          sender_domain_search: true,
+          infrastructureClass: "isolated",
+          seed: "acme",
+          requested: [
+            {
+              domain: "goacme.com",
+              available: true,
+              priceMinor: null,
+              currency: null,
+              purchasable: false,
+              pending: false,
+              warnings: [],
+            },
+          ],
+          suggested: [],
+          priceDefinition: "Availability only.",
+          observedAt: "2026-09-01T00:00:00.000Z",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
       )
     )
 
-    const result = await searchSenderDomains({ domains: ["goacme.com"] })
+    const result = await searchSenderDomains(
+      {
+        domains: ["goacme.com"],
+        infrastructureClass: "isolated",
+      },
+      controlPlane(fetchImpl)
+    )
 
     expect(result.requested[0]).toMatchObject({
       domain: "goacme.com",
@@ -298,34 +316,53 @@ describe("hosted sender infrastructure", () => {
       purchasable: false,
     })
     expect(result.priceDefinition).not.toMatch(/provider cost|1\.25|margin/i)
-    expect(fetch).toHaveBeenCalledWith(
-      "https://api.mailforge.ai/public/check-domain-availability-bulk",
-      expect.objectContaining({ method: "POST" })
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://app.signalsurf.ai/api/mcp/sender-domains",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer ssmcp_at_test",
+        }),
+        body: JSON.stringify({
+          workspaceId: PRODUCT_ID,
+          domains: ["goacme.com"],
+          count: 5,
+          exclude: [],
+          infrastructureClass: "isolated",
+        }),
+      })
     )
   })
 
   it("never treats an HTTP 202 availability response as final or purchasable", async () => {
-    process.env.MAILFORGE_API_KEY = "test-key"
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            data: [
-              {
-                domain: "goacme.com",
-                available: true,
-                priceMinor: 1200,
-                currency: "USD",
-              },
-            ],
-          }),
-          { status: 202, headers: { "content-type": "application/json" } }
-        )
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          sender_domain_search: true,
+          infrastructureClass: "standard",
+          seed: null,
+          requested: [
+            {
+              domain: "goacme.com",
+              available: true,
+              priceMinor: null,
+              currency: null,
+              purchasable: false,
+              pending: false,
+              warnings: [],
+            },
+          ],
+          suggested: [],
+          observedAt: "2026-09-01T00:00:00.000Z",
+        }),
+        { status: 202, headers: { "content-type": "application/json" } }
       )
     )
 
-    const result = await searchSenderDomains({ domains: ["goacme.com"] })
+    const result = await searchSenderDomains(
+      { domains: ["goacme.com"] },
+      controlPlane(fetchImpl)
+    )
 
     expect(result.requested[0]).toMatchObject({
       available: null,
@@ -333,6 +370,36 @@ describe("hosted sender infrastructure", () => {
       currency: null,
       purchasable: false,
       pending: true,
+    })
+  })
+
+  it("sanitizes control-plane network failures", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValue(new Error("getaddrinfo ENOTFOUND private.internal"))
+
+    await expect(
+      searchSenderDomains({ domains: ["goacme.com"] }, controlPlane(fetchImpl))
+    ).rejects.toMatchObject({
+      code: "DOMAIN_AVAILABILITY_UNAVAILABLE",
+      status: 503,
+      message: "Live Domain availability could not be loaded.",
+    })
+  })
+
+  it("sanitizes malformed control-plane responses", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response("private upstream failure details", { status: 200 })
+      )
+
+    await expect(
+      searchSenderDomains({ domains: ["goacme.com"] }, controlPlane(fetchImpl))
+    ).rejects.toMatchObject({
+      code: "DOMAIN_AVAILABILITY_UNAVAILABLE",
+      status: 503,
+      message: "Live Domain availability could not be loaded.",
     })
   })
 })

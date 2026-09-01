@@ -1,7 +1,7 @@
 import http from "node:http"
 import type { Server } from "node:http"
 
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { sha256Hex } from "../src/auth.js"
 import {
@@ -183,6 +183,31 @@ describe("HTTP transport", () => {
           name: "signalsurf-mcp",
         },
       },
+    })
+  })
+
+  it("passes the existing MCP grant to the provider-neutral Web control plane", async () => {
+    const createRepository = vi.fn(() => makeRepository())
+    const { server, url } = await listen(
+      makeConfig({ authorizationServerUrl: "https://app.signalsurf.ai" }),
+      createRepository
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: initializeBody(),
+    })
+
+    expect(response.status).toBe(200)
+    expect(createRepository).toHaveBeenCalledWith({
+      authorizationServerUrl: "https://app.signalsurf.ai",
+      accessToken: token,
     })
   })
 

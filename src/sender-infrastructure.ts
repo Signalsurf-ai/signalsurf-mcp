@@ -1,31 +1,6 @@
 import type { SignalSurfContext, SupabaseLike } from "./types.js"
 import { UserFacingError } from "./errors.js"
 
-const DOMAIN_PATTERN =
-  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/
-const DOMAIN_PREFIXES = [
-  "my",
-  "go",
-  "use",
-  "try",
-  "get",
-  "the",
-  "join",
-  "hey",
-  "with",
-  "meet",
-]
-const DOMAIN_SUFFIXES = [
-  "mail",
-  "hq",
-  "team",
-  "hub",
-  "app",
-  "inbox",
-  "mailer",
-  "outreach",
-]
-
 export type InfrastructureInput = {
   productId?: string
   excludedDomainIds?: string[]
@@ -49,6 +24,13 @@ export type DomainSearchInput = {
   count?: number
   exclude?: string[]
   infrastructureClass?: "standard" | "isolated"
+}
+
+export type SenderDomainControlPlaneOptions = {
+  workspaceId: string
+  authorizationServerUrl?: string
+  accessToken?: string
+  fetchImpl?: typeof fetch
 }
 
 function cleanRecord(value: unknown): Record<string, unknown> {
@@ -512,7 +494,7 @@ export async function planSenderCapacity(
       mailboxMonthlyMinor: null,
       currency: "USD",
       domainPriceSource:
-        "Use search_sender_domains for exact current annual retail prices for concrete candidates.",
+        "Hosted MCP exposes live availability only; open the secure in-app Domain card for exact current annual retail prices.",
       mailboxPriceSource:
         "Recurring sender-seat price is unavailable in hosted MCP; open the secure in-app capacity card for the current Stripe price.",
     },
@@ -520,160 +502,127 @@ export async function planSenderCapacity(
   }
 }
 
-function seedLabel(value: string | undefined) {
-  if (!value?.trim()) return null
-  const raw = value.trim().toLowerCase()
-  const hostname = raw.replace(/^https?:\/\//, "").split(/[/?#]/)[0] ?? raw
-  const first = hostname.includes(".") ? hostname.split(".")[0] : hostname
-  const label = first.replace(/[^a-z0-9]/g, "")
-  return label || null
-}
-
-function generatedDomains(seed: string, count: number, excluded: Set<string>) {
-  const templates = [
-    ...DOMAIN_PREFIXES.map((prefix) => `${prefix}${seed}`),
-    ...DOMAIN_SUFFIXES.map((suffix) => `${seed}${suffix}`),
-    ...DOMAIN_PREFIXES.flatMap((prefix) =>
-      DOMAIN_SUFFIXES.map((suffix) => `${prefix}${seed}${suffix}`)
-    ),
-  ]
-  const result: string[] = []
-  for (const label of templates) {
-    const domain = `${label}.com`
-    if (excluded.has(domain)) continue
-    excluded.add(domain)
-    result.push(domain)
-    if (result.length >= count) break
-  }
-  return result
-}
-
-function warnings(domain: string) {
-  const label = domain.split(".")[0] ?? ""
-  return [
-    ...(label.includes("-") ? ["hyphen"] : []),
-    ...(/\d/.test(label) ? ["digit"] : []),
-    ...(label.length > 20 ? ["length"] : []),
-    ...(!domain.endsWith(".com") ? ["nonComEnding"] : []),
-  ]
-}
-
-function providerItems(value: unknown): unknown[] {
-  if (Array.isArray(value)) return value
-  const record = cleanRecord(value)
-  for (const key of ["items", "data", "results", "domains"]) {
-    if (Array.isArray(record[key])) return record[key]
-  }
-  throw new Error(
-    "Domain provider response does not match the expected contract"
-  )
-}
-
-export async function searchSenderDomains(input: DomainSearchInput) {
-  if ((input.infrastructureClass ?? "standard") !== "standard")
+function availabilityEntries(value: unknown, responsePending: boolean) {
+  if (!Array.isArray(value)) {
     throw new UserFacingError(
-      "Hosted MCP currently quotes the standard managed Email setup only; open the in-app secure infrastructure card for isolated setup.",
-      { code: "INFRASTRUCTURE_CLASS_UNAVAILABLE", status: 409 }
+      "SignalSurf's Domain availability response did not match its public contract.",
+      { code: "DOMAIN_AVAILABILITY_UNAVAILABLE", status: 503 }
     )
-  const apiKey = process.env.MAILFORGE_API_KEY?.trim()
-  if (!apiKey)
+  }
+  return value.map((item) => {
+    const record = cleanRecord(item)
+    const domain = typeof record.domain === "string" ? record.domain : ""
+    if (!domain) {
+      throw new UserFacingError(
+        "SignalSurf's Domain availability response did not match its public contract.",
+        { code: "DOMAIN_AVAILABILITY_UNAVAILABLE", status: 503 }
+      )
+    }
+    const pending = responsePending || record.pending === true
+    return {
+      domain,
+      available:
+        pending || typeof record.available !== "boolean"
+          ? null
+          : record.available,
+      priceMinor: null,
+      currency: null,
+      purchasable: false,
+      pending,
+      warnings: Array.isArray(record.warnings)
+        ? record.warnings.filter(
+            (warning): warning is string => typeof warning === "string"
+          )
+        : [],
+    }
+  })
+}
+
+export async function searchSenderDomains(
+  input: DomainSearchInput,
+  options?: SenderDomainControlPlaneOptions
+) {
+  const authorizationServerUrl = options?.authorizationServerUrl?.replace(
+    /\/+$/,
+    ""
+  )
+  const accessToken = options?.accessToken?.trim()
+  if (!authorizationServerUrl || !accessToken || !options?.workspaceId) {
     throw new UserFacingError(
       "Live managed Domain availability is not configured on this hosted MCP deployment.",
       { code: "DOMAIN_AVAILABILITY_UNAVAILABLE", status: 503 }
     )
-  const requested = [
-    ...new Set(
-      (input.domains ?? []).map((value) => value.trim().toLowerCase())
-    ),
-  ]
-  if (requested.some((domain) => !DOMAIN_PATTERN.test(domain)))
-    throw new UserFacingError(
-      "Every requested Domain must be a valid public hostname.",
+  }
+  let response: Response
+  try {
+    response = await (options.fetchImpl ?? fetch)(
+      `${authorizationServerUrl}/api/mcp/sender-domains`,
       {
-        code: "INVALID_DOMAIN",
-        status: 400,
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          workspaceId: options.workspaceId,
+          domains: input.domains ?? [],
+          count: input.count ?? 5,
+          ...(input.seed ? { seed: input.seed } : {}),
+          exclude: input.exclude ?? [],
+          infrastructureClass: input.infrastructureClass ?? "standard",
+        }),
+        signal: AbortSignal.timeout(30_000),
       }
     )
-  const count = Math.max(0, Math.min(10, input.count ?? 5))
-  const seed = seedLabel(input.seed)
-  const excluded = new Set([
-    ...requested,
-    ...(input.exclude ?? []).map((value) => value.trim().toLowerCase()),
-    ...(seed ? [`${seed}.com`] : []),
-  ])
-  const generated = seed ? generatedDomains(seed, count * 3, excluded) : []
-  const candidates = [...requested, ...generated].slice(0, 100)
-  if (candidates.length === 0)
-    return {
-      seed,
-      requested: [],
-      suggested: [],
-      observedAt: new Date().toISOString(),
-    }
-  const baseUrl = (
-    process.env.MAILFORGE_API_BASE_URL ?? "https://api.mailforge.ai/public"
-  ).replace(/\/+$/, "")
-  const response = await fetch(`${baseUrl}/check-domain-availability-bulk`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: apiKey,
-      "X-Source": "signalsurf-mcp",
-    },
-    body: JSON.stringify({ domains: candidates }),
-    signal: AbortSignal.timeout(30_000),
-  })
-  if (!response.ok)
+  } catch {
     throw new UserFacingError("Live Domain availability could not be loaded.", {
       code: "DOMAIN_AVAILABILITY_UNAVAILABLE",
-      status: response.status >= 500 ? 503 : 409,
+      status: 503,
     })
-  const items = providerItems(await response.json())
-  const quotes = new Map(
-    items.map((item) => {
-      const record = cleanRecord(item)
-      const domain = String(
-        record.domain ?? record.domainName ?? record.domain_name ?? ""
-      ).toLowerCase()
-      const available =
-        typeof record.available === "boolean"
-          ? record.available
-          : record.isAvailable === true
-      const pending = response.status === 202
-      return [
-        domain,
-        {
-          domain,
-          available: pending ? null : available,
-          priceMinor: null,
-          currency: null,
-          purchasable: false,
-          pending,
-          warnings: warnings(domain),
-        },
-      ] as const
+  }
+  if (!response.ok && response.status !== 202) {
+    const status =
+      response.status === 401 || response.status === 403
+        ? response.status
+        : response.status >= 500
+          ? 503
+          : 409
+    throw new UserFacingError("Live Domain availability could not be loaded.", {
+      code:
+        status === 401
+          ? "UNAUTHORIZED"
+          : status === 403
+            ? "FORBIDDEN"
+            : "DOMAIN_AVAILABILITY_UNAVAILABLE",
+      status,
     })
-  )
-  const present = (domain: string) =>
-    quotes.get(domain) ?? {
-      domain,
-      available: false,
-      priceMinor: null,
-      currency: null,
-      purchasable: false,
-      pending: true,
-      warnings: warnings(domain),
-    }
+  }
+  let body: Record<string, unknown>
+  try {
+    body = cleanRecord(await response.json())
+  } catch {
+    throw new UserFacingError("Live Domain availability could not be loaded.", {
+      code: "DOMAIN_AVAILABILITY_UNAVAILABLE",
+      status: 503,
+    })
+  }
+  if (body.sender_domain_search !== true) {
+    throw new UserFacingError(
+      "SignalSurf's Domain availability response did not match its public contract.",
+      { code: "DOMAIN_AVAILABILITY_UNAVAILABLE", status: 503 }
+    )
+  }
+  const pending = response.status === 202
   return {
-    seed,
-    requested: requested.map(present),
-    suggested: generated
-      .map(present)
-      .filter((quote) => quote.available === true && !quote.pending)
-      .slice(0, count),
+    seed: typeof body.seed === "string" ? body.seed : null,
+    requested: availabilityEntries(body.requested, pending),
+    suggested: availabilityEntries(body.suggested, pending),
     priceDefinition:
       "Hosted MCP returns live availability only. Exact customer retail prices, plan-credit use, registrant details, and purchase confirmation remain in the secure in-app Domain card.",
-    observedAt: new Date().toISOString(),
+    observedAt:
+      typeof body.observedAt === "string"
+        ? body.observedAt
+        : new Date().toISOString(),
   }
 }

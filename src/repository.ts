@@ -72,6 +72,7 @@ import {
   type CapacityInput,
   type DomainSearchInput,
   type InfrastructureInput,
+  type SenderDomainControlPlaneOptions,
 } from "./sender-infrastructure.js"
 import type {
   AccessRole,
@@ -1447,7 +1448,13 @@ function readSourceEndpointId(source: SourceRow): string | null {
 }
 
 export class SignalSurfRepository {
-  constructor(private readonly db: SupabaseLike) {}
+  constructor(
+    private readonly db: SupabaseLike,
+    private readonly senderDomainControlPlane: Omit<
+      SenderDomainControlPlaneOptions,
+      "workspaceId"
+    > = {}
+  ) {}
 
   async inspectSenderInfrastructure(
     context: SignalSurfContext,
@@ -1456,18 +1463,18 @@ export class SignalSurfRepository {
     return inspectSenderInfrastructure(this.db, context, input)
   }
 
-  async planSenderCapacity(
-    context: SignalSurfContext,
-    input: CapacityInput
-  ) {
+  async planSenderCapacity(context: SignalSurfContext, input: CapacityInput) {
     return planSenderCapacity(this.db, context, input)
   }
 
   async searchSenderDomains(
-    _context: SignalSurfContext,
+    context: SignalSurfContext,
     input: DomainSearchInput
   ) {
-    return searchSenderDomains(input)
+    return searchSenderDomains(input, {
+      ...this.senderDomainControlPlane,
+      workspaceId: context.productId,
+    })
   }
 
   async loadWorkspaceCapabilities(productIds: readonly string[]) {
@@ -3160,9 +3167,7 @@ export class SignalSurfRepository {
       "ICLOUD",
       "IMAP",
       "SMTP",
-    ].some(
-      (candidate) => provider.includes(candidate)
-    )
+    ].some((candidate) => provider.includes(candidate))
     if (!binding || !isEmailProvider) {
       throw new UserFacingError(
         "The Campaign mailbox is not an eligible email sender in this Workspace.",
