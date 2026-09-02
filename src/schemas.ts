@@ -63,10 +63,10 @@ const publicDomainSchema = z
 
 export const searchSenderDomainsSchema = {
   ...productTargetSchema,
-  domains: z.array(publicDomainSchema).max(100).default([]).optional(),
+  domains: z.array(publicDomainSchema).max(50).default([]).optional(),
   seed: z.string().trim().min(1).max(253).optional(),
   count: z.number().int().min(1).max(10).default(5).optional(),
-  exclude: z.array(publicDomainSchema).max(500).default([]).optional(),
+  exclude: z.array(publicDomainSchema).max(50).default([]).optional(),
   infrastructureClass: z
     .enum(["standard", "isolated"])
     .default("standard")

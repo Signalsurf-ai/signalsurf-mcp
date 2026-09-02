@@ -307,7 +307,17 @@ describe("auth", () => {
       "deepline.read",
       "deepline.enrich",
       "deepline.execute",
+      "sender_infrastructure.read",
     ])
+  })
+
+  it("advertises sender infrastructure to unscoped viewer tokens", () => {
+    expect(
+      listContextCapabilities({
+        productId: "00000000-0000-4000-8000-000000000001",
+        role: "viewer",
+      })
+    ).toContain("sender_infrastructure.read")
   })
 
   it("requires explicit productId for multi-product contexts", () => {

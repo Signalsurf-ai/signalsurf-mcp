@@ -233,6 +233,7 @@ export function listContextCapabilities(
         "account_lists.read",
         "creator_discovery.read",
         "deepline.read",
+        "sender_infrastructure.read",
       ]
     : [
         "context.read",
@@ -255,6 +256,7 @@ export function listContextCapabilities(
         "deepline.read",
         "deepline.enrich",
         "deepline.execute",
+        "sender_infrastructure.read",
       ]
 }
 

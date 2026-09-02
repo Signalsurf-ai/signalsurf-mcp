@@ -5,6 +5,7 @@ import {
   planSenderCapacity,
   searchSenderDomains,
 } from "../src/sender-infrastructure.js"
+import { searchSenderDomainsSchema } from "../src/schemas.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 const PRODUCT_ID = "00000000-0000-4000-8000-000000000001"
@@ -124,6 +125,23 @@ function controlPlane(fetchImpl: typeof fetch = vi.fn()) {
 }
 
 describe("hosted sender infrastructure", () => {
+  it("matches the Web control-plane batch limits", () => {
+    const domain = "goacme.com"
+
+    expect(
+      searchSenderDomainsSchema.domains.safeParse(Array(50).fill(domain)).success
+    ).toBe(true)
+    expect(
+      searchSenderDomainsSchema.domains.safeParse(Array(51).fill(domain)).success
+    ).toBe(false)
+    expect(
+      searchSenderDomainsSchema.exclude.safeParse(Array(50).fill(domain)).success
+    ).toBe(true)
+    expect(
+      searchSenderDomainsSchema.exclude.safeParse(Array(51).fill(domain)).success
+    ).toBe(false)
+  })
+
   it("keeps inventory product-scoped and strips credentials and signature text", async () => {
     const result = await inspectSenderInfrastructure(
       new FakeSupabase(seed()) as never,
