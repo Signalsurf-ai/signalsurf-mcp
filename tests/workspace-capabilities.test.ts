@@ -269,6 +269,33 @@ describe("hosted MCP Workspace capability projection", () => {
     )
   })
 
+  it("projects sender infrastructure tools and OAuth capability behind Inbox", async () => {
+    const client = await connect(
+      policyDb([
+        {
+          product_id: productId,
+          capability_key: "inbox",
+          enabled: false,
+        },
+      ])
+    )
+
+    const tools = (await client.listTools()).tools.map((tool) => tool.name)
+    expect(tools).not.toContain("inspect_sender_infrastructure")
+    expect(tools).not.toContain("plan_sender_capacity")
+    expect(tools).not.toContain("search_sender_domains")
+
+    const result = await client.callTool({
+      name: "get_context",
+      arguments: {},
+    })
+    const text =
+      result.content?.[0]?.type === "text" ? result.content[0].text : ""
+    expect(JSON.parse(text).data.capabilities.effective).not.toContain(
+      "sender_infrastructure.read"
+    )
+  })
+
   it("rechecks policy before a stale registered tool can mutate", async () => {
     const db = policyDb()
     const client = await connect(db)

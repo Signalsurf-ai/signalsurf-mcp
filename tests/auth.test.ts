@@ -234,6 +234,25 @@ describe("auth", () => {
     )
   })
 
+  it("keeps sender infrastructure in its own read-only scope", () => {
+    const context = {
+      productId: "00000000-0000-4000-8000-000000000001",
+      role: "viewer" as const,
+      scopes: ["mcp:sender_infrastructure.read"],
+    }
+
+    expect(listContextCapabilities(context)).toEqual([
+      "context.read",
+      "sender_infrastructure.read",
+    ])
+    expect(() =>
+      assertCanUseCapability(context, "sender_infrastructure.read")
+    ).not.toThrow()
+    expect(() => assertCanUseCapability(context, "tables.read")).toThrow(
+      "Token scope does not allow"
+    )
+  })
+
   it("accepts the legacy Deepline write alias without advertising it as the new scope hint", () => {
     const legacyContext = {
       productId: "00000000-0000-4000-8000-000000000001",
@@ -288,7 +307,17 @@ describe("auth", () => {
       "deepline.read",
       "deepline.enrich",
       "deepline.execute",
+      "sender_infrastructure.read",
     ])
+  })
+
+  it("advertises sender infrastructure to unscoped viewer tokens", () => {
+    expect(
+      listContextCapabilities({
+        productId: "00000000-0000-4000-8000-000000000001",
+        role: "viewer",
+      })
+    ).toContain("sender_infrastructure.read")
   })
 
   it("requires explicit productId for multi-product contexts", () => {

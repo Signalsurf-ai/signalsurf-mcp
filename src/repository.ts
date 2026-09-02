@@ -65,6 +65,15 @@ import {
   applyPublicTableTemplate,
   type PublicTableTemplate,
 } from "./table-templates.js"
+import {
+  inspectSenderInfrastructure,
+  planSenderCapacity,
+  searchSenderDomains,
+  type CapacityInput,
+  type DomainSearchInput,
+  type InfrastructureInput,
+  type SenderDomainControlPlaneOptions,
+} from "./sender-infrastructure.js"
 import type {
   AccessRole,
   DatabaseRow,
@@ -1439,7 +1448,34 @@ function readSourceEndpointId(source: SourceRow): string | null {
 }
 
 export class SignalSurfRepository {
-  constructor(private readonly db: SupabaseLike) {}
+  constructor(
+    private readonly db: SupabaseLike,
+    private readonly senderDomainControlPlane: Omit<
+      SenderDomainControlPlaneOptions,
+      "workspaceId"
+    > = {}
+  ) {}
+
+  async inspectSenderInfrastructure(
+    context: SignalSurfContext,
+    input: InfrastructureInput = {}
+  ) {
+    return inspectSenderInfrastructure(this.db, context, input)
+  }
+
+  async planSenderCapacity(context: SignalSurfContext, input: CapacityInput) {
+    return planSenderCapacity(this.db, context, input)
+  }
+
+  async searchSenderDomains(
+    context: SignalSurfContext,
+    input: DomainSearchInput
+  ) {
+    return searchSenderDomains(input, {
+      ...this.senderDomainControlPlane,
+      workspaceId: context.productId,
+    })
+  }
 
   async loadWorkspaceCapabilities(productIds: readonly string[]) {
     return loadWorkspaceCapabilities(this.db, productIds)
@@ -3131,9 +3167,7 @@ export class SignalSurfRepository {
       "ICLOUD",
       "IMAP",
       "SMTP",
-    ].some(
-      (candidate) => provider.includes(candidate)
-    )
+    ].some((candidate) => provider.includes(candidate))
     if (!binding || !isEmailProvider) {
       throw new UserFacingError(
         "The Campaign mailbox is not an eligible email sender in this Workspace.",

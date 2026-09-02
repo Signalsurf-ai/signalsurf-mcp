@@ -25,7 +25,10 @@ import { createSupabaseClient } from "./supabase.js"
 import type { SignalSurfContext } from "./types.js"
 
 export type HttpServerDependencies = {
-  createRepository?: () => SignalSurfRepository
+  createRepository?: (options: {
+    authorizationServerUrl?: string
+    accessToken?: string
+  }) => SignalSurfRepository
 }
 
 class McpJsonParseError extends Error {
@@ -95,9 +98,7 @@ function getInsufficientScopeHeader(
     `error_description="${quoteAuthParam(description)}"`,
   ]
   if (config.authorizationServerUrl) {
-    parts.push(
-      `resource_metadata="${getProtectedResourceMetadataUrl(config)}"`
-    )
+    parts.push(`resource_metadata="${getProtectedResourceMetadataUrl(config)}"`)
   }
   return parts.join(", ")
 }
@@ -177,12 +178,19 @@ export function createHttpApp(
 
   app.post(config.path, async (req, res) => {
     try {
+      const accessToken = parseBearerToken(req.headers.authorization)
       const repository =
-        dependencies.createRepository?.() ??
-        new SignalSurfRepository(createSupabaseClient(config))
+        dependencies.createRepository?.({
+          authorizationServerUrl: config.authorizationServerUrl,
+          accessToken,
+        }) ??
+        new SignalSurfRepository(createSupabaseClient(config), {
+          authorizationServerUrl: config.authorizationServerUrl,
+          accessToken,
+        })
       const context = await resolveHttpTokenContext(
         config,
-        parseBearerToken(req.headers.authorization),
+        accessToken,
         repository,
         {
           ip: getClientIp(req, config.trustProxy),

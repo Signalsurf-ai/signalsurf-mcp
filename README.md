@@ -228,6 +228,7 @@ capability instead of hiding them behind broad write access:
 - `mcp:deepline.read`
 - `mcp:deepline.enrich`
 - `mcp:deepline.execute`
+- `mcp:sender_infrastructure.read`
 
 Default authorization requests include `mcp:deepline.read`, but not the
 higher-risk enrichment or execution scopes. The MCP server still accepts the

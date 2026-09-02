@@ -36,6 +36,7 @@ agent-facing capabilities should have a public MCP equivalent.
 | `mcp:deepline.read`          | `context.read`, `deepline.read`                                                                    |
 | `mcp:deepline.enrich`        | `context.read`, `deepline.read`, `deepline.enrich`                                                 |
 | `mcp:deepline.execute`       | `context.read`, `deepline.read`, `deepline.execute`                                                |
+| `mcp:sender_infrastructure.read` | `context.read`, `sender_infrastructure.read`                                                   |
 | `mcp:deepline.write`         | Legacy alias for both `mcp:deepline.enrich` and `mcp:deepline.execute`                             |
 | `offline_access`             | No tool capability; allows OAuth refresh in SignalSurf Web                                         |
 
@@ -99,6 +100,16 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `deepline_enrich_contact`   | `deepline.enrich`        | No          | Finds a work email through Deepline after one-time Web approval                                                       |
 | `deepline_search_catalog`   | `deepline.read`          | No          | Searches Deepline's live v2 tool catalog for provider tool ids                                                        |
 | `deepline_execute_tool`     | `deepline.execute`       | No          | Executes one selected Deepline tool only after atomically consuming an exact, unexpired Web approval                  |
+| `inspect_sender_infrastructure` | `sender_infrastructure.read` | No | Reads product-scoped Domain, mailbox, health, Warm-up, Placement, settings, and entitlement evidence without credentials |
+| `plan_sender_capacity` | `sender_infrastructure.read` | No | Shows editable assumptions, worst-case formulas, upward rounding, conservative existing-capacity credit, and pricing sources |
+| `search_sender_domains` | `sender_infrastructure.read` | No | Checks live Domain availability; exact pricing, purchase, and registrant PII remain in secure Web UI |
+
+The sender-infrastructure scope is read-only, included in default hosted
+authorization, and projected behind the Workspace `inbox` capability. `30`
+messages per mailbox per day, `80%` utilization, and `3`
+mailboxes per Domain are editable planning defaults, not quotas. Hosted MCP
+does not have verified live provider usage, so the planner shows inventory but
+credits zero existing capacity rather than overstating readiness.
 
 OAuth tokens can authorize multiple products. Agents should call `get_context`
 first; when multiple `productIds` are returned, choose from `products[]` using

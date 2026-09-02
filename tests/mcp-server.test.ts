@@ -347,6 +347,9 @@ describe("MCP server", () => {
       delete_signal: false,
       list_product_tools: false,
       list_workflow_tools: false,
+      inspect_sender_infrastructure: false,
+      plan_sender_capacity: false,
+      search_sender_domains: false,
     })
 
     const tools = await client.listTools()
@@ -383,6 +386,23 @@ describe("MCP server", () => {
       details: {
         oauthError: "insufficient_scope",
         requiredScopes: ["mcp:workflows.execute"],
+      },
+    })
+
+    const deniedSenderInfrastructure = await client.callTool({
+      name: "inspect_sender_infrastructure",
+      arguments: {},
+    })
+    expect(deniedSenderInfrastructure.isError).toBe(true)
+    const deniedSenderText =
+      deniedSenderInfrastructure.content?.[0]?.type === "text"
+        ? deniedSenderInfrastructure.content[0].text
+        : ""
+    expect(JSON.parse(deniedSenderText)).toMatchObject({
+      code: "INSUFFICIENT_SCOPE",
+      details: {
+        oauthError: "insufficient_scope",
+        requiredScopes: ["mcp:sender_infrastructure.read"],
       },
     })
 
