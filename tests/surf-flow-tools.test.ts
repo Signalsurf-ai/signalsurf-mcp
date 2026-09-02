@@ -54,7 +54,8 @@ async function connect(db: FakeSupabase, context = editorContext()) {
     repository: new SignalSurfRepository(db as any),
   })
   const client = new Client({ name: "test-client", version: "0.0.0" })
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair()
   cleanup.push(async () => client.close())
   cleanup.push(async () => server.close())
   await Promise.all([
@@ -76,20 +77,19 @@ describe("describe_node_types tool", () => {
       arguments: {},
     })
     expect(result.isError).toBeFalsy()
-    expect(data(result).nodeTypes.map((n: any) => n.type).sort()).toEqual([
-      "action",
-      "agent",
-      "rule",
-      "sequence",
-      "trigger",
-      "wait",
-    ])
+    expect(
+      data(result)
+        .nodeTypes.map((n: any) => n.type)
+        .sort()
+    ).toEqual(["action", "agent", "rule", "sequence", "trigger", "wait"])
   })
 })
 
 describe("edit_workflow_flows tool", () => {
   it("builds a graph atomically with refs", async () => {
-    const client = await connect(new FakeSupabase({ workflows: [workflowRow()] }))
+    const client = await connect(
+      new FakeSupabase({ workflows: [workflowRow()] })
+    )
     const result = await client.callTool({
       name: "edit_workflow_flows",
       arguments: {
@@ -169,12 +169,13 @@ describe("get_node_upstream_context tool", () => {
 
 describe("create_campaign tool", () => {
   it("requires an explicit mailbox (the MCP cannot list Unipile accounts)", async () => {
-    const client = await connect(new FakeSupabase({ workflows: [workflowRow()] }))
+    const client = await connect(new FakeSupabase({ campaigns: [] }))
     const result = await client.callTool({
       name: "create_campaign",
       arguments: {
-        workflowId,
-        contactTableId: "00000000-0000-4000-8000-000000000201",
+        name: "Founder outreach",
+        goal: "Book product calls",
+        audienceDatabaseId: "00000000-0000-4000-8000-000000000201",
         steps: [{ copy: "hello" }],
       },
     })
@@ -183,6 +184,147 @@ describe("create_campaign tool", () => {
       result.content?.[0]?.type === "text" ? result.content[0].text : ""
     expect(text).toMatch(/mailbox/i)
   })
+
+  it("creates a first-class Campaign without a Workflow or partial tool row", async () => {
+    const audienceDatabaseId = "00000000-0000-4000-8000-000000000201"
+    const db = new FakeSupabase({
+      campaigns: [],
+      workflows: [],
+      product_tools: [],
+      product_unipile_accounts: [
+        {
+          product_id: productId,
+          unipile_account_id: "mailbox-1",
+          provider: "MAIL",
+        },
+      ],
+      managed_email_mailboxes: [],
+      databases: [
+        {
+          id: audienceDatabaseId,
+          product_id: productId,
+          name: "Founders",
+          data_model: "table",
+          schema: {
+            fields: [{ key: "email", label: "Email", type: "email" }],
+          },
+        },
+      ],
+    })
+    const client = await connect(db, {
+      productId,
+      role: "editor",
+      workspaceCapabilities: ["campaigns"],
+    })
+    const result = await client.callTool({
+      name: "create_campaign",
+      arguments: {
+        name: "Founder outreach",
+        goal: "Book product calls",
+        audienceDatabaseId,
+        mailbox: "mailbox-1",
+        steps: [{ copy: "hello", delayDays: 1 }],
+      },
+    })
+
+    expect(result.isError).toBeFalsy()
+    expect(db.tables.workflows).toEqual([])
+    expect(db.tables.product_tools).toEqual([])
+    expect(db.tables.campaigns).toEqual([
+      expect.objectContaining({
+        product_id: productId,
+        name: "Founder outreach",
+        goal: "Book product calls",
+        audience_database_id: audienceDatabaseId,
+        recipient_field: "email",
+        status: "draft",
+      }),
+    ])
+    expect(db.tables.campaigns[0]).not.toHaveProperty("workflow_id")
+  })
+
+  it("rejects an unbound or non-email Campaign mailbox before inserting", async () => {
+    const audienceDatabaseId = "00000000-0000-4000-8000-000000000201"
+    const db = new FakeSupabase({
+      campaigns: [],
+      product_unipile_accounts: [
+        {
+          product_id: productId,
+          unipile_account_id: "linkedin-1",
+          provider: "LINKEDIN",
+        },
+      ],
+      managed_email_mailboxes: [],
+      databases: [
+        {
+          id: audienceDatabaseId,
+          product_id: productId,
+          data_model: "table",
+          schema: { fields: [{ key: "email", type: "email" }] },
+        },
+      ],
+    })
+    const client = await connect(db)
+    for (const mailbox of ["other-workspace-mailbox", "linkedin-1"]) {
+      const result = await client.callTool({
+        name: "create_campaign",
+        arguments: {
+          name: "Must not exist",
+          goal: "No side effects",
+          audienceDatabaseId,
+          mailbox,
+          steps: [{ copy: "hello" }],
+        },
+      })
+      expect(result.isError).toBe(true)
+    }
+    expect(db.tables.campaigns).toEqual([])
+  })
+
+  it.each(["EXCHANGE", "ICLOUD", "IMAP", "SMTP"])(
+    "accepts a canonical %s email provider binding",
+    async (provider) => {
+      const audienceDatabaseId = "00000000-0000-4000-8000-000000000201"
+      const db = new FakeSupabase({
+        campaigns: [],
+        product_unipile_accounts: [
+          {
+            product_id: productId,
+            unipile_account_id: "mailbox-1",
+            provider,
+          },
+        ],
+        managed_email_mailboxes: [],
+        databases: [
+          {
+            id: audienceDatabaseId,
+            product_id: productId,
+            data_model: "table",
+            schema: { fields: [{ key: "email", type: "email" }] },
+          },
+        ],
+      })
+      const client = await connect(db, {
+        productId,
+        role: "editor",
+        workspaceCapabilities: ["campaigns"],
+      })
+
+      const result = await client.callTool({
+        name: "create_campaign",
+        arguments: {
+          name: `${provider} outreach`,
+          goal: "Book product calls",
+          audienceDatabaseId,
+          mailbox: "mailbox-1",
+          steps: [{ copy: "hello" }],
+        },
+      })
+
+      expect(result.isError).toBeFalsy()
+      expect(db.tables.campaigns).toHaveLength(1)
+    }
+  )
 })
 
 describe("test_workflow_node tool", () => {

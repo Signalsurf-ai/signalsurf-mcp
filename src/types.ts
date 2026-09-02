@@ -19,6 +19,7 @@ export type SignalSurfContext = {
   oauthTokenId?: string
   oauthGrantId?: string
   oauthClientId?: string
+  workspaceCapabilitiesByProduct?: Record<string, readonly string[]>
 }
 
 export type JsonRecord = Record<string, unknown>
@@ -41,6 +42,7 @@ export type WorkflowRow = {
   tool_config: JsonRecord | null
   variables: JsonRecord | null
   config: JsonRecord | null
+  kind: string | null
   project_id: string | null
   display_order: number | null
   created_at: string
@@ -58,6 +60,7 @@ export type DatabaseRow = {
   schema: unknown
   item_type: string | null
   system_type: string | null
+  data_model: string | null
   view_configs: JsonRecord | null
   folder_id?: string | null
   display_order: number

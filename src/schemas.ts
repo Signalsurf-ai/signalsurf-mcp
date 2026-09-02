@@ -450,8 +450,10 @@ export const getNodeUpstreamContextSchema = {
 
 export const createCampaignSchema = {
   ...productTargetSchema,
-  workflowId: uuidSchema,
-  contactTableId: uuidSchema,
+  name: z.string().trim().min(1).max(120),
+  goal: z.string().trim().min(1).max(4000),
+  description: z.string().trim().max(500).optional(),
+  audienceDatabaseId: uuidSchema,
   recipientField: z.string().min(1).max(100).optional(),
   mailbox: z.string().min(1).optional(),
   steps: z
