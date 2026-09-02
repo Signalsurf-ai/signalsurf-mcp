@@ -74,7 +74,11 @@ function providerKind(value: unknown) {
     provider.includes("GOOGLE") ||
     provider.includes("GMAIL") ||
     provider.includes("MAIL") ||
-    provider.includes("OUTLOOK")
+    provider.includes("OUTLOOK") ||
+    provider.includes("EXCHANGE") ||
+    provider.includes("ICLOUD") ||
+    provider.includes("IMAP") ||
+    provider.includes("SMTP")
   )
     return "email"
   return "unknown"
@@ -127,7 +131,7 @@ export async function inspectSenderInfrastructure(
           .select(
             "id, domain_id, email_address, provider, infrastructure_class, desired_state, provider_status, lifecycle_status, infrastructure_status, transport_status, real_send_status, synthetic_warmup_status, health_status, campaign_eligibility_status, readiness_reason_codes, readiness_source_observed_at, forwarding_status, credential_handoff_status, warmup_connection_status, unipile_account_id, updated_at"
           )
-          .eq("workspace_id", productId),
+          .eq("product_id", productId),
         "Managed mailbox inventory"
       ),
       rows(
@@ -143,14 +147,14 @@ export async function inspectSenderInfrastructure(
         db
           .from("product_unipile_accounts")
           .select("unipile_account_id, provider, connected_at")
-          .eq("workspace_id", productId),
+          .eq("product_id", productId),
         "Sender bindings"
       ),
       rows(
         db
           .from("product_tools")
           .select("id, user_id, config, updated_at")
-          .eq("workspace_id", productId)
+          .eq("product_id", productId)
           .eq("tool_type", "unipile"),
         "Sender settings"
       ),
