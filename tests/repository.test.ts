@@ -18,9 +18,10 @@ const org2 = "00000000-0000-4000-8000-000000000702"
 const db1 = "00000000-0000-4000-8000-000000000201"
 const db2 = "00000000-0000-4000-8000-000000000202"
 const otherProductDb = "00000000-0000-4000-8000-000000000299"
-const surfPoint1 = "00000000-0000-4000-8000-000000000101"
-const surfPoint2 = "00000000-0000-4000-8000-000000000104"
-const otherProductSurfPoint = "00000000-0000-4000-8000-000000000103"
+const workflow1 = "00000000-0000-4000-8000-000000000101"
+const workflow2 = "00000000-0000-4000-8000-000000000104"
+const otherProductWorkflow = "00000000-0000-4000-8000-000000000103"
+const project1 = "00000000-0000-4000-8000-000000000501"
 const row1 = "00000000-0000-4000-8000-000000000301"
 const row2 = "00000000-0000-4000-8000-000000000302"
 const otherProductRow = "00000000-0000-4000-8000-000000000399"
@@ -37,9 +38,9 @@ const completedJob = "00000000-0000-4000-8000-000000000403"
 
 function makeDb() {
   return new FakeSupabase({
-    playbooks: [
+    workflows: [
       {
-        id: surfPoint1,
+        id: workflow1,
         product_id: context.productId,
         name: "Active",
         description: null,
@@ -56,14 +57,14 @@ function makeDb() {
         tool_config: {},
         variables: {},
         config: {},
-        folder_id: null,
+        project_id: null,
         display_order: 0,
         created_at: "2026-06-01T00:00:00Z",
         updated_at: "2026-06-01T00:00:00Z",
         deleted_at: null,
       },
       {
-        id: surfPoint2,
+        id: workflow2,
         product_id: context.productId,
         name: "Second",
         description: null,
@@ -80,7 +81,7 @@ function makeDb() {
         tool_config: {},
         variables: {},
         config: {},
-        folder_id: null,
+        project_id: null,
         display_order: 1,
         created_at: "2026-06-01T00:00:00Z",
         updated_at: "2026-06-01T00:00:00Z",
@@ -98,7 +99,7 @@ function makeDb() {
         deleted_at: "2026-06-01T01:00:00Z",
       },
       {
-        id: otherProductSurfPoint,
+        id: otherProductWorkflow,
         product_id: "00000000-0000-4000-8000-000000000099",
         name: "Other Product",
         is_default: false,
@@ -107,6 +108,13 @@ function makeDb() {
         database_ids: [],
         created_at: "2026-06-01T00:00:00Z",
         deleted_at: null,
+      },
+    ],
+    database_folders: [
+      {
+        id: project1,
+        product_id: context.productId,
+        name: "GTM",
       },
     ],
     databases: [
@@ -167,7 +175,7 @@ function makeDb() {
       {
         id: row1,
         database_id: db1,
-        playbook_id: surfPoint1,
+        workflow_id: workflow1,
         data: {
           name: "Acme",
           stage: "new",
@@ -187,7 +195,7 @@ function makeDb() {
       {
         id: row2,
         database_id: db1,
-        playbook_id: surfPoint1,
+        workflow_id: workflow1,
         data: {
           name: "Beta",
           stage: "qualified",
@@ -207,7 +215,7 @@ function makeDb() {
       {
         id: otherProductRow,
         database_id: otherProductDb,
-        playbook_id: null,
+        workflow_id: null,
         data: { name: "Other" },
         note: null,
         origin: "mcp",
@@ -283,7 +291,7 @@ function makeDb() {
         id: pendingJob,
         product_id: context.productId,
         user_id: context.userId,
-        playbook_id: surfPoint1,
+        workflow_id: workflow1,
         source_id: source1,
         job_type: "extract",
         status: "pending",
@@ -296,14 +304,14 @@ function makeDb() {
     user_preferences: [
       {
         user_id: context.userId,
-        current_playbook_id: surfPoint1,
+        current_workflow_id: workflow1,
       },
     ],
     sources: [
       {
         id: source1,
         user_id: context.userId,
-        playbook_id: surfPoint1,
+        workflow_id: workflow1,
         name: "Threads search",
         type: "pull",
         pull_config: {
@@ -320,7 +328,7 @@ function makeDb() {
       {
         id: otherProductSource,
         user_id: "00000000-0000-4000-8000-000000000099",
-        playbook_id: otherProductSurfPoint,
+        workflow_id: otherProductWorkflow,
         name: "Other source",
         type: "pull",
         pull_config: {},
@@ -435,32 +443,32 @@ function makeDb() {
 }
 
 describe("SignalSurfRepository", () => {
-  it("lists only active surf points in the current product", async () => {
+  it("lists only active Workflows in the current product", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    const result = await repo.listSurfPoints(context)
+    const result = await repo.listWorkflows(context)
 
     expect(
-      result.surfPoints.map((point: { name: string }) => point.name)
+      result.workflows.map((point: { name: string }) => point.name)
     ).toEqual(["Active", "Second"])
   })
 
-  it("reads one product-scoped surf point", async () => {
+  it("reads one product-scoped Workflow", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    await expect(repo.getSurfPoint(context, surfPoint1)).resolves.toMatchObject(
+    await expect(repo.getWorkflow(context, workflow1)).resolves.toMatchObject(
       {
-        surfPoint: {
-          surfPointId: surfPoint1,
+        workflow: {
+          workflowId: workflow1,
           name: "Active",
         },
       }
     )
 
     await expect(
-      repo.getSurfPoint(context, otherProductSurfPoint)
+      repo.getWorkflow(context, otherProductWorkflow)
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
@@ -507,28 +515,28 @@ describe("SignalSurfRepository", () => {
     })
   })
 
-  it("soft-deletes surf points and cancels pending jobs", async () => {
+  it("soft-deletes Workflows and cancels pending jobs", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    await repo.deleteSurfPoints(context, [surfPoint1])
+    await repo.deleteWorkflows(context, [workflow1])
 
-    const row = db.tables.playbooks.find(
-      (playbook) => playbook.id === surfPoint1
+    const row = db.tables.workflows.find(
+      (workflow) => workflow.id === workflow1
     )
     expect(row).toBeTruthy()
     expect(row?.deleted_at).toEqual(expect.any(String))
     expect(db.tables.surf_jobs[0].status).toBe("failed")
-    expect(db.tables.user_preferences[0].current_playbook_id).toBe(surfPoint2)
+    expect(db.tables.user_preferences[0].current_workflow_id).toBe(workflow2)
   })
 
-  it("queues an active surf point run", async () => {
+  it("queues an active Workflow run", async () => {
     const db = makeDb()
     db.tables.surf_jobs = []
     const repo = new SignalSurfRepository(db as any)
 
-    const result = await repo.runSurfPoint(context, {
-      surfPointId: surfPoint1,
+    const result = await repo.runWorkflow(context, {
+      workflowId: workflow1,
     })
 
     expect(result).toMatchObject({
@@ -537,7 +545,7 @@ describe("SignalSurfRepository", () => {
       skippedCount: 0,
       sourceIdsQueued: [source1],
       job: {
-        surfPointId: surfPoint1,
+        workflowId: workflow1,
         sourceId: source1,
         jobType: "extract",
         status: "pending",
@@ -547,7 +555,7 @@ describe("SignalSurfRepository", () => {
     expect(db.tables.surf_jobs[0]).toMatchObject({
       product_id: context.productId,
       user_id: context.userId,
-      playbook_id: surfPoint1,
+      workflow_id: workflow1,
       source_id: source1,
       job_type: "extract",
       status: "pending",
@@ -560,12 +568,12 @@ describe("SignalSurfRepository", () => {
     expect(db.tables.surf_jobs[0].id).toEqual(expect.any(String))
   })
 
-  it("deduplicates pending surf point runs by default", async () => {
+  it("deduplicates pending Workflow runs by default", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    const result = await repo.runSurfPoint(context, {
-      surfPointId: surfPoint1,
+    const result = await repo.runWorkflow(context, {
+      workflowId: workflow1,
     })
 
     expect(result).toMatchObject({
@@ -575,7 +583,7 @@ describe("SignalSurfRepository", () => {
       skippedCount: 1,
       job: {
         jobId: pendingJob,
-        surfPointId: surfPoint1,
+        workflowId: workflow1,
         sourceId: source1,
         jobType: "extract",
         status: "pending",
@@ -584,44 +592,44 @@ describe("SignalSurfRepository", () => {
     expect(db.tables.surf_jobs).toHaveLength(1)
   })
 
-  it("requires an explicit override to run inactive surf points", async () => {
+  it("requires an explicit override to run inactive Workflows", async () => {
     const db = makeDb()
     db.tables.surf_jobs = []
-    const surfPoint = db.tables.playbooks.find(
-      (playbook) => playbook.id === surfPoint1
+    const workflow = db.tables.workflows.find(
+      (workflow) => workflow.id === workflow1
     )
-    surfPoint!.is_active = false
+    workflow!.is_active = false
     const repo = new SignalSurfRepository(db as any)
 
     await expect(
-      repo.runSurfPoint(context, { surfPointId: surfPoint1 })
+      repo.runWorkflow(context, { workflowId: workflow1 })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" })
 
     await expect(
-      repo.runSurfPoint(context, {
-        surfPointId: surfPoint1,
+      repo.runWorkflow(context, {
+        workflowId: workflow1,
         allowInactive: true,
       })
     ).resolves.toMatchObject({
       enqueued: true,
       job: {
-        surfPointId: surfPoint1,
+        workflowId: workflow1,
         status: "pending",
       },
     })
   })
 
-  it("uses idempotency keys to avoid duplicate surf point runs", async () => {
+  it("uses idempotency keys to avoid duplicate Workflow runs", async () => {
     const db = makeDb()
     db.tables.surf_jobs = []
     const repo = new SignalSurfRepository(db as any)
 
-    const first = await repo.runSurfPoint(context, {
-      surfPointId: surfPoint1,
+    const first = await repo.runWorkflow(context, {
+      workflowId: workflow1,
       idempotencyKey: "daily-digest-2026-06-04",
     })
-    const second = await repo.runSurfPoint(context, {
-      surfPointId: surfPoint1,
+    const second = await repo.runWorkflow(context, {
+      workflowId: workflow1,
       idempotencyKey: "daily-digest-2026-06-04",
       dedupePending: false,
     })
@@ -641,7 +649,7 @@ describe("SignalSurfRepository", () => {
       id: otherProductJob,
       product_id: "00000000-0000-4000-8000-000000000099",
       user_id: "00000000-0000-4000-8000-000000000099",
-      playbook_id: "00000000-0000-4000-8000-000000000103",
+      workflow_id: "00000000-0000-4000-8000-000000000103",
       source_id: otherProductSource,
       job_type: "extract",
       status: "pending",
@@ -652,7 +660,7 @@ describe("SignalSurfRepository", () => {
     await expect(repo.getSurfJob(context, pendingJob)).resolves.toMatchObject({
       job: {
         jobId: pendingJob,
-        surfPointId: surfPoint1,
+        workflowId: workflow1,
         status: "pending",
       },
     })
@@ -690,7 +698,7 @@ describe("SignalSurfRepository", () => {
       id: completedJob,
       product_id: context.productId,
       user_id: context.userId,
-      playbook_id: surfPoint1,
+      workflow_id: workflow1,
       source_id: source1,
       job_type: "extract",
       status: "completed",
@@ -729,19 +737,19 @@ describe("SignalSurfRepository", () => {
     })
   })
 
-  it("lists and toggles safe surf point source metadata", async () => {
+  it("lists and toggles safe Workflow source metadata", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    const result = await repo.listSurfPointSources(context, surfPoint1)
+    const result = await repo.listWorkflowSources(context, workflow1)
 
     expect(result).toMatchObject({
-      surfPointId: surfPoint1,
+      workflowId: workflow1,
       totalCount: 1,
       sources: [
         {
           sourceId: source1,
-          surfPointId: surfPoint1,
+          workflowId: workflow1,
           name: "Threads search",
           type: "pull",
           endpointId: "threads-keyword-search",
@@ -755,7 +763,7 @@ describe("SignalSurfRepository", () => {
     expect(result.sources[0]).not.toHaveProperty("config")
     expect(result.sources[0]).not.toHaveProperty("credentials")
 
-    const updated = await repo.setSurfPointSourceActive(context, {
+    const updated = await repo.setWorkflowSourceActive(context, {
       sourceId: source1,
       isActive: false,
     })
@@ -771,19 +779,19 @@ describe("SignalSurfRepository", () => {
     })
 
     await expect(
-      repo.setSurfPointSourceActive(context, {
+      repo.setWorkflowSourceActive(context, {
         sourceId: otherProductSource,
         isActive: false,
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
-  it("creates and updates typed surf point source config without leaking secrets", async () => {
+  it("creates and updates typed Workflow source config without leaking secrets", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    const created = await repo.createSurfPointSource(context, {
-      surfPointId: surfPoint1,
+    const created = await repo.createWorkflowSource(context, {
+      workflowId: workflow1,
       sourceType: "custom-pull",
       name: "Partner API",
       config: {
@@ -813,7 +821,7 @@ describe("SignalSurfRepository", () => {
     )
     expect(inserted).toMatchObject({
       user_id: context.userId,
-      playbook_id: surfPoint1,
+      workflow_id: workflow1,
       pull_config: {
         method: "POST",
         response_path: "$.items",
@@ -821,7 +829,7 @@ describe("SignalSurfRepository", () => {
       },
     })
 
-    const updated = await repo.updateSurfPointSource(context, {
+    const updated = await repo.updateWorkflowSource(context, {
       sourceId: created.source.sourceId,
       pullConfigPatch: { schedule: "0 9 * * *" },
       metadataPatch: { provider: "partner-api" },
@@ -846,8 +854,8 @@ describe("SignalSurfRepository", () => {
     const repo = new SignalSurfRepository(db as any)
 
     try {
-      const created = await repo.createSurfPointSource(context, {
-        surfPointId: surfPoint1,
+      const created = await repo.createWorkflowSource(context, {
+        workflowId: workflow1,
         sourceType: "webhook",
         name: "BlockRun intake",
       })
@@ -869,7 +877,7 @@ describe("SignalSurfRepository", () => {
         db.tables.sources.find((source) => source.id === sourceId)
       ).toMatchObject({
         user_id: context.userId,
-        playbook_id: surfPoint1,
+        workflow_id: workflow1,
         type: "webhook",
       })
     } finally {
@@ -917,8 +925,8 @@ describe("SignalSurfRepository", () => {
       ],
     }
 
-    const created = await repo.createSurfPointSource(context, {
-      surfPointId: surfPoint1,
+    const created = await repo.createWorkflowSource(context, {
+      workflowId: workflow1,
       sourceType: "webhook",
       name: "GitHub stars webhook",
       config: {
@@ -952,7 +960,7 @@ describe("SignalSurfRepository", () => {
         },
       ],
     }
-    const updated = await repo.updateSurfPointSource(context, {
+    const updated = await repo.updateWorkflowSource(context, {
       sourceId,
       sourceType: "webhook",
       config: {
@@ -1061,7 +1069,7 @@ describe("SignalSurfRepository", () => {
       rows: [
         {
           databaseId: db1,
-          playbookId: surfPoint1,
+          workflowId: workflow1,
           entryKeyHash: "github:agenticnick",
           rawSignalId: payloadId,
           data: {
@@ -1079,7 +1087,7 @@ describe("SignalSurfRepository", () => {
     )
     expect(inserted).toMatchObject({
       database_id: db1,
-      playbook_id: surfPoint1,
+      workflow_id: workflow1,
       origin: "pipeline",
       origin_ref: `raw_signal:${payloadId}`,
       data: {
@@ -1134,8 +1142,8 @@ describe("SignalSurfRepository", () => {
     }
 
     await expect(
-      repo.createSurfPointSource(context, {
-        surfPointId: surfPoint1,
+      repo.createWorkflowSource(context, {
+        workflowId: workflow1,
         sourceType: "webhook",
         name: "Invalid transform webhook",
         config: {
@@ -1159,8 +1167,8 @@ describe("SignalSurfRepository", () => {
     ).rejects.toThrow("config.importMapping must match")
 
     await expect(
-      repo.createSurfPointSource(context, {
-        surfPointId: surfPoint1,
+      repo.createWorkflowSource(context, {
+        workflowId: workflow1,
         sourceType: "webhook",
         name: "Invalid normalize webhook",
         config: {
@@ -1185,8 +1193,8 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    const created = await repo.createSurfPointSource(context, {
-      surfPointId: surfPoint1,
+    const created = await repo.createWorkflowSource(context, {
+      workflowId: workflow1,
       sourceType: "platform",
       config: {
         endpointId: "threads-keyword-search",
@@ -1202,12 +1210,12 @@ describe("SignalSurfRepository", () => {
     })
     expect(created).toMatchObject({ updatedExisting: true })
     expect(
-      db.tables.sources.filter((source) => source.playbook_id === surfPoint1)
+      db.tables.sources.filter((source) => source.workflow_id === workflow1)
     ).toHaveLength(1)
     expect(db.tables.platform_search_config).toMatchObject([
       {
         product_id: context.productId,
-        playbook_id: surfPoint1,
+        workflow_id: workflow1,
         platform: "threads-keyword-search",
         keywords: ["x402", "MCP"],
       },
@@ -1215,7 +1223,7 @@ describe("SignalSurfRepository", () => {
     expect(db.tables.tracked_accounts).toMatchObject([
       {
         product_id: context.productId,
-        playbook_id: surfPoint1,
+        workflow_id: workflow1,
         platform: "threads-keyword-search",
         username: "blockrun",
       },
@@ -1227,7 +1235,7 @@ describe("SignalSurfRepository", () => {
     db.tables.platform_search_config = [
       {
         product_id: context.productId,
-        playbook_id: surfPoint1,
+        workflow_id: workflow1,
         platform: "threads-keyword-search",
         is_enabled: true,
         keywords: ["old"],
@@ -1236,7 +1244,7 @@ describe("SignalSurfRepository", () => {
     db.tables.tracked_accounts = [
       {
         product_id: context.productId,
-        playbook_id: surfPoint1,
+        workflow_id: workflow1,
         platform: "threads-keyword-search",
         username: "old-account",
         is_enabled: true,
@@ -1244,7 +1252,7 @@ describe("SignalSurfRepository", () => {
     ]
     const repo = new SignalSurfRepository(db as any)
 
-    await repo.updateSurfPointSource(context, {
+    await repo.updateWorkflowSource(context, {
       sourceId: source1,
       sourceType: "platform",
       config: {
@@ -1289,7 +1297,7 @@ describe("SignalSurfRepository", () => {
       id: completedJob,
       product_id: context.productId,
       user_id: context.userId,
-      playbook_id: surfPoint1,
+      workflow_id: workflow1,
       source_id: source1,
       job_type: "extract",
       status: "completed",
@@ -1298,8 +1306,8 @@ describe("SignalSurfRepository", () => {
     const repo = new SignalSurfRepository(db as any)
 
     await expect(
-      repo.createSurfPointSource(context, {
-        surfPointId: surfPoint1,
+      repo.createWorkflowSource(context, {
+        workflowId: workflow1,
         sourceType: "item-updated",
         name: "Stage updated",
         config: {
@@ -1310,8 +1318,8 @@ describe("SignalSurfRepository", () => {
       })
     ).rejects.toMatchObject({ code: "CONFLICT" })
 
-    const created = await repo.createSurfPointSource(context, {
-      surfPointId: surfPoint1,
+    const created = await repo.createWorkflowSource(context, {
+      workflowId: workflow1,
       sourceType: "item-updated",
       name: "Stage updated",
       config: {
@@ -1358,12 +1366,12 @@ describe("SignalSurfRepository", () => {
     })
   })
 
-  it("deletes surf point sources after product-scope validation", async () => {
+  it("deletes Workflow sources after product-scope validation", async () => {
     const db = makeDb()
     db.tables.platform_search_config = [
       {
         product_id: context.productId,
-        playbook_id: surfPoint1,
+        workflow_id: workflow1,
         platform: "threads-keyword-search",
         is_enabled: true,
         keywords: ["old"],
@@ -1372,7 +1380,7 @@ describe("SignalSurfRepository", () => {
     db.tables.tracked_accounts = [
       {
         product_id: context.productId,
-        playbook_id: surfPoint1,
+        workflow_id: workflow1,
         platform: "threads-keyword-search",
         username: "old-account",
         is_enabled: true,
@@ -1382,7 +1390,7 @@ describe("SignalSurfRepository", () => {
       id: completedJob,
       product_id: context.productId,
       user_id: context.userId,
-      playbook_id: surfPoint1,
+      workflow_id: workflow1,
       source_id: source1,
       job_type: "extract",
       status: "completed",
@@ -1391,12 +1399,12 @@ describe("SignalSurfRepository", () => {
     const repo = new SignalSurfRepository(db as any)
 
     await expect(
-      repo.deleteSurfPointSource(context, {
+      repo.deleteWorkflowSource(context, {
         sourceId: otherProductSource,
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
 
-    const deleted = await repo.deleteSurfPointSource(context, {
+    const deleted = await repo.deleteWorkflowSource(context, {
       sourceId: source1,
     })
 
@@ -1451,28 +1459,28 @@ describe("SignalSurfRepository", () => {
     expect(result.tools[0]).not.toHaveProperty("token")
   })
 
-  it("manages surf point tool ids idempotently", async () => {
+  it("manages Workflow tool ids idempotently", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    await expect(repo.listSurfPointTools(context, surfPoint1)).resolves.toEqual(
+    await expect(repo.listWorkflowTools(context, workflow1)).resolves.toEqual(
       {
-        surfPointId: surfPoint1,
+        workflowId: workflow1,
         toolIds: [],
         totalCount: 0,
       }
     )
 
     await expect(
-      repo.attachSurfPointTool(context, {
-        surfPointId: surfPoint1,
+      repo.attachWorkflowTool(context, {
+        workflowId: workflow1,
         toolId: tool1,
       })
     ).resolves.toMatchObject({
       changed: true,
       toolIds: [tool1],
-      surfPoint: {
-        surfPointId: surfPoint1,
+      workflow: {
+        workflowId: workflow1,
         toolConfig: {
           auto_tool_ids: [tool1],
         },
@@ -1480,8 +1488,8 @@ describe("SignalSurfRepository", () => {
     })
 
     await expect(
-      repo.attachSurfPointTool(context, {
-        surfPointId: surfPoint1,
+      repo.attachWorkflowTool(context, {
+        workflowId: workflow1,
         toolId: tool1,
       })
     ).resolves.toMatchObject({
@@ -1489,14 +1497,14 @@ describe("SignalSurfRepository", () => {
       toolIds: [tool1],
     })
 
-    await repo.attachSurfPointTool(context, {
-      surfPointId: surfPoint1,
+    await repo.attachWorkflowTool(context, {
+      workflowId: workflow1,
       toolId: tool2,
     })
 
     await expect(
-      repo.detachSurfPointTool(context, {
-        surfPointId: surfPoint1,
+      repo.detachWorkflowTool(context, {
+        workflowId: workflow1,
         toolId: tool1,
       })
     ).resolves.toMatchObject({
@@ -1505,41 +1513,41 @@ describe("SignalSurfRepository", () => {
     })
 
     expect(
-      db.tables.playbooks.find((playbook) => playbook.id === surfPoint1)
+      db.tables.workflows.find((workflow) => workflow.id === workflow1)
         ?.tool_config
     ).toMatchObject({
       auto_tool_ids: [tool2],
     })
 
     await expect(
-      repo.attachSurfPointTool(context, {
-        surfPointId: otherProductSurfPoint,
+      repo.attachWorkflowTool(context, {
+        workflowId: otherProductWorkflow,
         toolId: tool1,
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
 
     await expect(
-      repo.attachSurfPointTool(context, {
-        surfPointId: surfPoint1,
+      repo.attachWorkflowTool(context, {
+        workflowId: workflow1,
         toolId: "00000000-0000-4000-8000-000000000903",
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
-  it("validates auto_tool_ids ownership when update_surf_point writes tool config", async () => {
+  it("validates auto_tool_ids ownership when update_workflow writes tool config", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
     await expect(
-      repo.updateSurfPoint(context, {
-        surfPointId: surfPoint1,
+      repo.updateWorkflow(context, {
+        workflowId: workflow1,
         toolConfigPatch: { auto_tool_ids: [tool1] },
       })
     ).resolves.toBeDefined()
 
     await expect(
-      repo.updateSurfPoint(context, {
-        surfPointId: surfPoint1,
+      repo.updateWorkflow(context, {
+        workflowId: workflow1,
         toolConfigPatch: {
           auto_tool_ids: ["00000000-0000-4000-8000-000000000903"],
         },
@@ -1751,9 +1759,9 @@ describe("SignalSurfRepository", () => {
     })
     expect(hostedContext?.userId).toBeUndefined()
 
-    await repo.deleteSurfPoints(hostedContext!, [surfPoint1])
+    await repo.deleteWorkflows(hostedContext!, [workflow1])
 
-    expect(db.tables.user_preferences[0].current_playbook_id).toBe(surfPoint1)
+    expect(db.tables.user_preferences[0].current_workflow_id).toBe(workflow1)
   })
 
   it("resolves OAuth tokens with every authorized product id", async () => {
@@ -1773,7 +1781,7 @@ describe("SignalSurfRepository", () => {
         user_id: context.userId,
         product_id: context.productId,
         product_ids: [context.productId, secondProductId],
-        scope: "mcp:surf_points.read mcp:tables.read offline_access",
+        scope: "mcp:workflows.read mcp:tables.read offline_access",
         resource: "https://mcp.signalsurf.ai/mcp",
         access_token_sha256: sha256Hex("oauth-token"),
         access_token_expires_at: "2999-01-01T00:00:00Z",
@@ -1897,13 +1905,13 @@ describe("SignalSurfRepository", () => {
     db.tables.databases = db.tables.databases.filter((row) => row.id === db1)
     const repo = new SignalSurfRepository(db as any)
 
-    await repo.createSurfPoint(context, {
+    await repo.createWorkflow(context, {
       name: "New point",
       scoringRubric: "Score qualified leads highly.",
       surfPrompt: "Find recent funding events.",
     })
 
-    const inserted = db.tables.playbooks.at(-1)
+    const inserted = db.tables.workflows.at(-1)
     expect(inserted).toMatchObject({
       name: "New point",
       database_ids: [db1],
@@ -1912,38 +1920,62 @@ describe("SignalSurfRepository", () => {
     })
   })
 
+  it("places Workflows in Projects without using legacy Workflow folders", async () => {
+    const db = makeDb()
+    const repo = new SignalSurfRepository(db as any)
+
+    const created = await repo.createWorkflow(context, {
+      name: "Project Workflow",
+      projectId: project1,
+      databaseIds: [db1],
+    })
+
+    expect(created.workflow).toMatchObject({ projectId: project1 })
+    expect(db.tables.workflows.at(-1)).toMatchObject({
+      project_id: project1,
+    })
+    expect(db.tables).not.toHaveProperty("workflow" + "_folders")
+
+    const updated = await repo.updateWorkflow(context, {
+      workflowId: workflow1,
+      projectId: project1,
+    })
+
+    expect(updated.workflow).toMatchObject({ projectId: project1 })
+  })
+
   it("uses explicit prompt templates instead of synthesized prompt sections", async () => {
     const db = makeDb()
     db.tables.databases = db.tables.databases.filter((row) => row.id === db1)
     const repo = new SignalSurfRepository(db as any)
 
-    await repo.createSurfPoint(context, {
+    await repo.createWorkflow(context, {
       name: "Explicit point",
       promptTemplate: "Use this exact prompt.",
       scoringRubric: "Ignored for prompt_template.",
       surfPrompt: "Also ignored for prompt_template.",
     })
 
-    const inserted = db.tables.playbooks.at(-1)
+    const inserted = db.tables.workflows.at(-1)
     expect(inserted?.prompt_template).toBe("Use this exact prompt.")
   })
 
-  it("shallow-merges surf point patches and recomputes prompt templates", async () => {
+  it("shallow-merges Workflow patches and recomputes prompt templates", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    const result = await repo.updateSurfPoint(context, {
-      surfPointId: surfPoint1,
+    const result = await repo.updateWorkflow(context, {
+      workflowId: workflow1,
       variablesPatch: { region: "US" },
       toolConfigPatch: { maxResults: 10 },
       configPatch: { cadence: "daily" },
       scoringRubric: "Prefer new accounts.",
     })
 
-    expect(result.surfPoint.variables).toMatchObject({ region: "US" })
-    expect(result.surfPoint.toolConfig).toMatchObject({ maxResults: 10 })
-    expect(result.surfPoint.config).toMatchObject({ cadence: "daily" })
-    expect(result.surfPoint.promptTemplate).toContain("Prefer new accounts.")
+    expect(result.workflow.variables).toMatchObject({ region: "US" })
+    expect(result.workflow.toolConfig).toMatchObject({ maxResults: 10 })
+    expect(result.workflow.config).toMatchObject({ cadence: "daily" })
+    expect(result.workflow.promptTemplate).toContain("Prefer new accounts.")
   })
 
   it("rejects conflicting full and patch updates", async () => {
@@ -1951,8 +1983,8 @@ describe("SignalSurfRepository", () => {
     const repo = new SignalSurfRepository(db as any)
 
     await expect(
-      repo.updateSurfPoint(context, {
-        surfPointId: surfPoint1,
+      repo.updateWorkflow(context, {
+        workflowId: workflow1,
         variables: { region: "US" },
         variablesPatch: { segment: "enterprise" },
       })
@@ -2436,13 +2468,13 @@ describe("SignalSurfRepository", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
-  it("deletes product tables and unlinks them from active surf points", async () => {
+  it("deletes product tables and unlinks them from active Workflows", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
-    const secondSurfPoint = db.tables.playbooks.find(
-      (row) => row.id === surfPoint2
+    const secondWorkflow = db.tables.workflows.find(
+      (row) => row.id === workflow2
     )!
-    secondSurfPoint.database_ids = [db1, db2]
+    secondWorkflow.database_ids = [db1, db2]
 
     const result = await repo.deleteTables(context, [db1, db1])
 
@@ -2451,10 +2483,10 @@ describe("SignalSurfRepository", () => {
       count: 1,
       deletedTables: [{ databaseId: db1, name: "Companies" }],
     })
-    expect(result.unlinkedSurfPoints).toEqual(
+    expect(result.unlinkedWorkflows).toEqual(
       expect.arrayContaining([
-        { id: surfPoint1, databaseIds: [] },
-        { id: surfPoint2, databaseIds: [db2] },
+        { id: workflow1, databaseIds: [] },
+        { id: workflow2, databaseIds: [db2] },
       ])
     )
     expect(db.tables.databases.some((database) => database.id === db1)).toBe(
@@ -2467,10 +2499,10 @@ describe("SignalSurfRepository", () => {
       db.tables.databases.some((database) => database.id === otherProductDb)
     ).toBe(true)
     expect(
-      db.tables.playbooks.find((row) => row.id === surfPoint1)?.database_ids
+      db.tables.workflows.find((row) => row.id === workflow1)?.database_ids
     ).toEqual([])
     expect(
-      db.tables.playbooks.find((row) => row.id === surfPoint2)?.database_ids
+      db.tables.workflows.find((row) => row.id === workflow2)?.database_ids
     ).toEqual([db2])
   })
 
@@ -2614,20 +2646,20 @@ describe("SignalSurfRepository", () => {
     await repo.createTableRow(context, {
       databaseId: db1,
       data: { name: "Created" },
-      playbookId: surfPoint1,
+      workflowId: workflow1,
       note: "created by test",
     })
 
     expect(db.tables.entries.at(-1)).toMatchObject({
       database_id: db1,
-      playbook_id: surfPoint1,
+      workflow_id: workflow1,
       origin: "mcp",
       origin_ref: "test-agent",
       triggered: false,
     })
   })
 
-  it("rejects row attribution to surf points that do not target the row database", async () => {
+  it("rejects row attribution to Workflows that do not target the row database", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
@@ -2635,13 +2667,13 @@ describe("SignalSurfRepository", () => {
       repo.createTableRow(context, {
         databaseId: db1,
         data: { name: "Wrong attribution" },
-        playbookId: surfPoint2,
+        workflowId: workflow2,
       })
     ).rejects.toThrow("is not configured to write to database")
 
     await expect(
       repo.updateTableRows(context, {
-        edits: [{ rowId: row1, playbookId: surfPoint2 }],
+        edits: [{ rowId: row1, workflowId: workflow2 }],
       })
     ).rejects.toThrow("is not configured to write to database")
   })
@@ -2739,7 +2771,7 @@ describe("SignalSurfRepository", () => {
     expect(db.tables.entries.find((e) => e.id === row1)?.data.stage).toBe("new")
   })
 
-  it("rejects a no-op edit with none of data, dataPatch, note, or playbookId", async () => {
+  it("rejects a no-op edit with none of data, dataPatch, note, or workflowId", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
@@ -2748,7 +2780,7 @@ describe("SignalSurfRepository", () => {
         edits: [{ rowId: row1 }],
       })
     ).rejects.toThrow(
-      "must include at least one of data, dataPatch, note, or playbookId"
+      "must include at least one of data, dataPatch, note, or workflowId"
     )
   })
 

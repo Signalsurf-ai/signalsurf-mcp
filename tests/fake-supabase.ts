@@ -218,10 +218,10 @@ export class FakeSupabase {
           product_id: args.p_product_id,
           user_id: args.p_user_id,
           source_id: args.p_source_id,
-          playbook_id: args.p_playbook_id,
+          workflow_id: args.p_workflow_id,
           payload: {
             raw_signal_id: entry.raw_signal_id,
-            playbook_id: args.p_playbook_id,
+            workflow_id: args.p_workflow_id,
             target_field: args.p_target_field,
             triggered_by: args.p_triggered_by,
           },

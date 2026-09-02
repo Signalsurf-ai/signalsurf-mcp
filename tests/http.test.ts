@@ -46,7 +46,7 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 function makeRepository() {
   return new SignalSurfRepository(
     new FakeSupabase({
-      playbooks: [],
+      workflows: [],
       databases: [],
       entries: [],
       surf_jobs: [],
@@ -201,7 +201,7 @@ describe("HTTP transport", () => {
           last_used_ip: null,
         },
       ],
-      playbooks: [],
+      workflows: [],
       databases: [],
       entries: [],
       surf_jobs: [],
@@ -242,7 +242,7 @@ describe("HTTP transport", () => {
           revoked_at: "2026-06-01T00:00:00Z",
         },
       ],
-      playbooks: [],
+      workflows: [],
       databases: [],
       entries: [],
       surf_jobs: [],
@@ -282,7 +282,7 @@ describe("HTTP transport", () => {
           last_used_ip: null,
         },
       ],
-      playbooks: [],
+      workflows: [],
       databases: [],
       entries: [],
       surf_jobs: [],
@@ -435,7 +435,7 @@ describe("HTTP transport", () => {
           revoked_at: null,
         },
       ],
-      playbooks: [],
+      workflows: [],
       databases: [],
       entries: [],
       surf_jobs: [],
@@ -492,7 +492,7 @@ describe("HTTP transport", () => {
           revoked_at: null,
         },
       ],
-      playbooks: [],
+      workflows: [],
       databases: [],
       entries: [],
       surf_jobs: [],
@@ -517,7 +517,7 @@ describe("HTTP transport", () => {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: callToolBody("create_surf_point", { name: "Denied" }),
+      body: callToolBody("create_workflow", { name: "Denied" }),
     })
 
     expect(response.status).toBe(403)
@@ -525,7 +525,7 @@ describe("HTTP transport", () => {
       'error="insufficient_scope"'
     )
     expect(response.headers.get("www-authenticate")).toContain(
-      'scope="mcp:surf_points.write"'
+      'scope="mcp:workflows.write"'
     )
     expect(response.headers.get("www-authenticate")).toContain(
       'resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"'
@@ -535,11 +535,11 @@ describe("HTTP transport", () => {
       code: "INSUFFICIENT_SCOPE",
       details: {
         oauthError: "insufficient_scope",
-        requiredScopes: ["mcp:surf_points.write"],
-        toolName: "create_surf_point",
+        requiredScopes: ["mcp:workflows.write"],
+        toolName: "create_workflow",
       },
     })
-    expect(db.tables.playbooks).toHaveLength(0)
+    expect(db.tables.workflows).toHaveLength(0)
   })
 
   it("requires explicit productId for multi-product OAuth HTTP tool calls", async () => {
@@ -590,11 +590,11 @@ describe("HTTP transport", () => {
           name: "Second Workspace",
         },
       ],
-      playbooks: [
+      workflows: [
         {
           id: "00000000-0000-4000-8000-000000000301",
           product_id: secondProductId,
-          name: "Second Product Surf Point",
+          name: "Second Product Workflow",
           description: null,
           is_default: false,
           is_active: true,
@@ -609,7 +609,7 @@ describe("HTTP transport", () => {
           tool_config: {},
           variables: {},
           config: {},
-          folder_id: null,
+          project_id: null,
           display_order: 0,
           created_at: "2026-06-01T00:00:00Z",
           updated_at: "2026-06-01T00:00:00Z",
@@ -665,7 +665,7 @@ describe("HTTP transport", () => {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: callToolBody("list_surf_points"),
+      body: callToolBody("list_workflows"),
     })
 
     expect(missingProduct.status).toBe(200)
@@ -682,14 +682,14 @@ describe("HTTP transport", () => {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: callToolBody("list_surf_points", { productId: secondProductId }),
+      body: callToolBody("list_workflows", { productId: secondProductId }),
     })
 
     expect(explicitProduct.status).toBe(200)
     const body = await readMcpJson(explicitProduct)
     const content = JSON.parse(body.result.content[0].text)
-    expect(content.data.surfPoints).toMatchObject([
-      { name: "Second Product Surf Point" },
+    expect(content.data.workflows).toMatchObject([
+      { name: "Second Product Workflow" },
     ])
   })
 
@@ -717,7 +717,7 @@ describe("HTTP transport", () => {
           revoked_at: null,
         },
       ],
-      playbooks: [],
+      workflows: [],
       databases: [],
       entries: [],
       surf_jobs: [],
@@ -770,7 +770,7 @@ describe("HTTP transport", () => {
           revoked_at: null,
         },
       ],
-      playbooks: [],
+      workflows: [],
       databases: [],
       entries: [],
       surf_jobs: [],

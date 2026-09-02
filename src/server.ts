@@ -22,41 +22,40 @@ import { PROMPT_CATALOG, registerPrompts } from "./prompts.js"
 import { SignalSurfRepository } from "./repository.js"
 import { searchCapabilities } from "./tool-search.js"
 import {
-  createSurfPointSourceSchema,
+  createWorkflowSourceSchema,
   createProductSchema,
-  createSurfPointSchema,
+  createWorkflowSchema,
   createTableSchema,
   createTableRowSchema,
   addDatabaseFieldSchema,
   cancelSurfJobSchema,
   createRelationFieldSchema,
-  deleteSurfPointSourceSchema,
-  deleteSurfPointSchema,
+  deleteWorkflowSourceSchema,
+  deleteWorkflowSchema,
   deleteTableSchema,
   deleteTableRowsSchema,
-  applyFlowEditsSchema,
+  editWorkflowFlowsSchema,
   createCampaignSchema,
   findCapabilitiesSchema,
   getBrandContextSchema,
   getEnrichmentContextSchema,
   getNodeUpstreamContextSchema,
-  getSurfPointSchema,
-  testSurfPointNodeSchema,
-  updateSurfPointFlowSchema,
+  getWorkflowSchema,
+  testWorkflowNodeSchema,
   getSurfJobSchema,
   getTableRowSchema,
   listDatabasesSchema,
   listDatabaseViewsSchema,
   listDatabaseFieldsSchema,
   listProductToolsSchema,
-  listSurfPointSourcesSchema,
-  listSurfPointToolsSchema,
+  listWorkflowSourcesSchema,
+  listWorkflowToolsSchema,
   removeDatabaseFieldSchema,
   listSurfJobsSchema,
-  listSurfPointsSchema,
+  listWorkflowsSchema,
   readTableSchema,
   readTableViewSchema,
-  runSurfPointSchema,
+  runWorkflowSchema,
   deeplineSearchPeopleSchema,
   deeplineSearchCompaniesSchema,
   deeplineEnrichContactSchema,
@@ -68,9 +67,9 @@ import {
   listEnrichSchema,
   runEnrichSchema,
   updateDatabaseFieldSchema,
-  updateSurfPointSourceSchema,
+  updateWorkflowSourceSchema,
   toolOutputSchema,
-  updateSurfPointSchema,
+  updateWorkflowSchema,
   updateTableSchema,
   updateTableRowsSchema,
   waitForSurfJobSchema,
@@ -85,19 +84,19 @@ export type CreateServerOptions = {
 
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
 
-Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter — productId from get_context (when multiple products), databaseId from list_tables, surfPointId from list_surf_points. Never pass a null or guessed id.
+Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter — productId from get_context (when multiple products), databaseId from list_tables, workflowId from list_workflows. Never pass a null or guessed id.
 
-Execution model: enrichment runs on the SignalSurf server brain via Enrich and surf points. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
+Execution model: enrichment runs on the SignalSurf server brain via Enrich and Workflows. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
 
 I want to… →
 - Not sure which tool or prompt fits → call find_capabilities(query) to search by intent.
 - Enrich a whole table → use the enrich_table prompt; it scripts get_enrichment_context → enable_enrich → run_enrich(scope="all") → wait_for_surf_job.
-- Set up a new surf point (playbook) → use the set_up_surf_point prompt.
+- Set up a new Workflow → use the set_up_workflow prompt.
 - Build a lead list with Deepline → use the build_lead_list prompt.
-- Build a multi-step / branching surf point → a surf point is a node graph (Flow V2). Call describe_node_types first, then update_surf_point_flow (whole graph) or apply_surf_point_edits (incremental); get_node_upstream_context before mapping create_row fields.
+- Build a multi-step / branching Workflow → a Workflow is a node graph (Flow V2). Call describe_node_types first, then edit_workflow_flows (atomic); get_node_upstream_context before mapping create_row fields.
 - Build a contact-list email drip → use create_campaign (do not hand-wire it); pass a connected Unipile mailbox id.
 - Decide what to write into a column → call get_enrichment_context(databaseId[, fieldKey]) for brand context, schema, popular existing values, and field conventions.
-- Run or monitor a surf point → run_surf_point, then list_surf_jobs / wait_for_surf_job.
+- Run or monitor a Workflow → run_workflow, then list_surf_jobs / wait_for_surf_job.
 - Inspect data → list_tables, read_table, list_database_fields.
 
 When multiple products are authorized, pass products[].productId (from get_context) on every product-scoped call.`
@@ -213,13 +212,13 @@ function registerTools(
           ),
           read: canUseCapability(context, "context.read"),
           execute:
-            canUseCapability(context, "surf_points.execute") ||
+            canUseCapability(context, "workflows.execute") ||
             canUseCapability(context, "deepline.execute"),
           write:
             canUseCapability(context, "products.write") ||
-            canUseCapability(context, "surf_points.execute") ||
-            canUseCapability(context, "surf_points.write") ||
-            canUseCapability(context, "surf_points.delete") ||
+            canUseCapability(context, "workflows.execute") ||
+            canUseCapability(context, "workflows.write") ||
+            canUseCapability(context, "workflows.delete") ||
             canUseCapability(context, "tables.write") ||
             canUseCapability(context, "tables.delete") ||
             canUseCapability(context, "schemas.write") ||
@@ -285,46 +284,46 @@ function registerTools(
   )
 
   registerPublicTool(
-    "list_surf_points",
-    listSurfPointsSchema,
+    "list_workflows",
+    listWorkflowsSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("list_surf_points")
-        return repository.listSurfPoints(toolContext(args), args)
+        assertToolAllowed("list_workflows")
+        return repository.listWorkflows(toolContext(args), args)
       })
   )
 
-  registerPublicTool("get_surf_point", getSurfPointSchema, async (args: any) =>
+  registerPublicTool("get_workflow", getWorkflowSchema, async (args: any) =>
     runJsonTool(async () => {
-      assertToolAllowed("get_surf_point")
-      return repository.getSurfPoint(toolContext(args), args.surfPointId)
+      assertToolAllowed("get_workflow")
+      return repository.getWorkflow(toolContext(args), args.workflowId)
     })
   )
 
   registerPublicTool(
-    "create_surf_point",
-    createSurfPointSchema,
+    "create_workflow",
+    createWorkflowSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("create_surf_point")
-        return repository.createSurfPoint(toolContext(args), args)
+        assertToolAllowed("create_workflow")
+        return repository.createWorkflow(toolContext(args), args)
       })
   )
 
   registerPublicTool(
-    "update_surf_point",
-    updateSurfPointSchema,
+    "update_workflow",
+    updateWorkflowSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("update_surf_point")
-        return repository.updateSurfPoint(toolContext(args), args)
+        assertToolAllowed("update_workflow")
+        return repository.updateWorkflow(toolContext(args), args)
       })
   )
 
-  registerPublicTool("run_surf_point", runSurfPointSchema, async (args: any) =>
+  registerPublicTool("run_workflow", runWorkflowSchema, async (args: any) =>
     runJsonTool(async () => {
-      assertToolAllowed("run_surf_point")
-      return repository.runSurfPoint(toolContext(args), args)
+      assertToolAllowed("run_workflow")
+      return repository.runWorkflow(toolContext(args), args)
     })
   )
 
@@ -363,12 +362,12 @@ function registerTools(
   )
 
   registerPublicTool(
-    "delete_surf_point",
-    deleteSurfPointSchema,
+    "delete_workflow",
+    deleteWorkflowSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("delete_surf_point")
-        return repository.deleteSurfPoints(toolContext(args), args.surfPointIds)
+        assertToolAllowed("delete_workflow")
+        return repository.deleteWorkflows(toolContext(args), args.workflowIds)
       })
   )
 
@@ -380,26 +379,13 @@ function registerTools(
   )
 
   registerPublicTool(
-    "update_surf_point_flow",
-    updateSurfPointFlowSchema,
+    "edit_workflow_flows",
+    editWorkflowFlowsSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("update_surf_point_flow")
-        return repository.updateSurfPointFlow(toolContext(args), {
-          playbookId: args.playbookId,
-          flow: args.flow,
-        })
-      })
-  )
-
-  registerPublicTool(
-    "apply_surf_point_edits",
-    applyFlowEditsSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("apply_surf_point_edits")
+        assertToolAllowed("edit_workflow_flows")
         return repository.applyFlowEdits(toolContext(args), {
-          playbookId: args.playbookId,
+          workflowId: args.workflowId,
           edits: args.edits,
         })
       })
@@ -412,7 +398,7 @@ function registerTools(
       runJsonTool(async () => {
         assertToolAllowed("get_node_upstream_context")
         return repository.getNodeUpstreamContext(toolContext(args), {
-          playbookId: args.playbookId,
+          workflowId: args.workflowId,
           nodeId: args.nodeId,
         })
       })
@@ -425,7 +411,7 @@ function registerTools(
       runJsonTool(async () => {
         assertToolAllowed("create_campaign")
         return repository.createCampaign(toolContext(args), {
-          playbookId: args.playbookId,
+          workflowId: args.workflowId,
           contactTableId: args.contactTableId,
           recipientField: args.recipientField,
           mailbox: args.mailbox,
@@ -435,13 +421,13 @@ function registerTools(
   )
 
   registerPublicTool(
-    "test_surf_point_node",
-    testSurfPointNodeSchema,
+    "test_workflow_node",
+    testWorkflowNodeSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("test_surf_point_node")
-        return repository.testSurfPointNode(toolContext(args), {
-          playbookId: args.playbookId,
+        assertToolAllowed("test_workflow_node")
+        return repository.testWorkflowNode(toolContext(args), {
+          workflowId: args.workflowId,
           nodeId: args.nodeId,
           sampleText: args.sampleText,
         })
@@ -592,44 +578,44 @@ function registerTools(
 
   registerPublicTool(
     "list_signals",
-    listSurfPointSourcesSchema,
+    listWorkflowSourcesSchema,
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("list_signals")
-        return repository.listSurfPointSources(
+        return repository.listWorkflowSources(
           toolContext(args),
-          args.surfPointId
+          args.workflowId
         )
       })
   )
 
   registerPublicTool(
     "create_signal",
-    createSurfPointSourceSchema,
+    createWorkflowSourceSchema,
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("create_signal")
-        return repository.createSurfPointSource(toolContext(args), args)
+        return repository.createWorkflowSource(toolContext(args), args)
       })
   )
 
   registerPublicTool(
     "update_signal",
-    updateSurfPointSourceSchema,
+    updateWorkflowSourceSchema,
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("update_signal")
-        return repository.updateSurfPointSource(toolContext(args), args)
+        return repository.updateWorkflowSource(toolContext(args), args)
       })
   )
 
   registerPublicTool(
     "delete_signal",
-    deleteSurfPointSourceSchema,
+    deleteWorkflowSourceSchema,
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("delete_signal")
-        return repository.deleteSurfPointSource(toolContext(args), args)
+        return repository.deleteWorkflowSource(toolContext(args), args)
       })
   )
 
@@ -681,14 +667,14 @@ function registerTools(
   )
 
   registerPublicTool(
-    "list_surf_point_tools",
-    listSurfPointToolsSchema,
+    "list_workflow_tools",
+    listWorkflowToolsSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("list_surf_point_tools")
-        return repository.listSurfPointTools(
+        assertToolAllowed("list_workflow_tools")
+        return repository.listWorkflowTools(
           toolContext(args),
-          args.surfPointId
+          args.workflowId
         )
       })
   )
@@ -799,18 +785,18 @@ function registerResources(
   if (contextProductIds.length > 1) return
 
   server.registerResource(
-    "signalsurf_surf_points",
-    "signalsurf://surf-points",
+    "signalsurf_workflows",
+    "signalsurf://workflows",
     {
-      title: "SignalSurf Surf Points",
-      description: "Non-deleted surf points for the current product.",
+      title: "SignalSurf Workflows",
+      description: "Non-deleted Workflows for the current product.",
       mimeType: "application/json",
     },
     async (uri) => {
-      assertCanUseCapability(context, "surf_points.read")
+      assertCanUseCapability(context, "workflows.read")
       return jsonResource(
         uri.href,
-        await repository.listSurfPoints(resolveProductContext(context), {
+        await repository.listWorkflows(resolveProductContext(context), {
           limit: 200,
         })
       )
@@ -818,25 +804,25 @@ function registerResources(
   )
 
   server.registerResource(
-    "signalsurf_surf_point",
-    new ResourceTemplate("signalsurf://surf-points/{surfPointId}", {
+    "signalsurf_workflow",
+    new ResourceTemplate("signalsurf://workflows/{workflowId}", {
       list: async () => {
-        if (!canUseCapability(context, "surf_points.read")) {
+        if (!canUseCapability(context, "workflows.read")) {
           return { resources: [] }
         }
-        const { surfPoints } = await repository.listSurfPoints(
+        const { workflows } = await repository.listWorkflows(
           resolveProductContext(context),
           {
             limit: 200,
           }
         )
         return {
-          resources: surfPoints.map(
-            (surfPoint: { surfPointId: string; name: string }) => ({
-              uri: `signalsurf://surf-points/${surfPoint.surfPointId}`,
-              name: `Surf Point: ${surfPoint.name}`,
-              title: surfPoint.name,
-              description: `SignalSurf surf point ${surfPoint.name}`,
+          resources: workflows.map(
+            (workflow: { workflowId: string; name: string }) => ({
+              uri: `signalsurf://workflows/${workflow.workflowId}`,
+              name: `Workflow: ${workflow.name}`,
+              title: workflow.name,
+              description: `SignalSurf Workflow ${workflow.name}`,
               mimeType: "application/json",
             })
           ),
@@ -844,45 +830,45 @@ function registerResources(
       },
     }),
     {
-      title: "SignalSurf Surf Point",
-      description: "One surf point by surfPointId.",
+      title: "SignalSurf Workflow",
+      description: "One Workflow by workflowId.",
       mimeType: "application/json",
     },
     async (uri, variables) => {
-      assertCanUseCapability(context, "surf_points.read")
+      assertCanUseCapability(context, "workflows.read")
       return jsonResource(
         uri.href,
-        await repository.getSurfPoint(
+        await repository.getWorkflow(
           resolveProductContext(context),
-          String(variables.surfPointId ?? "")
+          String(variables.workflowId ?? "")
         )
       )
     }
   )
 
   server.registerResource(
-    "signalsurf_surf_point_sources",
-    new ResourceTemplate("signalsurf://surf-points/{surfPointId}/sources", {
+    "signalsurf_workflow_sources",
+    new ResourceTemplate("signalsurf://workflows/{workflowId}/sources", {
       list: async () => {
         if (
           !canUseCapability(context, "sources.read") ||
-          !canUseCapability(context, "surf_points.read")
+          !canUseCapability(context, "workflows.read")
         ) {
           return { resources: [] }
         }
-        const { surfPoints } = await repository.listSurfPoints(
+        const { workflows } = await repository.listWorkflows(
           resolveProductContext(context),
           {
             limit: 200,
           }
         )
         return {
-          resources: surfPoints.map(
-            (surfPoint: { surfPointId: string; name: string }) => ({
-              uri: `signalsurf://surf-points/${surfPoint.surfPointId}/sources`,
-              name: `Sources: ${surfPoint.name}`,
-              title: `${surfPoint.name} Sources`,
-              description: `Safe source metadata for SignalSurf surf point ${surfPoint.name}`,
+          resources: workflows.map(
+            (workflow: { workflowId: string; name: string }) => ({
+              uri: `signalsurf://workflows/${workflow.workflowId}/sources`,
+              name: `Sources: ${workflow.name}`,
+              title: `${workflow.name} Sources`,
+              description: `Safe source metadata for SignalSurf Workflow ${workflow.name}`,
               mimeType: "application/json",
             })
           ),
@@ -890,42 +876,42 @@ function registerResources(
       },
     }),
     {
-      title: "SignalSurf Surf Point Sources",
-      description: "Safe source metadata for one surf point.",
+      title: "SignalSurf Workflow Sources",
+      description: "Safe source metadata for one Workflow.",
       mimeType: "application/json",
     },
     async (uri, variables) => {
       assertCanUseCapability(context, "sources.read")
       return jsonResource(
         uri.href,
-        await repository.listSurfPointSources(
+        await repository.listWorkflowSources(
           resolveProductContext(context),
-          String(variables.surfPointId ?? "")
+          String(variables.workflowId ?? "")
         )
       )
     }
   )
 
   server.registerResource(
-    "signalsurf_surf_point_tools",
-    new ResourceTemplate("signalsurf://surf-points/{surfPointId}/tools", {
+    "signalsurf_workflow_tools",
+    new ResourceTemplate("signalsurf://workflows/{workflowId}/tools", {
       list: async () => {
-        if (!canUseCapability(context, "surf_points.read")) {
+        if (!canUseCapability(context, "workflows.read")) {
           return { resources: [] }
         }
-        const { surfPoints } = await repository.listSurfPoints(
+        const { workflows } = await repository.listWorkflows(
           resolveProductContext(context),
           {
             limit: 200,
           }
         )
         return {
-          resources: surfPoints.map(
-            (surfPoint: { surfPointId: string; name: string }) => ({
-              uri: `signalsurf://surf-points/${surfPoint.surfPointId}/tools`,
-              name: `Tools: ${surfPoint.name}`,
-              title: `${surfPoint.name} Tools`,
-              description: `Tool ids attached to SignalSurf surf point ${surfPoint.name}`,
+          resources: workflows.map(
+            (workflow: { workflowId: string; name: string }) => ({
+              uri: `signalsurf://workflows/${workflow.workflowId}/tools`,
+              name: `Tools: ${workflow.name}`,
+              title: `${workflow.name} Tools`,
+              description: `Tool ids attached to SignalSurf Workflow ${workflow.name}`,
               mimeType: "application/json",
             })
           ),
@@ -933,17 +919,17 @@ function registerResources(
       },
     }),
     {
-      title: "SignalSurf Surf Point Tools",
-      description: "Tool ids attached to one surf point.",
+      title: "SignalSurf Workflow Tools",
+      description: "Tool ids attached to one Workflow.",
       mimeType: "application/json",
     },
     async (uri, variables) => {
-      assertCanUseCapability(context, "surf_points.read")
+      assertCanUseCapability(context, "workflows.read")
       return jsonResource(
         uri.href,
-        await repository.listSurfPointTools(
+        await repository.listWorkflowTools(
           resolveProductContext(context),
-          String(variables.surfPointId ?? "")
+          String(variables.workflowId ?? "")
         )
       )
     }
@@ -958,7 +944,7 @@ function registerResources(
       mimeType: "application/json",
     },
     async (uri) => {
-      assertCanUseCapability(context, "surf_points.read")
+      assertCanUseCapability(context, "workflows.read")
       return jsonResource(
         uri.href,
         await repository.listProductTools(resolveProductContext(context), {
@@ -973,11 +959,11 @@ function registerResources(
     "signalsurf://surf-jobs",
     {
       title: "SignalSurf Surf Jobs",
-      description: "Recent surf point execution jobs for the current product.",
+      description: "Recent Workflow execution jobs for the current product.",
       mimeType: "application/json",
     },
     async (uri) => {
-      assertCanUseCapability(context, "surf_points.read")
+      assertCanUseCapability(context, "workflows.read")
       return jsonResource(
         uri.href,
         await repository.listSurfJobs(resolveProductContext(context), {
@@ -991,7 +977,7 @@ function registerResources(
     "signalsurf_surf_job",
     new ResourceTemplate("signalsurf://surf-jobs/{jobId}", {
       list: async () => {
-        if (!canUseCapability(context, "surf_points.read")) {
+        if (!canUseCapability(context, "workflows.read")) {
           return { resources: [] }
         }
         const { jobs } = await repository.listSurfJobs(
@@ -1013,11 +999,11 @@ function registerResources(
     }),
     {
       title: "SignalSurf Surf Job",
-      description: "One surf point execution job by job id.",
+      description: "One Workflow execution job by job id.",
       mimeType: "application/json",
     },
     async (uri, variables) => {
-      assertCanUseCapability(context, "surf_points.read")
+      assertCanUseCapability(context, "workflows.read")
       return jsonResource(
         uri.href,
         await repository.getSurfJob(
