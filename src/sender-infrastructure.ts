@@ -394,6 +394,33 @@ function positiveInteger(value: number, label: string) {
   return value
 }
 
+const WARMUP_DAYS = 15
+const WARMUP_START_PER_DAY = 2
+
+function projectNewMailboxCapacityByDay(
+  sendingDays: number,
+  dailyLimit: number,
+  utilization: number
+): number[] {
+  const start = Math.min(WARMUP_START_PER_DAY, dailyLimit)
+  return Array.from({ length: sendingDays }, (_, dayIndex) => {
+    const effectiveLimit =
+      dayIndex >= WARMUP_DAYS - 1
+        ? dailyLimit
+        : Math.max(
+            start,
+            Math.min(
+              dailyLimit,
+              Math.round(
+                start +
+                  (dailyLimit - start) * (dayIndex / (WARMUP_DAYS - 1))
+              )
+            )
+          )
+    return Math.floor(effectiveLimit * utilization)
+  })
+}
+
 export async function planSenderCapacity(
   db: SupabaseLike,
   context: SignalSurfContext,
@@ -422,9 +449,21 @@ export async function planSenderCapacity(
   const infrastructure = await inspectSenderInfrastructure(db, context, input)
   const plannedMessages = recipients * touches
   const targetDailyMessages = Math.ceil(plannedMessages / sendingDays)
-  const effectiveMailboxDaily = dailyLimit * (utilizationPercent / 100)
+  const utilization = utilizationPercent / 100
+  const effectiveMailboxDaily = dailyLimit * utilization
+  const newMailboxWindowCapacity = projectNewMailboxCapacityByDay(
+    sendingDays,
+    dailyLimit,
+    utilization
+  ).reduce((total, capacity) => total + capacity, 0)
+  if (newMailboxWindowCapacity <= 0) {
+    throw new UserFacingError(
+      "The selected mailbox limit and utilization leave no usable sending capacity.",
+      { code: "INVALID_CAPACITY_INPUT", status: 400 }
+    )
+  }
   const requiredMailboxes = Math.ceil(
-    targetDailyMessages / effectiveMailboxDaily
+    plannedMessages / newMailboxWindowCapacity
   )
   const requiredDomains = Math.ceil(requiredMailboxes / mailboxesPerDomain)
   const existingUsableMailboxes = infrastructure.mailboxes.filter(
@@ -440,7 +479,7 @@ export async function planSenderCapacity(
     : null
 
   return {
-    calculationVersion: "sender-capacity-hosted-2026-09-01.v1",
+    calculationVersion: "sender-capacity-hosted-2026-09-03.v2",
     assumptions: {
       recipients,
       touchesPerRecipient: touches,
@@ -457,9 +496,9 @@ export async function planSenderCapacity(
       sendingDays:
         "Sending days available, not elapsed calendar days. Extending the timeline reduces the required capacity.",
       dailyLimitPerMailbox:
-        "Editable planning default, not a provider or product limit.",
+        "Editable steady-state planning limit, not a provider or product limit. New mailboxes follow the canonical 15-day ramp starting at 2 messages per day.",
       utilizationPercent:
-        "Editable safety factor for uneven delivery windows, ramping and operational headroom.",
+        "Editable safety factor for operational headroom, applied after the new-mailbox ramp.",
       mailboxesPerDomain:
         "Editable planning ratio, not a quota. A higher number reduces domain count but concentrates reputation risk.",
     },
@@ -467,11 +506,12 @@ export async function planSenderCapacity(
       plannedMessages: `${recipients} × ${touches} = ${plannedMessages}`,
       targetDailyMessages: `ceil(${plannedMessages} ÷ ${sendingDays}) = ${targetDailyMessages}`,
       effectiveMailboxDaily: `${dailyLimit} × ${utilizationPercent}% = ${effectiveMailboxDaily}`,
-      requiredMailboxes: `ceil(${targetDailyMessages} ÷ ${effectiveMailboxDaily}) = ${requiredMailboxes}`,
+      newMailboxWindowCapacity: `sum(floor(canonical 15-day ramp × ${utilizationPercent}%)) across ${sendingDays} sending days = ${newMailboxWindowCapacity}`,
+      requiredMailboxes: `ceil(${plannedMessages} ÷ ${newMailboxWindowCapacity} ramped window capacity) = ${requiredMailboxes}`,
       requiredDomains: `ceil(${requiredMailboxes} ÷ ${mailboxesPerDomain}) = ${requiredDomains}`,
     },
     rounding:
-      "Daily volume, mailbox count and domain count round up so the plan does not understate worst-case demand.",
+      "Each day's ramped mailbox capacity rounds down after utilization; daily volume, mailbox count and domain count round up so the plan does not understate worst-case demand.",
     liveFacts: infrastructure,
     comparisons: {
       useExisting: {

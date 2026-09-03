@@ -300,15 +300,39 @@ describe("hosted sender infrastructure", () => {
     expect(defaultPlan.formulas.targetDailyMessages).toBe(
       "ceil(30000 ÷ 20) = 1500"
     )
-    expect(defaultPlan.comparisons.meetTarget.requiredNewMailboxes).toBe(63)
-    expect(defaultPlan.comparisons.meetTarget.requiredNewDomains).toBe(21)
-    expect(defaultPlan.comparisons.meetTarget.additionalDomains).toBe(21)
-    expect(fivePerDomain.comparisons.meetTarget.requiredNewDomains).toBe(13)
+    expect(defaultPlan.formulas.newMailboxWindowCapacity).toBe(
+      "sum(floor(canonical 15-day ramp × 80%)) across 20 sending days = 306"
+    )
+    expect(defaultPlan.comparisons.meetTarget.requiredNewMailboxes).toBe(99)
+    expect(defaultPlan.comparisons.meetTarget.requiredNewDomains).toBe(33)
+    expect(defaultPlan.comparisons.meetTarget.additionalDomains).toBe(33)
+    expect(fivePerDomain.comparisons.meetTarget.requiredNewDomains).toBe(20)
     expect(
       defaultPlan.comparisons.meetTarget.projectedInventoryAfterPurchase
         .mailboxes
-    ).toBe(64)
+    ).toBe(100)
     expect(defaultPlan.comparisons.useExisting.creditedDailyCapacity).toBe(0)
+  })
+
+  it("applies the canonical Campaign ramp to new mailbox capacity", async () => {
+    const result = await planSenderCapacity(
+      new FakeSupabase(seed()) as never,
+      context,
+      {
+        recipients: 7,
+        touchesPerRecipient: 1,
+        sendingDays: 2,
+        dailyLimitPerMailbox: 30,
+        utilizationPercent: 100,
+      }
+    )
+
+    expect(result.comparisons.meetTarget).toMatchObject({
+      requiredNewMailboxes: 2,
+      requiredNewDomains: 1,
+      additionalMailboxes: 2,
+      additionalDomains: 1,
+    })
   })
 
   it("fails closed when live Domain availability is not configured", async () => {
