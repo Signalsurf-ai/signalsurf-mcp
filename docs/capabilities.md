@@ -108,8 +108,9 @@ The sender-infrastructure scope is read-only, included in default hosted
 authorization, and projected behind the Workspace `inbox` capability. `30`
 messages per mailbox per day, `80%` utilization, and `3`
 mailboxes per Domain are editable planning defaults, not quotas. Hosted MCP
-does not have verified live provider usage, so the planner shows inventory but
-credits zero existing capacity rather than overstating readiness.
+uses the same 15-day new-mailbox ramp as Campaign capacity planning. It does not
+have verified live provider usage, so the planner shows inventory but credits
+zero existing capacity rather than overstating readiness.
 
 OAuth tokens can authorize multiple products. Agents should call `get_context`
 first; when multiple `productIds` are returned, choose from `products[]` using
