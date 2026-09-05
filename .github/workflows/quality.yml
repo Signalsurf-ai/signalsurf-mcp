@@ -32,14 +32,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check Surfer/MCP parity registry
-        run: pnpm check:surfer-parity
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Test
-        run: pnpm test
-
-      - name: Build
-        run: pnpm build
+      - name: Validate PR
+        run: pnpm check:pr
