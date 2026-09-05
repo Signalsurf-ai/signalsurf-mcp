@@ -9,13 +9,3 @@ Use Node 22 (CI; package minimum 22.13.0) and pnpm 10.0.0 from `package.json`. R
 Preserve workspace/actor authorization, capability gates and response contracts. Validate through the public MCP tool where appropriate, including authorization failures; mocked repository tests alone do not prove live Supabase/provider behavior. Keep service credentials server-side and out of outputs or logs. Verify the actual project/environment before any live data mutation.
 
 For upstream SignalSurf changes, locate the matching repository and inspect its current guidance/contract. Sibling paths and a green parity check alone do not establish deployment compatibility. Record missing upstream/runtime evidence in the PR.
-
-## Delivery
-
-Inspect `git status --short --branch`, remotes and worktrees; fetch the intended PR base (normally `origin/main`). Preserve unrelated work and use a task branch/worktree from the fetched base. Review the complete base-to-head diff plus staged, unstaged and untracked changes. Stage explicit task paths, use a fitting conventional commit, and recheck any hook edits.
-
-Run the checks below before handoff, push normally and create/update a scoped PR using `--body-file` for multiline text. Preserve a requested Draft state. When merging is already authorized, verify the local tested SHA equals the PR head, check current CI and unresolved reviews, then merge with `gh pr merge <pr> --squash --match-head-commit <sha>` (or the repository's supported method). Do not bypass protection. Verify the merged state/SHA; code merge is not runtime/deployment proof.
-
-## Main branch gate
-
-The intended main-branch policy is versioned in [.github/branch-protection.json](.github/branch-protection.json): require the current GitHub Actions quality gate against an up-to-date base, resolve review conversations, and prohibit force pushes/deletion. Check live GitHub settings for drift; committing this file alone does not apply protection. Keep admin enforcement enabled and do not bypass failing checks. No mandatory human review count is introduced.
