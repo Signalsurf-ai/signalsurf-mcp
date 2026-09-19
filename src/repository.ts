@@ -6,6 +6,7 @@ import { canonicalJson, canonicalSha256 } from "./canonical-json.js"
 import {
   grantedCapabilitiesForScopes,
   isSupportedMcpScope,
+  MCP_DM_SCOPE,
   parseStoredScopes,
   scopesImplyWriteAccess,
 } from "./capabilities.js"
@@ -564,7 +565,11 @@ type McpOAuthTokenRow = {
   id: string
   client_id: string
   user_id: string
-  product_id: string
+  // SIG-2318 renamed these to workspace_id / workspace_ids; the product_*
+  // names are kept only as a fallback for older rows in tests.
+  workspace_id?: string | null
+  workspace_ids?: string[] | null
+  product_id?: string | null
   product_ids?: string[] | null
   scope: string
   resource: string
@@ -863,7 +868,14 @@ function sameStrings(left: string[], right: string[]): boolean {
 }
 
 function oauthTokenProductIds(row: McpOAuthTokenRow): string[] {
-  return uniqueIds([row.product_id, ...(row.product_ids ?? [])].filter(Boolean))
+  return uniqueIds(
+    [
+      row.workspace_id,
+      ...(row.workspace_ids ?? []),
+      row.product_id,
+      ...(row.product_ids ?? []),
+    ].filter((id): id is string => Boolean(id))
+  )
 }
 
 function idempotentSurfJobId(
@@ -1585,21 +1597,39 @@ export class SignalSurfRepository {
       )
     }
 
+    const productIds = oauthTokenProductIds(row)
+    const tokenName = client.client_name
+      ? `OAuth: ${client.client_name}`
+      : "OAuth MCP client"
+    // SIG-2673: a grant approved in Direct Message mode only relays to the
+    // web Surfer session endpoint, which re-authorizes it per workspace.
+    if (parseStoredScopes(row.scope).includes(MCP_DM_SCOPE)) {
+      return {
+        productId: productIds[0]!,
+        productIds,
+        userId: row.user_id,
+        role: "viewer",
+        tokenName,
+        authKind: "oauth",
+        mode: "surfer_session",
+        oauthTokenId: row.id,
+        oauthGrantId: row.refresh_token_family_id ?? row.id,
+        oauthClientId: row.client_id,
+      }
+    }
+
     const scopes = parseStoredScopes(row.scope).filter(isSupportedMcpScope)
     if (grantedCapabilitiesForScopes(scopes).length === 0) {
       return null
     }
-    const productIds = oauthTokenProductIds(row)
 
     return {
-      productId: row.product_id,
+      productId: productIds[0]!,
       productIds,
       products: await this.resolveProductContexts(productIds),
       userId: row.user_id,
       role: scopesImplyWriteAccess(scopes) ? "editor" : "viewer",
-      tokenName: client.client_name
-        ? `OAuth: ${client.client_name}`
-        : "OAuth MCP client",
+      tokenName,
       scopes,
       authKind: "oauth",
       mode: "tools",

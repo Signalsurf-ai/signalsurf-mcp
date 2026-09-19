@@ -53,6 +53,12 @@ export const MCP_RESOURCE_SCOPES = [
   ...MCP_GRANULAR_SCOPES,
 ] as const
 
+// SIG-2673: a grant approved in Direct Message mode carries only this scope
+// (plus offline_access). It exposes no product tools; the server relays to the
+// member's Surfer instead. Advertised first so clients request both modes and
+// the member picks one on the consent page.
+export const MCP_DM_SCOPE = "mcp:dm"
+
 export const MCP_DEFAULT_RESOURCE_SCOPES = MCP_GRANULAR_SCOPES.filter(
   (scope) => scope !== "mcp:deepline.enrich" && scope !== "mcp:deepline.execute"
 )
