@@ -29,6 +29,8 @@ export type HttpServerDependencies = {
     authorizationServerUrl?: string
     accessToken?: string
   }) => SignalSurfRepository
+  /** Test seam for the Surfer session relay; production uses global fetch. */
+  surferSessionFetch?: typeof fetch
 }
 
 class McpJsonParseError extends Error {
@@ -134,6 +136,8 @@ function findInsufficientScopeRequest(
   context: SignalSurfContext,
   body: unknown
 ): { toolName: PublicMcpToolName; requiredScopes: readonly string[] } | null {
+  // Session mode has no scoped tools; the relay owns member authority.
+  if (context.mode === "surfer_session") return null
   const messages = Array.isArray(body) ? body : [body]
   for (const message of messages) {
     const toolName = getKnownToolName(message)
@@ -227,7 +231,15 @@ export function createHttpApp(
         return
       }
 
-      const server = await createSignalSurfMcpServer({ context, repository })
+      const server = await createSignalSurfMcpServer({
+        context,
+        repository,
+        surferSession: {
+          baseUrl: config.authorizationServerUrl,
+          accessToken,
+          fetch: dependencies.surferSessionFetch,
+        },
+      })
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
       })

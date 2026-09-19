@@ -77,6 +77,12 @@ import {
   updateWorkflowSourceSchema,
   waitForSurfJobSchema,
 } from "./schemas.js"
+import {
+  SURFER_SESSION_INSTRUCTIONS,
+  SurferSessionClient,
+  registerSurferSessionTools,
+  type SurferSessionClientOptions,
+} from "./surfer-session.js"
 import { searchCapabilities } from "./tool-search.js"
 import type { SignalSurfContext } from "./types.js"
 import {
@@ -91,6 +97,8 @@ import {
 export type CreateServerOptions = {
   context: SignalSurfContext
   repository: SignalSurfRepository
+  /** Relay target for Surfer session mode (`context.mode === "surfer_session"`). */
+  surferSession?: SurferSessionClientOptions
 }
 
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
@@ -149,6 +157,9 @@ export async function createSignalSurfMcpServer(
   options: CreateServerOptions
 ): Promise<McpServer> {
   const { context, repository } = options
+  if (context.mode === "surfer_session") {
+    return createSurferSessionServer(options.surferSession ?? {})
+  }
   // OAuth/database tokens resolve product names during token resolution; static
   // env tokens do not. Resolve them once here so every response (get_context and
   // the signalsurf://context resource) reports real names instead of raw UUIDs.
@@ -187,6 +198,29 @@ export async function createSignalSurfMcpServer(
     tables: isToolVisibleAcrossProducts(context, "list_tables"),
     workflows: isToolVisibleAcrossProducts(context, "create_workflow"),
   })
+  return server
+}
+
+/**
+ * Session mode registers only the Surfer relay tools: no tool-mode tools,
+ * resources, or prompts, and no product-context resolution.
+ */
+function createSurferSessionServer(
+  relay: SurferSessionClientOptions
+): McpServer {
+  const server = new McpServer(
+    {
+      name: "signalsurf-mcp",
+      version: "0.1.0",
+    },
+    {
+      capabilities: {
+        tools: {},
+      },
+      instructions: SURFER_SESSION_INSTRUCTIONS,
+    }
+  )
+  registerSurferSessionTools(server, new SurferSessionClient(relay))
   return server
 }
 
