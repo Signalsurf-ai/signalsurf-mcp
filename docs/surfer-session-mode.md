@@ -6,19 +6,30 @@ endpoint. The bearer token decides which one a request sees.
 | Mode | Token | Tools | Who acts |
 | --- | --- | --- | --- |
 | Tool mode (default) | OAuth grant or manual token with `mode = tools` | The public product-operation catalog (`PUBLIC_MCP_TOOLS`), OAuth scopes, resources, prompts, and the one-time approval flow | The external client drives SignalSurf directly |
-| Surfer session mode | Manual token issued in SignalSurf Settings with `mode = surfer_session` | `message_surfer`, `read_surfer_session`, `answer_surfer_confirmation`, `close_surfer_session` | Surfer, SignalSurf's server-side agent, acting as the token's member |
+| Surfer session mode | Manual token issued in SignalSurf Settings with `mode = surfer_session` | `list_surfer_workspaces`, `message_surfer`, `read_surfer_session`, `answer_surfer_confirmation`, `close_surfer_session` | Surfer, SignalSurf's server-side agent, acting as the token's member |
 
-Session mode changes nothing about tool mode: its four tools are not part of
+Session mode changes nothing about tool mode: its tools are not part of
 `PUBLIC_MCP_TOOLS`, the public tool contract, or the Surfer parity registry.
 
 ## Issuing a session token
 
 A workspace member opens SignalSurf Settings → Agent → Profile → MCP →
 Surfer session access and creates a **Surfer session** token. The token is
-bound to that member; a member holds at most one active session token per
-workspace. Revoking the token ends access immediately. Membership and role
-are re-validated on every relay call, so a removed member's token stops
-working before the next action.
+bound to that member and to the workspaces ticked when issuing it (the current
+workspace plus any others the member belongs to, SIG-2669). A member's active
+session tokens never share a workspace. Revoking the token ends access
+immediately. Membership is re-validated in the target workspace on every relay
+call, so losing one workspace stops access there without affecting the others.
+
+## Several workspaces
+
+Each workspace has its own Surfer, sessions, delegation ledger, memory and
+timers; one MCP connection simply talks to each of them. Every session tool
+takes an optional `workspaceId`. It may be omitted when the token reaches a
+single workspace or when `sessionId` already identifies one; otherwise the call
+fails with `WORKSPACE_REQUIRED` instead of guessing. `list_surfer_workspaces`
+returns the granted workspaces with the member's current access and open-session
+count in each.
 
 ## How a session works
 
@@ -40,22 +51,23 @@ client.
 
 ## Tools
 
-- `message_surfer({ sessionId?, message, occurrenceId?, waitSeconds?, clientLabel? })`
+- `list_surfer_workspaces()` lists the workspaces this token may reach.
+- `message_surfer({ workspaceId?, sessionId?, message, occurrenceId?, waitSeconds?, clientLabel? })`
   appends one member message. Omit `sessionId` to open a new session. The
   call waits up to `waitSeconds` (default 25) for Surfer's reply; otherwise it
   returns `reply.status = "pending"` plus a `nextStep`. Retrying with the same
   `occurrenceId` is idempotent.
-- `read_surfer_session({ sessionId?, afterSequence?, limit? })` returns the
+- `read_surfer_session({ workspaceId?, sessionId?, afterSequence?, limit? })` returns the
   transcript after a sequence, current activity, Surfer's private Working
   State, delegated Project Thread work with source links, timers, and pending
   confirmations/decisions. Without `sessionId` it lists the token's sessions.
-- `answer_surfer_confirmation({ sessionId, confirmationId, decision | answer, occurrenceId? })`
+- `answer_surfer_confirmation({ workspaceId?, sessionId, confirmationId, decision | answer, occurrenceId? })`
   answers a pending item through its original authority boundary. Ids look like
   `op:<uuid>` (a confirmation raised inside the private conversation) or
   `decision:<uuid>` (a shared Project Thread decision projected into the
   session). Approval resumes exactly the original operation and cannot be
   replayed or redirected.
-- `close_surfer_session({ sessionId })` ends the session (idempotent). A
+- `close_surfer_session({ workspaceId?, sessionId })` ends the session (idempotent). A
   scheduled follow-up moves to the canonical Direct Message; the Direct Message
   holds one follow-up, so if it already has one the result reports
   `droppedTimerCount` instead of replacing it.

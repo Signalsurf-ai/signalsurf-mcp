@@ -14,6 +14,7 @@ import { jsonErrorResult, jsonResult } from "./mcp-results.js"
  */
 
 export const SURFER_SESSION_TOOL_NAMES = [
+  "list_surfer_workspaces",
   "message_surfer",
   "read_surfer_session",
   "answer_surfer_confirmation",
@@ -41,16 +42,27 @@ const mutatingAnnotations = {
 } as const
 
 export const SURFER_SESSION_TOOLS = {
+  list_surfer_workspaces: {
+    title: "List Surfer workspaces",
+    description:
+      "List the SignalSurf workspaces this session token may reach, with the member's current access and open-session count in each. Each workspace has its own Surfer; nothing is shared between workspaces. Call this first when the member works in more than one workspace.",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
   message_surfer: {
     title: "Message Surfer",
     description:
-      'Send one member message to Surfer, SignalSurf\'s server-side agent. Omit sessionId to open a new session; pass an existing id to continue it. Waits up to waitSeconds for Surfer\'s reply. When reply.status is "pending", follow nextStep and call read_surfer_session with afterSequence = message.sequence. Retry a failed call with the same occurrenceId to avoid duplicate messages.',
+      'Send one member message to Surfer, SignalSurf\'s server-side agent. Omit sessionId to open a new session; pass an existing id to continue it. Waits up to waitSeconds for Surfer\'s reply. When reply.status is "pending", follow nextStep and call read_surfer_session with afterSequence = message.sequence. Retry a failed call with the same occurrenceId to avoid duplicate messages. workspaceId picks the granted workspace whose Surfer to use (see list_surfer_workspaces); omit it only when the token reaches one workspace or sessionId already identifies it.',
     annotations: mutatingAnnotations,
   },
   read_surfer_session: {
     title: "Read Surfer session",
     description:
-      "Read a Surfer session: transcript events after a sequence number, current activity, working state, delegated Project Thread work, timers, and pending confirmations/decisions. Omit sessionId to list this token's sessions. This is the only way to confirm Surfer actually did something; a returned tool call is not completion.",
+      "Read a Surfer session: transcript events after a sequence number, current activity, working state, delegated Project Thread work, timers, and pending confirmations/decisions. Omit sessionId to list this token's sessions. This is the only way to confirm Surfer actually did something; a returned tool call is not completion. workspaceId picks the granted workspace whose Surfer to use (see list_surfer_workspaces); omit it only when the token reaches one workspace or sessionId already identifies it.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -61,13 +73,13 @@ export const SURFER_SESSION_TOOLS = {
   answer_surfer_confirmation: {
     title: "Answer Surfer confirmation",
     description:
-      'Approve or reject a pending Surfer confirmation, or answer a pending question decision. Use the confirmationId exactly as returned by message_surfer or read_surfer_session ("op:<uuid>" or "decision:<uuid>"). decision approves or rejects op: confirmations and operation-approval decisions; a question decision needs answer as { answers: [{ fieldId, value }] } with one entry per field from read_surfer_session (value: an option id, or an array of ids for multi_select; a string for text; a boolean for confirmation). Provide exactly one of decision or answer.',
+      'Approve or reject a pending Surfer confirmation, or answer a pending question decision. Use the confirmationId exactly as returned by message_surfer or read_surfer_session ("op:<uuid>" or "decision:<uuid>"). decision approves or rejects op: confirmations and operation-approval decisions; a question decision needs answer as { answers: [{ fieldId, value }] } with one entry per field from read_surfer_session (value: an option id, or an array of ids for multi_select; a string for text; a boolean for confirmation). Provide exactly one of decision or answer. workspaceId picks the granted workspace whose Surfer to use (see list_surfer_workspaces); omit it only when the token reaches one workspace or sessionId already identifies it.',
     annotations: mutatingAnnotations,
   },
   close_surfer_session: {
     title: "Close Surfer session",
     description:
-      "Close a Surfer session when the member is done. Idempotent; closing an already-closed session returns it unchanged. A scheduled follow-up moves to the member's Direct Message; if that Direct Message already has one, droppedTimerCount reports the follow-up that was not moved.",
+      "Close a Surfer session when the member is done. Idempotent; closing an already-closed session returns it unchanged. A scheduled follow-up moves to the member's Direct Message; if that Direct Message already has one, droppedTimerCount reports the follow-up that was not moved. workspaceId picks the granted workspace whose Surfer to use (see list_surfer_workspaces); omit it only when the token reaches one workspace or sessionId already identifies it.",
     annotations: mutatingAnnotations,
   },
 } as const satisfies Record<SurferSessionToolName, SurferSessionToolDefinition>
@@ -76,6 +88,7 @@ export const SURFER_SESSION_INSTRUCTIONS = `SignalSurf MCP — Surfer session mo
 
 You are relaying a SignalSurf member's messages to Surfer, SignalSurf's server-side agent. Surfer plans and delegates real work into Project Threads; you are an input device, not the coordinator.
 
+- If the member works in more than one workspace, call list_surfer_workspaces and pass workspaceId; each workspace has its own Surfer and nothing is shared between them.
 - Use message_surfer to talk to Surfer.
 - Use read_surfer_session to see the transcript, pending confirmations, and delegated work.
 - Use answer_surfer_confirmation to approve, reject, or answer pending items.
@@ -85,8 +98,13 @@ Never claim work is complete because a call returned; read the session to confir
 
 const uuidSchema = z.string().uuid()
 
+const workspaceIdField = uuidSchema.nullable().optional()
+
+export const listSurferWorkspacesSchema = z.object({}).strict()
+
 export const messageSurferSchema = z
   .object({
+    workspaceId: workspaceIdField,
     sessionId: uuidSchema.nullable().optional(),
     message: z.string().min(1).max(12000),
     occurrenceId: uuidSchema.optional(),
@@ -97,6 +115,7 @@ export const messageSurferSchema = z
 
 export const readSurferSessionSchema = z
   .object({
+    workspaceId: workspaceIdField,
     sessionId: uuidSchema.nullable().optional(),
     afterSequence: z.number().int().min(0).optional(),
     limit: z.number().int().min(1).max(100).default(50),
@@ -105,6 +124,7 @@ export const readSurferSessionSchema = z
 
 export const answerSurferConfirmationSchema = z
   .object({
+    workspaceId: workspaceIdField,
     sessionId: uuidSchema,
     confirmationId: z.string().min(1),
     decision: z.enum(["approve", "reject"]).optional(),
@@ -115,11 +135,13 @@ export const answerSurferConfirmationSchema = z
 
 export const closeSurferSessionSchema = z
   .object({
+    workspaceId: workspaceIdField,
     sessionId: uuidSchema,
   })
   .strict()
 
 export const SURFER_SESSION_TOOL_SCHEMAS = {
+  list_surfer_workspaces: listSurferWorkspacesSchema,
   message_surfer: messageSurferSchema,
   read_surfer_session: readSurferSessionSchema,
   answer_surfer_confirmation: answerSurferConfirmationSchema,
@@ -127,6 +149,7 @@ export const SURFER_SESSION_TOOL_SCHEMAS = {
 } as const satisfies Record<SurferSessionToolName, z.ZodTypeAny>
 
 export type SurferSessionAction =
+  | "workspaces"
   | "message"
   | "read"
   | "answer_confirmation"
@@ -245,6 +268,7 @@ export class SurferSessionClient {
   async message(input: z.infer<typeof messageSurferSchema>) {
     const occurrenceId = input.occurrenceId ?? randomUUID()
     const result = await this.call("message", {
+      workspaceId: input.workspaceId ?? null,
       sessionId: input.sessionId ?? null,
       message: input.message,
       occurrenceId,
@@ -271,6 +295,7 @@ export class SurferSessionClient {
 
   async read(input: z.infer<typeof readSurferSessionSchema>) {
     return this.call("read", {
+      workspaceId: input.workspaceId ?? null,
       sessionId: input.sessionId ?? null,
       afterSequence: input.afterSequence,
       limit: input.limit,
@@ -290,6 +315,7 @@ export class SurferSessionClient {
     }
     const occurrenceId = input.occurrenceId ?? randomUUID()
     const result = await this.call("answer_confirmation", {
+      workspaceId: input.workspaceId ?? null,
       sessionId: input.sessionId,
       confirmationId: input.confirmationId,
       decision: input.decision,
@@ -300,7 +326,14 @@ export class SurferSessionClient {
   }
 
   async close(input: z.infer<typeof closeSurferSessionSchema>) {
-    return this.call("close", { sessionId: input.sessionId })
+    return this.call("close", {
+      workspaceId: input.workspaceId ?? null,
+      sessionId: input.sessionId,
+    })
+  }
+
+  async workspaces() {
+    return this.call("workspaces", {})
   }
 }
 
@@ -326,6 +359,11 @@ export function registerSurferSessionTools(
     }
   }
 
+  server.registerTool(
+    "list_surfer_workspaces",
+    config("list_surfer_workspaces"),
+    () => runSessionTool(() => client.workspaces())
+  )
   server.registerTool("message_surfer", config("message_surfer"), (args: any) =>
     runSessionTool(() => client.message(args))
   )
