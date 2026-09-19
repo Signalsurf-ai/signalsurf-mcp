@@ -565,12 +565,9 @@ type McpOAuthTokenRow = {
   id: string
   client_id: string
   user_id: string
-  // SIG-2318 renamed these to workspace_id / workspace_ids; the product_*
-  // names are kept only as a fallback for older rows in tests.
-  workspace_id?: string | null
+  // SIG-2318 renamed the grant columns from product_id / product_ids.
+  workspace_id: string
   workspace_ids?: string[] | null
-  product_id?: string | null
-  product_ids?: string[] | null
   scope: string
   resource: string
   access_token_expires_at: string
@@ -869,12 +866,9 @@ function sameStrings(left: string[], right: string[]): boolean {
 
 function oauthTokenProductIds(row: McpOAuthTokenRow): string[] {
   return uniqueIds(
-    [
-      row.workspace_id,
-      ...(row.workspace_ids ?? []),
-      row.product_id,
-      ...(row.product_ids ?? []),
-    ].filter((id): id is string => Boolean(id))
+    [row.workspace_id, ...(row.workspace_ids ?? [])].filter(
+      (id): id is string => Boolean(id)
+    )
   )
 }
 
@@ -1779,7 +1773,7 @@ export class SignalSurfRepository {
     const { error } = await this.db
       .from("mcp_oauth_tokens")
       .update({
-        product_ids: productIds,
+        workspace_ids: productIds,
         updated_at: new Date().toISOString(),
       })
       .eq("id", context.oauthTokenId)
