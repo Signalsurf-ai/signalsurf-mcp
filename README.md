@@ -237,6 +237,14 @@ OAuth tokens may also carry
 `offline_access` for refresh-token support. The MCP resource server accepts that scope but does not advertise it as
 a resource requirement, and it grants no tool capability by itself.
 
+## Surfer Session Mode
+
+Besides the product-operation tool mode documented below, a manual token issued
+with `mode = surfer_session` turns the same endpoint into a four-tool relay to
+Surfer, SignalSurf's server-side agent, acting as the token's member. See
+[docs/surfer-session-mode.md](docs/surfer-session-mode.md). Tool mode is
+unchanged by this surface.
+
 ## Architecture
 
 ```text

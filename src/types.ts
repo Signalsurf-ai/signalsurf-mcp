@@ -16,6 +16,8 @@ export type SignalSurfContext = {
   tokenName?: string
   scopes?: string[]
   authKind?: "env" | "manual" | "oauth"
+  /** Hosted MCP surface. `surfer_session` relays to Surfer; absent means tool mode. */
+  mode?: "tools" | "surfer_session"
   oauthTokenId?: string
   oauthGrantId?: string
   oauthClientId?: string

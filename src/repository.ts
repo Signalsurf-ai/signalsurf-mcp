@@ -557,6 +557,7 @@ type McpTokenRow = {
   name: string | null
   role: AccessRole
   revoked_at: string | null
+  mode?: string | null
 }
 
 type McpOAuthTokenRow = {
@@ -1487,7 +1488,11 @@ export class SignalSurfRepository {
   ): Promise<SignalSurfContext | null> {
     const { data, error } = await this.db
       .from("mcp_tokens")
-      .select("id, product_id, created_by, name, role, revoked_at")
+      // The column is `workspace_id` since the SIG-2318 rename; alias it onto
+      // the row shape this repository still uses.
+      .select(
+        "id, product_id:workspace_id, created_by, name, role, revoked_at, mode"
+      )
       .eq("token_sha256", sha256Hex(token))
       .is("revoked_at", null)
       .maybeSingle()
@@ -1527,6 +1532,7 @@ export class SignalSurfRepository {
       role: row.role,
       tokenName: row.name ?? undefined,
       authKind: "manual",
+      mode: row.mode === "surfer_session" ? "surfer_session" : "tools",
     }
   }
 
@@ -1596,6 +1602,7 @@ export class SignalSurfRepository {
         : "OAuth MCP client",
       scopes,
       authKind: "oauth",
+      mode: "tools",
       oauthTokenId: row.id,
       oauthGrantId: row.refresh_token_family_id ?? row.id,
       oauthClientId: row.client_id,
