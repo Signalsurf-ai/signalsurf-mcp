@@ -1,0 +1,25 @@
+# SIG-2671: hosted SignalSurf MCP on Cloudflare Workers.
+# Secrets (never committed): SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY, BYCRAWL_API_KEY
+# and any optional provider keys. Set them with `wrangler secret put <NAME>`.
+name = "signalsurf-mcp"
+main = "worker/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+SIGNALSURF_MCP_AUTH_MODE = "database"
+SIGNALSURF_MCP_PATH = "/mcp"
+SIGNALSURF_MCP_RESOURCE_URL = "https://mcp.signalsurf.ai/mcp"
+SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL = "https://www.signalsurf.ai"
+SIGNALSURF_MCP_ALLOWED_HOSTS = "mcp.signalsurf.ai"
+SIGNALSURF_MCP_TRUST_PROXY = "true"
+SIGNALSURF_SUPABASE_URL = "https://wizgibkirtzpjilgvrbm.supabase.co"
+
+[observability]
+enabled = true
+
+# signalsurf.ai is on this Cloudflare account, so wrangler manages the DNS
+# record for this hostname.
+[[routes]]
+pattern = "mcp.signalsurf.ai"
+custom_domain = true

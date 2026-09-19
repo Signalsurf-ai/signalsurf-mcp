@@ -98,9 +98,32 @@ SIGNALSURF_MCP_ALLOWED_HOSTS=mcp.signalsurf.ai
 SIGNALSURF_MCP_TRUST_PROXY=true
 ```
 
-On Zeabur and similar platforms, do not hard-code
-`SIGNALSURF_MCP_PORT=3333`. The service reads the platform-provided `PORT` and
-listens on `0.0.0.0` when that variable is present.
+### Production hosting: Cloudflare Worker (SIG-2671)
+
+`mcp.signalsurf.ai` runs as the Cloudflare Worker `signalsurf-mcp`
+(`worker/index.ts`, `wrangler.toml`). The Worker serves the same Express app
+through Cloudflare's Node HTTP server support (`nodejs_compat`); non-secret
+settings are `[vars]` in `wrangler.toml`, and secrets are set once with
+`wrangler secret put`:
+
+- `SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY`: a Supabase secret API key dedicated
+  to this Worker (`signalsurf_mcp_worker`), so it can be revoked without
+  touching other services;
+- `BYCRAWL_API_KEY` and any optional provider keys.
+
+Deploy from a clean checkout of `main`:
+
+```bash
+npx wrangler@4 deploy
+```
+
+The Worker loads its configuration on the first request, so a missing secret
+answers `503 CONFIG_ERROR` instead of failing the upload. `wrangler tail
+signalsurf-mcp` streams production logs.
+
+On container platforms, do not hard-code `SIGNALSURF_MCP_PORT=3333`. The
+service reads the platform-provided `PORT` and listens on `0.0.0.0` when that
+variable is present.
 
 Build and run:
 
