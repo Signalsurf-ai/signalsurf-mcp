@@ -94,7 +94,7 @@ describe("Surfer session mode", () => {
     expect(tools?.mode).toBe("tools")
   })
 
-  it("registers only the four session tools in session mode and none in tool mode", async () => {
+  it("registers only the session tools in session mode and none in tool mode", async () => {
     const sessionClient = await connect({
       productId,
       role: "editor",
@@ -164,6 +164,64 @@ describe("Surfer session mode", () => {
     const retryBody = JSON.parse(String(calls[1].init.body))
     expect(retryBody.occurrenceId).toBe(sentBody.occurrenceId)
     expect(retryBody.sessionId).toBe(sessionId)
+  })
+
+  it("lists granted workspaces and forwards workspaceId on every session action (SIG-2669)", async () => {
+    const otherWorkspace = "00000000-0000-4000-8000-000000000002"
+    const bodies: any[] = []
+    const fetchImpl = vi.fn(async (_url: any, init: any) => {
+      const body = JSON.parse(String(init.body))
+      bodies.push(body)
+      if (body.action === "workspaces") {
+        return jsonResponse(200, {
+          ok: true,
+          workspaces: [
+            { workspaceId: productId, name: "Alpha", home: true, available: true, openSessions: 1 },
+            { workspaceId: otherWorkspace, name: "Beta", home: false, available: true, openSessions: 0 },
+          ],
+        })
+      }
+      return jsonResponse(200, {
+        ok: true,
+        session: { id: sessionId, workspaceId: otherWorkspace, closedAt: null },
+        message: { eventId: "e1", sequence: 1, deduplicated: false },
+        reply: { status: "replied", eventId: "e2", sequence: 2, text: "ok" },
+        pending: { confirmations: [], decisions: [] },
+      })
+    })
+    const client = await connect(
+      { productId, role: "editor", mode: "surfer_session" },
+      fetchImpl as unknown as typeof fetch
+    )
+    const listed = await client.callTool({
+      name: "list_surfer_workspaces",
+      arguments: {},
+    })
+    expect(JSON.parse((listed.content as any)[0].text).workspaces).toHaveLength(2)
+    await client.callTool({
+      name: "message_surfer",
+      arguments: { workspaceId: otherWorkspace, message: "Status in Beta?" },
+    })
+    await client.callTool({
+      name: "read_surfer_session",
+      arguments: { workspaceId: otherWorkspace, sessionId },
+    })
+    await client.callTool({
+      name: "close_surfer_session",
+      arguments: { sessionId },
+    })
+    expect(bodies.map((body) => body.action)).toEqual([
+      "workspaces",
+      "message",
+      "read",
+      "close",
+    ])
+    expect(bodies[0]).toEqual({ action: "workspaces" })
+    expect(bodies[1].workspaceId).toBe(otherWorkspace)
+    expect(bodies[2].workspaceId).toBe(otherWorkspace)
+    // Omitted workspaceId is sent as null so the web relay decides from the
+    // grant or the session; the MCP never guesses a workspace.
+    expect(bodies[3].workspaceId).toBeNull()
   })
 
   it("preserves web relay error codes and statuses", async () => {
