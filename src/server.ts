@@ -78,11 +78,10 @@ import {
   waitForSurfJobSchema,
 } from "./schemas.js"
 import {
-  SURFER_SESSION_INSTRUCTIONS,
-  SurferSessionClient,
-  registerSurferSessionTools,
-  type SurferSessionClientOptions,
-} from "./surfer-session.js"
+  DirectMessageClient,
+  loadDirectMessageSurface,
+  type DirectMessageClientOptions,
+} from "./direct-message.js"
 import { searchCapabilities } from "./tool-search.js"
 import type { SignalSurfContext } from "./types.js"
 import {
@@ -98,7 +97,7 @@ export type CreateServerOptions = {
   context: SignalSurfContext
   repository: SignalSurfRepository
   /** Relay target for Surfer session mode (`context.mode === "surfer_session"`). */
-  surferSession?: SurferSessionClientOptions
+  surferSession?: DirectMessageClientOptions
 }
 
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
@@ -158,7 +157,7 @@ export async function createSignalSurfMcpServer(
 ): Promise<McpServer> {
   const { context, repository } = options
   if (context.mode === "surfer_session") {
-    return createSurferSessionServer(options.surferSession ?? {})
+    return createDirectMessageServer(options.surferSession ?? {})
   }
   // OAuth/database tokens resolve product names during token resolution; static
   // env tokens do not. Resolve them once here so every response (get_context and
@@ -205,9 +204,12 @@ export async function createSignalSurfMcpServer(
  * Session mode registers only the Surfer relay tools: no tool-mode tools,
  * resources, or prompts, and no product-context resolution.
  */
-function createSurferSessionServer(
-  relay: SurferSessionClientOptions
-): McpServer {
+async function createDirectMessageServer(
+  relay: DirectMessageClientOptions
+): Promise<McpServer> {
+  // SIG-2681: SignalSurf publishes this member's capabilities and the role
+  // they act in, so a failure to load them must not silently publish nothing.
+  const surface = await loadDirectMessageSurface(new DirectMessageClient(relay))
   const server = new McpServer(
     {
       name: "signalsurf-mcp",
@@ -217,10 +219,10 @@ function createSurferSessionServer(
       capabilities: {
         tools: {},
       },
-      instructions: SURFER_SESSION_INSTRUCTIONS,
+      instructions: surface.instructions,
     }
   )
-  registerSurferSessionTools(server, new SurferSessionClient(relay))
+  surface.register(server.server)
   return server
 }
 
