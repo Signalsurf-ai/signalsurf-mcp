@@ -188,7 +188,10 @@ export class SurferSessionClient {
   constructor(options: SurferSessionClientOptions) {
     this.baseUrl = options.baseUrl?.trim().replace(/\/+$/, "") || undefined
     this.accessToken = options.accessToken?.trim() || undefined
-    this.fetchImpl = options.fetch ?? fetch
+    // workerd rejects a bare `fetch` invoked as a method with "Illegal
+    // invocation", so the relay must hold a bound copy. Node does not care,
+    // which is why this only ever failed on the deployed Worker.
+    this.fetchImpl = options.fetch ?? fetch.bind(globalThis)
     this.timeoutMs = options.timeoutMs ?? 65_000
   }
 
@@ -214,7 +217,17 @@ export class SurferSessionClient {
         body: JSON.stringify({ action, ...body }),
         signal: AbortSignal.timeout(this.timeoutMs),
       })
-    } catch {
+    } catch (error) {
+      // Without this the cause is invisible in production: the tool returns a
+      // generic "could not be reached" and the Worker logs nothing.
+      console.error("Surfer session relay request failed", {
+        action,
+        endpoint: this.endpoint,
+        error:
+          error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : String(error),
+      })
       throw unavailable(
         "SignalSurf could not be reached for this Surfer session.",
         { action }

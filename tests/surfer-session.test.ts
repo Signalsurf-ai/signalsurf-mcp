@@ -56,6 +56,36 @@ async function connect(context: SignalSurfContext, fetchImpl?: typeof fetch) {
   return client
 }
 
+describe("Surfer session relay transport", () => {
+  it("calls a fetch bound to globalThis, as workerd requires", async () => {
+    // A bare `fetch` stored on the client and called as `this.fetchImpl(...)`
+    // throws "Illegal invocation" on workerd while passing on Node, so the
+    // receiver is asserted here instead of in production (SIG-2676).
+    const original = globalThis.fetch
+    const receivers: unknown[] = []
+    globalThis.fetch = function trackingFetch(this: unknown) {
+      receivers.push(this)
+      return Promise.resolve(
+        new Response(JSON.stringify({ ok: true, workspaces: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      )
+    } as unknown as typeof fetch
+    try {
+      const client = new SurferSessionClient({
+        baseUrl: "https://app.signalsurf.test",
+        accessToken: "ssmcp_at_test",
+      })
+      await client.call("workspaces", {})
+    } finally {
+      globalThis.fetch = original
+    }
+    expect(receivers).toHaveLength(1)
+    expect(receivers[0] === globalThis || receivers[0] === undefined).toBe(true)
+  })
+})
+
 describe("Surfer session mode", () => {
   it("resolves the token mode from the hosted database row", async () => {
     const db = new FakeSupabase({
