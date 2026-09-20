@@ -54,27 +54,64 @@ function selectedColumns(select) {
     .filter((part) => /^[a-z_][a-z0-9_]*$/.test(part))
 }
 
-/** Keys of an object literal written inline in an insert/update/upsert call. */
+/**
+ * Keys of an object literal written inline in an insert/update/upsert call.
+ * Scans characters rather than matching a delimiter, so the first key of a
+ * one-line literal is not swallowed with its opening brace, and only keys —
+ * never words inside values — are collected.
+ */
 function payloadKeys(source, openIndex) {
-  let depth = 0
-  let index = openIndex
-  for (; index < source.length; index += 1) {
-    const character = source[index]
-    if (character === "{") depth += 1
-    else if (character === "}") {
-      depth -= 1
-      if (depth === 0) break
-    }
-  }
-  const body = source.slice(openIndex, index + 1)
   const keys = []
-  let nesting = 0
-  for (const match of body.matchAll(
-    /[{}]|(^|[,{])\s*([a-z_][a-z0-9_]*)\s*:/gm
-  )) {
-    if (match[0] === "{") nesting += 1
-    else if (match[0] === "}") nesting -= 1
-    else if (nesting === 1 && match[2]) keys.push(match[2])
+  let depth = 0
+  let identifier = ""
+  let expectKey = false
+  let quote = ""
+  for (let index = openIndex; index < source.length; index += 1) {
+    const character = source[index]
+    if (quote) {
+      if (character === quote && source[index - 1] !== "\\") quote = ""
+      continue
+    }
+    if (character === '"' || character === "'" || character === "`") {
+      quote = character
+      identifier = ""
+      continue
+    }
+    if (character === "{") {
+      depth += 1
+      identifier = ""
+      expectKey = depth === 1
+      continue
+    }
+    if (character === "}") {
+      depth -= 1
+      identifier = ""
+      expectKey = depth === 1
+      if (depth === 0) break
+      continue
+    }
+    if (depth !== 1) continue
+    if (character === ",") {
+      identifier = ""
+      expectKey = true
+      continue
+    }
+    if (!expectKey) continue
+    if (/[A-Za-z0-9_$]/.test(character)) {
+      identifier += character
+      continue
+    }
+    if (character === ":" && identifier) {
+      keys.push(identifier)
+      identifier = ""
+      expectKey = false
+      continue
+    }
+    if (!/\s/.test(character)) {
+      identifier = ""
+      expectKey = false
+      continue
+    }
   }
   return keys
 }
