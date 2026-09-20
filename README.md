@@ -262,12 +262,12 @@ a resource requirement, and it grants no tool capability by itself.
 
 ## Surfer Session Mode
 
-Besides the product-operation tool mode documented below, a manual token issued
-with `mode = surfer_session`, or an OAuth grant approved in Direct Message
-mode (SIG-2673), turns the MCP into a relay to Surfer,
-SignalSurf's server-side agent, acting as the token's member in each workspace
-the token was granted. See
-[docs/surfer-session-mode.md](docs/surfer-session-mode.md). Tool mode is
+Besides the product-operation tool mode documented below, a grant approved in
+Direct Message mode (`mcp:dm`, or a manual token with `mode = surfer_session`)
+gives the client the capability set the member's own Surfer Direct Message has,
+acting as that member in each granted workspace. SignalSurf publishes that
+catalogue; this server states no tool list of its own for that mode. See
+[docs/direct-message-mode.md](docs/direct-message-mode.md). Tool mode is
 unchanged by this surface.
 
 ## Architecture

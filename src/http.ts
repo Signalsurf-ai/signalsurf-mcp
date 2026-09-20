@@ -31,7 +31,8 @@ export type HttpServerDependencies = {
     accessToken?: string
   }) => SignalSurfRepository
   /** Test seam for the Surfer session relay; production uses global fetch. */
-  surferSessionFetch?: typeof fetch
+  /** SIG-2681: injected transport for the Direct Message capability relay. */
+  directMessageFetch?: typeof fetch
 }
 
 class McpJsonParseError extends Error {
@@ -238,7 +239,7 @@ export function createHttpApp(
         surferSession: {
           baseUrl: config.authorizationServerUrl,
           accessToken,
-          fetch: dependencies.surferSessionFetch,
+          fetch: dependencies.directMessageFetch,
         },
       })
       const transport = new StreamableHTTPServerTransport({

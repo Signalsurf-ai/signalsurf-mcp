@@ -1,36 +1,48 @@
-# Direct Message mode (Surfer session)
+# Direct Message mode
 
-The hosted MCP serves two modes on one endpoint: Tools mode and Direct Message
-mode (internally the `surfer_session` surface). The bearer token decides which
-one a request sees.
+The hosted MCP serves two modes on one endpoint, chosen by the member on
+SignalSurf's OAuth consent page.
 
-| Mode | Token | Tools | Who acts |
+| Mode | Grant | What the client gets | Who acts |
 | --- | --- | --- | --- |
-| Tools mode | OAuth grant with product scopes, or a manual token with `mode = tools` | The public product-operation catalog (`PUBLIC_MCP_TOOLS`), OAuth scopes, resources, prompts, and the one-time approval flow | The external client drives SignalSurf directly |
-| Direct Message mode | OAuth grant with `mcp:dm`, or a manual token issued in SignalSurf Settings with `mode = surfer_session` | `list_workspaces`, `send_message`, `read_conversation`, `answer_question`, `close_conversation` | Surfer, SignalSurf's server-side agent, acting as the token's member |
+| Tools mode | product scopes, or a manual token with `mode = tools` | The public product-operation catalogue (`PUBLIC_MCP_TOOLS`) | The client drives SignalSurf directly |
+| Direct Message mode | `mcp:dm`, or a manual token with `mode = surfer_session` | The capability set the member's own Surfer Direct Message has | The client acts as the member |
 
-Session mode changes nothing about tool mode: its tools are not part of
-`PUBLIC_MCP_TOOLS`, the public tool contract, or the Surfer parity registry.
+## What Direct Message mode is (SIG-2681)
 
-## Connecting (OAuth, SIG-2673)
+The member's conversation lives in their own client. SignalSurf keeps no
+second conversation, no server-side assistant of its own, and no transcript of
+what the member said to their client. The client acts as the member with the
+same capabilities the member's in-product Surfer Direct Message has: start or
+continue Project Threads, review and manage delegated work, create and update
+Projects, manage Project members and triggers, drive Thread Tasks. Real work
+and its record live in the Projects those capabilities touch.
 
-Both modes share one endpoint, `https://mcp.signalsurf.ai/mcp`. Add it to an
-MCP client without any token:
+SignalSurf publishes the catalogue per member and workspace, so this server
+states no tool list of its own:
+
+- `POST {authorization server}/api/mcp/direct-message`
+  - `{"action":"workspaces"}` — the granted workspaces, each with the member's
+    access and that workspace's Surfer name.
+  - `{"action":"catalog","workspaceId":…}` — the member's capabilities, with
+    the product's own descriptions and argument schemas.
+  - `{"action":"call","workspaceId":…,"tool":…,"arguments":{…}}` — run one, as
+    the member, after SignalSurf re-validates membership in that workspace.
+
+The server registers `list_workspaces` plus every published capability, adding
+`workspaceId` to each schema. Nothing in this mode can change workspace data
+directly; that is Tools mode, approved separately.
+
+## Connecting
 
 ```bash
 claude mcp add --transport http signalsurf https://mcp.signalsurf.ai/mcp
 ```
 
-The resource metadata and the 401 challenge advertise `mcp:dm` ahead of the
-tool scopes, so clients request both. The SignalSurf consent page shows a
-Direct Message / Tools tab (Direct Message by default) and the member picks
-one mode and the workspaces for it. A Direct Message grant carries only
-`mcp:dm` (plus `offline_access`), needs full member role in each workspace,
-and exposes only the relay tools below; a Tools grant carries product scopes
-and never reaches Surfer. The grant's scope decides the mode on every call,
-and refresh re-checks membership in every granted workspace. Switching modes
-means authorizing again; to use both at once, add the endpoint twice under
-different names.
+The consent page offers Direct Message and Tools; Direct Message is the
+default when the client requests `mcp:dm`, which the 401 challenge advertises
+first. Switching modes means authorizing again.
+
 
 ## Manual session token (fallback)
 
