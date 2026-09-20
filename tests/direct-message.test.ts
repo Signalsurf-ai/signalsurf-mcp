@@ -24,7 +24,7 @@ const toolOAuth = "ssmcp_at_tool_grant"
 
 const CATALOG = [
   {
-    name: "post_project_channel_message",
+    name: "start_thread",
     description: "Start a Project Thread.",
     inputSchema: {
       type: "object",
@@ -32,7 +32,7 @@ const CATALOG = [
     },
   },
   {
-    name: "commander_query",
+    name: "read_thread",
     description: "Review delegated Project Thread work.",
     inputSchema: { type: "object", properties: {} },
   },
@@ -55,7 +55,11 @@ function signalSurfStub() {
   return vi.fn(async (_url: unknown, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body ?? "{}"))
     if (body.action === "catalog") {
-      return jsonResponse(200, { ok: true, tools: CATALOG })
+      return jsonResponse(200, {
+        ok: true,
+        tools: CATALOG,
+        role: "You act as the member who authorized this connection.",
+      })
     }
     if (body.action === "workspaces") {
       return jsonResponse(200, { ok: true, workspaces: [] })
@@ -211,7 +215,7 @@ describe("Direct Message mode transport", () => {
           code: "MEMBERSHIP_REVOKED",
         })) as unknown as typeof fetch,
     })
-    await expect(client.run("commander_query", {})).rejects.toMatchObject({
+    await expect(client.run("read_thread", {})).rejects.toMatchObject({
       status: 403,
       code: "MEMBERSHIP_REVOKED",
     })
@@ -219,7 +223,7 @@ describe("Direct Message mode transport", () => {
 })
 
 describe("Direct Message mode over HTTP", () => {
-  it("publishes the member's Surfer capabilities, never the tool catalogue", async () => {
+  it("publishes the member's capabilities, never the tool catalogue", async () => {
     const { base } = await start()
     const response = await listTools(base, manualDm)
     expect(response.status).toBe(200)
@@ -238,7 +242,7 @@ describe("Direct Message mode over HTTP", () => {
       id: 2,
       method: "tools/call",
       params: {
-        name: "post_project_channel_message",
+        name: "start_thread",
         arguments: { workspaceId: productId, projectId: "p1" },
       },
     })
@@ -247,7 +251,7 @@ describe("Direct Message mode over HTTP", () => {
     const body = JSON.parse(String((call?.[1] as RequestInit).body))
     expect(body).toMatchObject({
       action: "call",
-      tool: "post_project_channel_message",
+      tool: "start_thread",
       workspaceId: productId,
       arguments: { projectId: "p1" },
     })
@@ -260,12 +264,29 @@ describe("Direct Message mode over HTTP", () => {
   it("serves Direct Message mode to an mcp:dm grant and tool mode to the others", async () => {
     const { base } = await start()
     const dm = await (await listTools(base, dmOAuth)).text()
-    expect(dm).toContain("commander_query")
+    expect(dm).toContain("read_thread")
     expect(dm).not.toContain("get_context")
 
     const tools = await (await listTools(base, toolOAuth)).text()
     expect(tools).toContain("get_context")
-    expect(tools).not.toContain("commander_query")
+    expect(tools).not.toContain("read_thread")
+  })
+
+  it("states the role the client acts in", async () => {
+    const { base } = await start()
+    const response = await rpc(base, manualDm, {
+      jsonrpc: "2.0",
+      id: 9,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1" },
+      },
+    })
+    const text = await response.text()
+    expect(text).toContain("act as the SignalSurf member")
+    expect(text).toContain("authorized this connection")
   })
 
   it("advertises Direct Message mode first in its OAuth metadata", async () => {

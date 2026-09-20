@@ -78,9 +78,8 @@ import {
   waitForSurfJobSchema,
 } from "./schemas.js"
 import {
-  DIRECT_MESSAGE_INSTRUCTIONS,
   DirectMessageClient,
-  registerDirectMessageTools,
+  loadDirectMessageSurface,
   type DirectMessageClientOptions,
 } from "./direct-message.js"
 import { searchCapabilities } from "./tool-search.js"
@@ -208,6 +207,9 @@ export async function createSignalSurfMcpServer(
 async function createDirectMessageServer(
   relay: DirectMessageClientOptions
 ): Promise<McpServer> {
+  // SIG-2681: SignalSurf publishes this member's capabilities and the role
+  // they act in, so a failure to load them must not silently publish nothing.
+  const surface = await loadDirectMessageSurface(new DirectMessageClient(relay))
   const server = new McpServer(
     {
       name: "signalsurf-mcp",
@@ -217,12 +219,10 @@ async function createDirectMessageServer(
       capabilities: {
         tools: {},
       },
-      instructions: DIRECT_MESSAGE_INSTRUCTIONS,
+      instructions: surface.instructions,
     }
   )
-  // SIG-2681: the capability set is published by SignalSurf for this member,
-  // so the tools here are the ones their own Surfer Direct Message has.
-  await registerDirectMessageTools(server.server, new DirectMessageClient(relay))
+  surface.register(server.server)
   return server
 }
 

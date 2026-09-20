@@ -17,11 +17,12 @@ import { jsonErrorResult, jsonResult } from "./mcp-results.js"
 
 export const DIRECT_MESSAGE_INSTRUCTIONS = `SignalSurf MCP — Direct Message mode.
 
-You act as the SignalSurf member, with the capabilities their own private Surfer Direct Message has. There is no separate SignalSurf-side assistant and no stored copy of this conversation: what you do lands in Projects, where the member and their colleagues see it.
+You act as the SignalSurf member who authorized this connection, with their workspace role and nothing more. Everything you post, answer, or create is recorded as that member, exactly as if they had done it in SignalSurf themselves. SignalSurf keeps no copy of this conversation and runs no assistant of its own for it.
 
 - Call list_workspaces first when the member reaches more than one workspace, and pass workspaceId on every later call.
-- Work happens in Projects: start or continue a Project Thread rather than answering as if SignalSurf saw this conversation.
-- Nothing here can change workspace data directly; that is Tools mode, which the member approves separately.`
+- Read Activity to see what is new and what waits on the member; read a Thread before claiming anything happened there.
+- Work happens in Projects. Start a Thread or reply in one, and that Project's Surfer does the work under its own confirmations. Read the Thread afterwards to see what it actually did.
+- You cannot change workspace data directly — no Tables, rows, Workflow runs, or sending. Ask for it in a Thread instead. Direct product operations are Tools mode, which the member approves separately.`
 
 export const DIRECT_MESSAGE_UNAVAILABLE = "DIRECT_MESSAGE_UNAVAILABLE"
 
@@ -124,9 +125,16 @@ export class DirectMessageClient {
     return this.call({ action: "workspaces" })
   }
 
-  async catalog(workspaceId?: string | null): Promise<DirectMessageTool[]> {
+  async catalog(
+    workspaceId?: string | null
+  ): Promise<{ tools: DirectMessageTool[]; role: string | null }> {
     const result = await this.call({ action: "catalog", workspaceId })
-    return Array.isArray(result.tools) ? (result.tools as DirectMessageTool[]) : []
+    return {
+      tools: Array.isArray(result.tools)
+        ? (result.tools as DirectMessageTool[])
+        : [],
+      role: typeof result.role === "string" ? result.role : null,
+    }
   }
 
   async run(
@@ -165,51 +173,59 @@ function withWorkspaceId(schema: JsonRecord): JsonRecord {
   return { ...schema, type: "object", properties, additionalProperties: false }
 }
 
-export async function registerDirectMessageTools(
-  server: Server,
+export type DirectMessageSurface = {
+  instructions: string
+  register: (server: Server) => void
+}
+
+/**
+ * SignalSurf publishes the member's capabilities and the role they act in, so
+ * the connection states both rather than restating a list here.
+ */
+export async function loadDirectMessageSurface(
   client: DirectMessageClient
-): Promise<void> {
-  let catalog: DirectMessageTool[] = []
-  try {
-    catalog = await client.catalog()
-  } catch (error) {
-    console.error("Direct Message capability catalogue unavailable", {
-      error: error instanceof Error ? `${error.name}: ${error.message}` : error,
-    })
-  }
+): Promise<DirectMessageSurface> {
+  const { tools: published, role } = await client.catalog()
   const tools = [
     LIST_WORKSPACES,
-    ...catalog.map((tool) => ({
+    ...published.map((tool) => ({
       ...tool,
       inputSchema: withWorkspaceId(tool.inputSchema ?? {}),
     })),
   ]
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-    })),
-  }))
+  return {
+    instructions: role
+      ? `${DIRECT_MESSAGE_INSTRUCTIONS}\n\n${role}`
+      : DIRECT_MESSAGE_INSTRUCTIONS,
+    register(server: Server) {
+      server.setRequestHandler(ListToolsRequestSchema, async () => ({
+        tools: tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+        })),
+      }))
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const name = request.params.name
-    const args = (request.params.arguments ?? {}) as JsonRecord
-    try {
-      if (name === LIST_WORKSPACES.name) {
-        const result = await client.workspaces()
-        return jsonResult({ workspaces: result.workspaces })
-      }
-      if (!tools.some((tool) => tool.name === name)) {
-        throw new UserFacingError(`Unknown tool: ${name}`, {
-          code: "UNKNOWN_TOOL",
-          status: 404,
-        })
-      }
-      return jsonResult(await client.run(name, args))
-    } catch (error) {
-      return jsonErrorResult(error)
-    }
-  })
+      server.setRequestHandler(CallToolRequestSchema, async (request) => {
+        const name = request.params.name
+        const args = (request.params.arguments ?? {}) as JsonRecord
+        try {
+          if (name === LIST_WORKSPACES.name) {
+            const result = await client.workspaces()
+            return jsonResult({ workspaces: result.workspaces })
+          }
+          if (!tools.some((tool) => tool.name === name)) {
+            throw new UserFacingError(`Unknown tool: ${name}`, {
+              code: "UNKNOWN_TOOL",
+              status: 404,
+            })
+          }
+          return jsonResult(await client.run(name, args))
+        } catch (error) {
+          return jsonErrorResult(error)
+        }
+      })
+    },
+  }
 }
