@@ -11,6 +11,7 @@ import {
 } from "./auth.js"
 import {
   MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_DM_SCOPE,
   MCP_RESOURCE_SCOPES,
   PUBLIC_MCP_TOOLS,
   requiredCapabilitiesForTool,
@@ -78,7 +79,7 @@ function getWwwAuthenticateHeader(config: AppConfig): string {
   if (config.authorizationServerUrl) {
     parts.push(
       `resource_metadata="${getProtectedResourceMetadataUrl(config)}"`,
-      `scope="${MCP_DEFAULT_RESOURCE_SCOPES.join(" ")}"`
+      `scope="${[MCP_DM_SCOPE, ...MCP_DEFAULT_RESOURCE_SCOPES].join(" ")}"`
     )
   }
   return parts.join(", ")
@@ -286,7 +287,7 @@ export function createHttpApp(
       res.json({
         resource: config.resourceUrl,
         authorization_servers: [config.authorizationServerUrl],
-        scopes_supported: MCP_RESOURCE_SCOPES,
+        scopes_supported: [MCP_DM_SCOPE, ...MCP_RESOURCE_SCOPES],
         bearer_methods_supported: ["header"],
       })
     }

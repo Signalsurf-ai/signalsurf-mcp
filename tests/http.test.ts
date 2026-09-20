@@ -391,7 +391,7 @@ describe("HTTP transport", () => {
       'resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"'
     )
     expect(response.headers.get("www-authenticate")).toContain(
-      `scope="${MCP_DEFAULT_RESOURCE_SCOPES.join(" ")}"`
+      `scope="${["mcp:dm", ...MCP_DEFAULT_RESOURCE_SCOPES].join(" ")}"`
     )
     expect(response.headers.get("www-authenticate")).not.toContain(
       MCP_OFFLINE_ACCESS_SCOPE
@@ -424,7 +424,7 @@ describe("HTTP transport", () => {
     expect(body).toMatchObject({
       resource: "https://mcp.example.com/mcp",
       authorization_servers: ["https://app.example.com"],
-      scopes_supported: MCP_RESOURCE_SCOPES,
+      scopes_supported: ["mcp:dm", ...MCP_RESOURCE_SCOPES],
     })
     expect(body.scopes_supported).not.toContain(MCP_OFFLINE_ACCESS_SCOPE)
     expect(body.scopes_supported).toEqual(
@@ -446,7 +446,7 @@ describe("HTTP transport", () => {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
           user_id: "00000000-0000-4000-8000-000000000202",
-          product_id: productId,
+          workspace_id: productId,
           scope: "mcp:read mcp:write offline_access openid profile",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
@@ -505,7 +505,7 @@ describe("HTTP transport", () => {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
           user_id: "00000000-0000-4000-8000-000000000202",
-          product_id: productId,
+          workspace_id: productId,
           scope: "mcp:tables.read mcp:tables.write",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
@@ -580,8 +580,8 @@ describe("HTTP transport", () => {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
           user_id: "00000000-0000-4000-8000-000000000202",
-          product_id: productId,
-          product_ids: [productId, secondProductId],
+          workspace_id: productId,
+          workspace_ids: [productId, secondProductId],
           scope: "mcp:read",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
@@ -730,7 +730,7 @@ describe("HTTP transport", () => {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
           user_id: "00000000-0000-4000-8000-000000000202",
-          product_id: productId,
+          workspace_id: productId,
           scope: "  ",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
@@ -783,7 +783,7 @@ describe("HTTP transport", () => {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
           user_id: "00000000-0000-4000-8000-000000000202",
-          product_id: productId,
+          workspace_id: productId,
           scope: "mcp:read",
           resource: "https://other.example.com/mcp",
           access_token_sha256: sha256Hex(token),

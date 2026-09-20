@@ -1779,8 +1779,8 @@ describe("SignalSurfRepository", () => {
         id: "00000000-0000-4000-8000-000000000601",
         client_id: "ssmcp_client_multi",
         user_id: context.userId,
-        product_id: context.productId,
-        product_ids: [context.productId, secondProductId],
+        workspace_id: context.productId,
+        workspace_ids: [context.productId, secondProductId],
         scope: "mcp:workflows.read mcp:tables.read offline_access",
         resource: "https://mcp.signalsurf.ai/mcp",
         access_token_sha256: sha256Hex("oauth-token"),
@@ -1820,8 +1820,8 @@ describe("SignalSurfRepository", () => {
     db.tables.mcp_oauth_tokens = [
       {
         id: oauthTokenId,
-        product_id: context.productId,
-        product_ids: [context.productId],
+        workspace_id: context.productId,
+        workspace_ids: [context.productId],
       },
     ]
     const oauthContext: SignalSurfContext = {
@@ -1877,7 +1877,7 @@ describe("SignalSurfRepository", () => {
         }),
       ])
     )
-    expect(db.tables.mcp_oauth_tokens[0].product_ids).toEqual([
+    expect(db.tables.mcp_oauth_tokens[0].workspace_ids).toEqual([
       context.productId,
       result.productId,
     ])

@@ -359,4 +359,141 @@ describe("Surfer session mode", () => {
       `Bearer ${token}`
     )
   })
+
+  describe("OAuth Direct Message mode (SIG-2673)", () => {
+    const resource = "http://127.0.0.1:3333/mcp"
+    const sessionOAuth = "ssmcp_at_session_grant"
+    const toolOAuth = "ssmcp_at_tool_grant"
+    const manualTools = "ssmcp_live_manual_tools"
+
+    function oauthRow(id: string, value: string, scope: string) {
+      return {
+        id,
+        client_id: "ssmcp_client_claude",
+        user_id: memberId,
+        workspace_id: productId,
+        workspace_ids: [productId],
+        scope,
+        resource,
+        access_token_sha256: sha256Hex(value),
+        access_token_expires_at: "2999-01-01T00:00:00.000Z",
+        refresh_token_family_id: null,
+        revoked_at: null,
+        last_used_at: null,
+        last_used_ip: null,
+      }
+    }
+
+    async function start() {
+      const db = new FakeSupabase({
+        mcp_tokens: [
+          {
+            id: "00000000-0000-4000-8000-000000000111",
+            product_id: productId,
+            created_by: memberId,
+            name: "tools",
+            role: "editor",
+            mode: "tools",
+            token_sha256: sha256Hex(manualTools),
+            revoked_at: null,
+            last_used_at: null,
+            last_used_ip: null,
+          },
+        ],
+        mcp_oauth_tokens: [
+          oauthRow(
+            "00000000-0000-4000-8000-000000000211",
+            sessionOAuth,
+            "mcp:dm offline_access"
+          ),
+          oauthRow(
+            "00000000-0000-4000-8000-000000000212",
+            toolOAuth,
+            "mcp:read offline_access"
+          ),
+        ],
+        mcp_oauth_clients: [
+          { client_id: "ssmcp_client_claude", client_name: "Claude", revoked_at: null },
+        ],
+      })
+      const config = {
+        supabaseUrl: "https://example.supabase.co",
+        supabaseServiceRoleKey: "service-role",
+        transport: "http",
+        authMode: "database",
+        trustProxy: false,
+        host: "127.0.0.1",
+        port: 3333,
+        path: "/mcp",
+        resourceUrl: resource,
+        authorizationServerUrl: "https://app.signalsurf.test",
+        allowedHosts: ["127.0.0.1", "localhost", "::1"],
+        authDisabled: false,
+        tokenEntries: [],
+      } as AppConfig
+      const app = createHttpApp(config, {
+        createRepository: () => new SignalSurfRepository(db as any),
+        surferSessionFetch: vi.fn(async () =>
+          jsonResponse(200, { ok: true, sessions: [] })
+        ) as unknown as typeof fetch,
+      })
+      const server = await new Promise<Server>((resolve) => {
+        const listener = app.listen(0, "127.0.0.1", () => resolve(listener))
+      })
+      cleanup.push(
+        () => new Promise<void>((resolve) => server.close(() => resolve()))
+      )
+      const address = server.address()
+      if (!address || typeof address === "string") throw new Error("no port")
+      return `http://127.0.0.1:${address.port}`
+    }
+
+    function listTools(base: string, bearer?: string) {
+      return fetch(`${base}/mcp`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json, text/event-stream",
+          "Content-Type": "application/json",
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      })
+    }
+
+    it("advertises Direct Message mode alongside the tool scopes", async () => {
+      const base = await start()
+      const metadata = await (
+        await fetch(`${base}/.well-known/oauth-protected-resource`)
+      ).json()
+      expect(metadata.resource).toBe(resource)
+      expect(metadata.scopes_supported[0]).toBe("mcp:dm")
+      expect(metadata.scopes_supported).toContain("mcp:read")
+
+      const challenge = await listTools(base)
+      expect(challenge.status).toBe(401)
+      expect(challenge.headers.get("www-authenticate")).toContain(
+        'scope="mcp:dm '
+      )
+    })
+
+    it("serves only the Surfer relay tools to a Direct Message grant", async () => {
+      const base = await start()
+      const response = await listTools(base, sessionOAuth)
+      expect(response.status).toBe(200)
+      const text = await response.text()
+      for (const name of SURFER_SESSION_TOOL_NAMES) expect(text).toContain(name)
+      expect(text).not.toContain("get_context")
+    })
+
+    it("keeps serving product tools to a Tools mode grant", async () => {
+      const base = await start()
+      const response = await listTools(base, toolOAuth)
+      expect(response.status).toBe(200)
+      const text = await response.text()
+      expect(text).toContain("get_context")
+      for (const name of SURFER_SESSION_TOOL_NAMES) {
+        expect(text).not.toContain(name)
+      }
+    })
+  })
 })

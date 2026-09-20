@@ -1,19 +1,40 @@
-# Surfer session mode
+# Direct Message mode (Surfer session)
 
-The hosted MCP serves two separately selectable surfaces from the same
-endpoint. The bearer token decides which one a request sees.
+The hosted MCP serves two modes on one endpoint: Tools mode and Direct Message
+mode (internally the `surfer_session` surface). The bearer token decides which
+one a request sees.
 
 | Mode | Token | Tools | Who acts |
 | --- | --- | --- | --- |
-| Tool mode (default) | OAuth grant or manual token with `mode = tools` | The public product-operation catalog (`PUBLIC_MCP_TOOLS`), OAuth scopes, resources, prompts, and the one-time approval flow | The external client drives SignalSurf directly |
-| Surfer session mode | Manual token issued in SignalSurf Settings with `mode = surfer_session` | `list_surfer_workspaces`, `message_surfer`, `read_surfer_session`, `answer_surfer_confirmation`, `close_surfer_session` | Surfer, SignalSurf's server-side agent, acting as the token's member |
+| Tools mode | OAuth grant with product scopes, or a manual token with `mode = tools` | The public product-operation catalog (`PUBLIC_MCP_TOOLS`), OAuth scopes, resources, prompts, and the one-time approval flow | The external client drives SignalSurf directly |
+| Direct Message mode | OAuth grant with `mcp:dm`, or a manual token issued in SignalSurf Settings with `mode = surfer_session` | `list_surfer_workspaces`, `message_surfer`, `read_surfer_session`, `answer_surfer_confirmation`, `close_surfer_session` | Surfer, SignalSurf's server-side agent, acting as the token's member |
 
 Session mode changes nothing about tool mode: its tools are not part of
 `PUBLIC_MCP_TOOLS`, the public tool contract, or the Surfer parity registry.
 
-## Issuing a session token
+## Connecting (OAuth, SIG-2673)
 
-A workspace member opens SignalSurf Settings → Agent → Profile → MCP →
+Both modes share one endpoint, `https://mcp.signalsurf.ai/mcp`. Add it to an
+MCP client without any token:
+
+```bash
+claude mcp add --transport http signalsurf https://mcp.signalsurf.ai/mcp
+```
+
+The resource metadata and the 401 challenge advertise `mcp:dm` ahead of the
+tool scopes, so clients request both. The SignalSurf consent page shows a
+Direct Message / Tools tab (Direct Message by default) and the member picks
+one mode and the workspaces for it. A Direct Message grant carries only
+`mcp:dm` (plus `offline_access`), needs full member role in each workspace,
+and exposes only the relay tools below; a Tools grant carries product scopes
+and never reaches Surfer. The grant's scope decides the mode on every call,
+and refresh re-checks membership in every granted workspace. Switching modes
+means authorizing again; to use both at once, add the endpoint twice under
+different names.
+
+## Manual session token (fallback)
+
+For clients without OAuth, a workspace member opens SignalSurf Settings → Agent → Profile → MCP →
 Surfer session access and creates a **Surfer session** token. The token is
 bound to that member and to the workspaces ticked when issuing it (the current
 workspace plus any others the member belongs to, SIG-2669). A member's active
