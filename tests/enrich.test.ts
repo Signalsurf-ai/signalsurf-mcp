@@ -23,7 +23,7 @@ function makeDb() {
     databases: [
       {
         id: db1,
-        product_id: context.productId,
+        workspace_id: context.productId,
         name: "Customers",
         schema: {
           fields: [
@@ -34,7 +34,7 @@ function makeDb() {
       },
       {
         id: otherDb,
-        product_id: otherProductId,
+        workspace_id: otherProductId,
         name: "Other product DB",
         schema: { fields: [{ key: "work_email", type: "string" }] },
       },
@@ -82,7 +82,7 @@ describe("Enrich column enrichment", () => {
     const workflow = db.tables.workflows.find(
       (p) => p.id === result.workflowId
     )
-    expect(workflow?.product_id).toBe(context.productId)
+    expect(workflow?.workspace_id).toBe(context.productId)
     expect(workflow?.surf_prompt).toContain("work email")
     expect(workflow?.relevance_threshold).toBe(0)
 
@@ -222,7 +222,7 @@ describe("Enrich column enrichment", () => {
     for (const job of jobs) {
       expect(job.job_type).toBe("analyze")
       expect(job.status).toBe("pending")
-      expect(job.product_id).toBe(context.productId)
+      expect(job.workspace_id).toBe(context.productId)
       expect(job.payload.target_field).toBe("work_email")
     }
   })

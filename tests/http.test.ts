@@ -216,7 +216,7 @@ describe("HTTP transport", () => {
       mcp_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000101",
-          product_id: productId,
+          workspace_id: productId,
           created_by: "00000000-0000-4000-8000-000000000102",
           name: "hosted-agent",
           role: "editor",
@@ -259,7 +259,7 @@ describe("HTTP transport", () => {
       mcp_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000101",
-          product_id: productId,
+          workspace_id: productId,
           created_by: "00000000-0000-4000-8000-000000000102",
           name: "hosted-agent",
           role: "editor",
@@ -298,7 +298,7 @@ describe("HTTP transport", () => {
       mcp_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000101",
-          product_id: productId,
+          workspace_id: productId,
           created_by: null,
           name: "hosted-agent",
           role: "editor",
@@ -621,7 +621,7 @@ describe("HTTP transport", () => {
       workflows: [
         {
           id: "00000000-0000-4000-8000-000000000301",
-          product_id: secondProductId,
+          workspace_id: secondProductId,
           name: "Second Product Workflow",
           description: null,
           is_default: false,
@@ -637,7 +637,7 @@ describe("HTTP transport", () => {
           tool_config: {},
           variables: {},
           config: {},
-          project_id: null,
+          agent_id: null,
           display_order: 0,
           created_at: "2026-06-01T00:00:00Z",
           updated_at: "2026-06-01T00:00:00Z",

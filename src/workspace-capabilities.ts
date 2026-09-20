@@ -156,7 +156,7 @@ function isRollingSchemaMiss(error: { code?: string } | null | undefined) {
 function capabilitiesWithOverrides(
   productIds: readonly string[],
   overrides: readonly {
-    product_id: string
+    workspace_id: string
     capability_key: unknown
     enabled: unknown
   }[]
@@ -166,7 +166,7 @@ function capabilitiesWithOverrides(
       productId,
       resolveEffectiveWorkspaceCapabilities(
         WORKSPACE_CAPABILITIES,
-        overrides.filter((row) => row.product_id === productId)
+        overrides.filter((row) => row.workspace_id === productId)
       ),
     ])
   )
@@ -187,9 +187,9 @@ export async function loadWorkspaceCapabilities(
       .select("id, organization_id")
       .in("id", [...productIds]),
     db
-      .from("product_capability_overrides")
-      .select("product_id, capability_key, enabled")
-      .in("product_id", [...productIds]),
+      .from("workspace_capability_overrides")
+      .select("workspace_id, capability_key, enabled")
+      .in("workspace_id", [...productIds]),
   ])
   if (isRollingSchemaMiss(overridesResult.error)) return allEnabled
   if (productsResult.error || overridesResult.error) {
@@ -201,7 +201,7 @@ export async function loadWorkspaceCapabilities(
     organization_id: string
   }>
   const overrideRows = (overridesResult.data ?? []) as Array<{
-    product_id: string
+    workspace_id: string
     capability_key: unknown
     enabled: unknown
   }>
@@ -259,9 +259,9 @@ export async function loadWorkspaceCapabilities(
     Array<{ capability_key: unknown; enabled: unknown }>
   >()
   for (const row of overrideRows) {
-    const rows = overridesByProduct.get(row.product_id) ?? []
+    const rows = overridesByProduct.get(row.workspace_id) ?? []
     rows.push(row)
-    overridesByProduct.set(row.product_id, rows)
+    overridesByProduct.set(row.workspace_id, rows)
   }
 
   const productById = new Map(products.map((product) => [product.id, product]))

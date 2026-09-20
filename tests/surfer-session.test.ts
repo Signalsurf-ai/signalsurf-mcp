@@ -62,7 +62,7 @@ describe("Surfer session mode", () => {
       mcp_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000101",
-          product_id: productId,
+          workspace_id: productId,
           created_by: memberId,
           name: "claude-session",
           role: "editor",
@@ -74,7 +74,7 @@ describe("Surfer session mode", () => {
         },
         {
           id: "00000000-0000-4000-8000-000000000103",
-          product_id: productId,
+          workspace_id: productId,
           created_by: memberId,
           name: "tools",
           role: "viewer",
@@ -284,7 +284,7 @@ describe("Surfer session mode", () => {
       mcp_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000101",
-          product_id: productId,
+          workspace_id: productId,
           created_by: memberId,
           name: "claude-session",
           role: "editor",
@@ -389,7 +389,7 @@ describe("Surfer session mode", () => {
         mcp_tokens: [
           {
             id: "00000000-0000-4000-8000-000000000111",
-            product_id: productId,
+            workspace_id: productId,
             created_by: memberId,
             name: "tools",
             role: "editor",

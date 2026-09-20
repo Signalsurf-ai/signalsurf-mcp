@@ -38,7 +38,7 @@ function seed() {
     managed_email_mailboxes: [
       {
         id: "20000000-0000-4000-8000-000000000001",
-        product_id: PRODUCT_ID,
+        workspace_id: PRODUCT_ID,
         domain_id: "10000000-0000-4000-8000-000000000001",
         email_address: "hello@goacme.com",
         provider: "internal-mailbox-provider",
@@ -50,7 +50,7 @@ function seed() {
       },
       {
         id: "20000000-0000-4000-8000-000000000002",
-        product_id: OTHER_PRODUCT_ID,
+        workspace_id: OTHER_PRODUCT_ID,
         email_address: "hidden@other-secret.com",
         desired_state: "active",
       },
@@ -65,12 +65,12 @@ function seed() {
     ],
     product_unipile_accounts: [
       {
-        product_id: PRODUCT_ID,
+        workspace_id: PRODUCT_ID,
         unipile_account_id: "account-email",
         provider: "GMAIL",
       },
       {
-        product_id: PRODUCT_ID,
+        workspace_id: PRODUCT_ID,
         unipile_account_id: "account-linkedin",
         provider: "LINKEDIN",
       },
@@ -78,7 +78,7 @@ function seed() {
     product_tools: [
       {
         id: "30000000-0000-4000-8000-000000000001",
-        product_id: PRODUCT_ID,
+        workspace_id: PRODUCT_ID,
         user_id: "user-1",
         tool_type: "unipile",
         updated_at: "2026-08-01T00:00:00Z",
@@ -169,7 +169,7 @@ describe("hosted sender infrastructure", () => {
     data.product_tools = [
       {
         id: "tool-newer-shared",
-        product_id: PRODUCT_ID,
+        workspace_id: PRODUCT_ID,
         user_id: "user-3",
         tool_type: "unipile",
         updated_at: "2026-08-03T00:00:00Z",
@@ -177,7 +177,7 @@ describe("hosted sender infrastructure", () => {
       },
       {
         id: "tool-older-shared",
-        product_id: PRODUCT_ID,
+        workspace_id: PRODUCT_ID,
         user_id: "user-2",
         tool_type: "unipile",
         updated_at: "2026-08-02T00:00:00Z",
@@ -185,7 +185,7 @@ describe("hosted sender infrastructure", () => {
       },
       {
         id: "tool-own",
-        product_id: PRODUCT_ID,
+        workspace_id: PRODUCT_ID,
         user_id: "user-1",
         tool_type: "unipile",
         updated_at: "2026-08-01T00:00:00Z",
@@ -211,7 +211,7 @@ describe("hosted sender infrastructure", () => {
       "IMAP",
       "SMTP",
     ].map((provider, index) => ({
-      product_id: PRODUCT_ID,
+      workspace_id: PRODUCT_ID,
       unipile_account_id: `account-${index}`,
       provider,
     }))

@@ -309,6 +309,7 @@ export const createTableSchema = {
   icon: z.string().trim().max(50).nullish(),
   color: z.string().trim().max(20).nullish(),
   schema: jsonObjectSchema.optional(),
+  /** Retired with the web table templates (SIG-2672): accepted, not stored. */
   itemType: z.string().trim().max(100).nullish(),
   viewConfigs: jsonObjectSchema.optional(),
   folderId: uuidSchema.nullish(),
@@ -325,6 +326,7 @@ export const updateTableSchema = {
   color: z.string().trim().max(20).nullable().optional(),
   schema: jsonObjectSchema.nullable().optional(),
   schemaPatch: jsonObjectSchema.optional(),
+  /** Retired with the web table templates (SIG-2672): accepted, not stored. */
   itemType: z.string().trim().max(100).nullable().optional(),
   viewConfigs: jsonObjectSchema.nullable().optional(),
   folderId: uuidSchema.nullable().optional(),
