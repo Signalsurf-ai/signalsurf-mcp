@@ -145,7 +145,7 @@ describe("Surfer session mode", () => {
     expect(toolNames).toContain("get_context")
   })
 
-  it("relays message_surfer with the bearer token, echoes the occurrence id, and reuses it on retry", async () => {
+  it("relays send_message with the bearer token, echoes the occurrence id, and reuses it on retry", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = []
     const fetchImpl = vi.fn(async (url: any, init: any) => {
       calls.push({ url: String(url), init })
@@ -162,7 +162,7 @@ describe("Surfer session mode", () => {
       fetchImpl as unknown as typeof fetch
     )
     const first = await client.callTool({
-      name: "message_surfer",
+      name: "send_message",
       arguments: { message: "Find 20 fintech CFOs in Project Alpha" },
     })
     const firstPayload = JSON.parse((first.content as any)[0].text)
@@ -184,7 +184,7 @@ describe("Surfer session mode", () => {
     expect(firstPayload.nextStep).toContain("afterSequence = 7")
 
     await client.callTool({
-      name: "message_surfer",
+      name: "send_message",
       arguments: {
         sessionId,
         message: "Find 20 fintech CFOs in Project Alpha",
@@ -224,20 +224,20 @@ describe("Surfer session mode", () => {
       fetchImpl as unknown as typeof fetch
     )
     const listed = await client.callTool({
-      name: "list_surfer_workspaces",
+      name: "list_workspaces",
       arguments: {},
     })
     expect(JSON.parse((listed.content as any)[0].text).workspaces).toHaveLength(2)
     await client.callTool({
-      name: "message_surfer",
+      name: "send_message",
       arguments: { workspaceId: otherWorkspace, message: "Status in Beta?" },
     })
     await client.callTool({
-      name: "read_surfer_session",
+      name: "read_conversation",
       arguments: { workspaceId: otherWorkspace, sessionId },
     })
     await client.callTool({
-      name: "close_surfer_session",
+      name: "close_conversation",
       arguments: { sessionId },
     })
     expect(bodies.map((body) => body.action)).toEqual([
@@ -379,7 +379,7 @@ describe("Surfer session mode", () => {
         jsonrpc: "2.0",
         id: 2,
         method: "tools/call",
-        params: { name: "read_surfer_session", arguments: {} },
+        params: { name: "read_conversation", arguments: {} },
       }),
     })
     expect(read.status).toBe(200)

@@ -14,11 +14,11 @@ import { jsonErrorResult, jsonResult } from "./mcp-results.js"
  */
 
 export const SURFER_SESSION_TOOL_NAMES = [
-  "list_surfer_workspaces",
-  "message_surfer",
-  "read_surfer_session",
-  "answer_surfer_confirmation",
-  "close_surfer_session",
+  "list_workspaces",
+  "send_message",
+  "read_conversation",
+  "answer_question",
+  "close_conversation",
 ] as const
 
 export type SurferSessionToolName = (typeof SURFER_SESSION_TOOL_NAMES)[number]
@@ -41,11 +41,16 @@ const mutatingAnnotations = {
   openWorldHint: false,
 } as const
 
+/**
+ * The member names their agent in SignalSurf Settings ("Surfer" is only the
+ * default), so neither the tool names nor their descriptions state a name.
+ * `list_workspaces` reports the configured name per workspace.
+ */
 export const SURFER_SESSION_TOOLS = {
-  list_surfer_workspaces: {
-    title: "List Surfer workspaces",
+  list_workspaces: {
+    title: "List workspaces",
     description:
-      "List the SignalSurf workspaces this session token may reach, with the member's current access and open-session count in each. Each workspace has its own Surfer; nothing is shared between workspaces. Call this first when the member works in more than one workspace.",
+      "List the SignalSurf workspaces this connection may reach, each with the member's current access, that workspace's agent name, and its open-conversation count. Every workspace has its own agent; nothing is shared between workspaces. Call this first when the member works in more than one workspace.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -53,16 +58,16 @@ export const SURFER_SESSION_TOOLS = {
       openWorldHint: false,
     },
   },
-  message_surfer: {
-    title: "Message Surfer",
+  send_message: {
+    title: "Send a message",
     description:
-      'Send one member message to Surfer, SignalSurf\'s server-side agent. Omit sessionId to open a new session; pass an existing id to continue it. Waits up to waitSeconds for Surfer\'s reply. When reply.status is "pending", follow nextStep and call read_surfer_session with afterSequence = message.sequence. Retry a failed call with the same occurrenceId to avoid duplicate messages. workspaceId picks the granted workspace whose Surfer to use (see list_surfer_workspaces); omit it only when the token reaches one workspace or sessionId already identifies it.',
+      'Send one member message to the workspace\'s SignalSurf agent, which runs server-side. Omit sessionId to open a new conversation; pass an existing id to continue it. Waits up to waitSeconds for the reply. When reply.status is "pending", follow nextStep and call read_conversation with afterSequence = message.sequence. Retry a failed call with the same occurrenceId to avoid duplicate messages. workspaceId picks which granted workspace to talk to (see list_workspaces); omit it only when the connection reaches one workspace or sessionId already identifies it.',
     annotations: mutatingAnnotations,
   },
-  read_surfer_session: {
-    title: "Read Surfer session",
+  read_conversation: {
+    title: "Read a conversation",
     description:
-      "Read a Surfer session: transcript events after a sequence number, current activity, working state, delegated Project Thread work, timers, and pending confirmations/decisions. Omit sessionId to list this token's sessions. This is the only way to confirm Surfer actually did something; a returned tool call is not completion. workspaceId picks the granted workspace whose Surfer to use (see list_surfer_workspaces); omit it only when the token reaches one workspace or sessionId already identifies it.",
+      "Read a conversation with the workspace's agent: transcript events after a sequence number, current activity, working state, delegated Project Thread work, timers, and pending confirmations/decisions. Omit sessionId to list this connection's conversations. This is the only way to confirm the agent actually did something; a returned tool call is not completion. workspaceId picks which granted workspace to read (see list_workspaces); omit it only when the connection reaches one workspace or sessionId already identifies it.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -70,39 +75,39 @@ export const SURFER_SESSION_TOOLS = {
       openWorldHint: false,
     },
   },
-  answer_surfer_confirmation: {
-    title: "Answer Surfer confirmation",
+  answer_question: {
+    title: "Answer a pending question",
     description:
-      'Approve or reject a pending Surfer confirmation, or answer a pending question decision. Use the confirmationId exactly as returned by message_surfer or read_surfer_session ("op:<uuid>" or "decision:<uuid>"). decision approves or rejects op: confirmations and operation-approval decisions; a question decision needs answer as { answers: [{ fieldId, value }] } with one entry per field from read_surfer_session (value: an option id, or an array of ids for multi_select; a string for text; a boolean for confirmation). Provide exactly one of decision or answer. workspaceId picks the granted workspace whose Surfer to use (see list_surfer_workspaces); omit it only when the token reaches one workspace or sessionId already identifies it.',
+      'Approve or reject a pending confirmation from the workspace\'s agent, or answer a pending question decision. Use the confirmationId exactly as returned by send_message or read_conversation ("op:<uuid>" or "decision:<uuid>"). decision approves or rejects op: confirmations and operation-approval decisions; a question decision needs answer as { answers: [{ fieldId, value }] } with one entry per field from read_conversation (value: an option id, or an array of ids for multi_select; a string for text; a boolean for confirmation). Provide exactly one of decision or answer. workspaceId picks which granted workspace to answer in (see list_workspaces); omit it only when the connection reaches one workspace or sessionId already identifies it.',
     annotations: mutatingAnnotations,
   },
-  close_surfer_session: {
-    title: "Close Surfer session",
+  close_conversation: {
+    title: "Close a conversation",
     description:
-      "Close a Surfer session when the member is done. Idempotent; closing an already-closed session returns it unchanged. A scheduled follow-up moves to the member's Direct Message; if that Direct Message already has one, droppedTimerCount reports the follow-up that was not moved. workspaceId picks the granted workspace whose Surfer to use (see list_surfer_workspaces); omit it only when the token reaches one workspace or sessionId already identifies it.",
+      "Close a conversation when the member is done. Idempotent; closing an already-closed conversation returns it unchanged. A scheduled follow-up moves to the member's Direct Message; if that Direct Message already has one, droppedTimerCount reports the follow-up that was not moved. workspaceId picks which granted workspace to close in (see list_workspaces); omit it only when the connection reaches one workspace or sessionId already identifies it.",
     annotations: mutatingAnnotations,
   },
 } as const satisfies Record<SurferSessionToolName, SurferSessionToolDefinition>
 
-export const SURFER_SESSION_INSTRUCTIONS = `SignalSurf MCP — Surfer session mode.
+export const SURFER_SESSION_INSTRUCTIONS = `SignalSurf MCP — Direct Message mode.
 
-You are relaying a SignalSurf member's messages to Surfer, SignalSurf's server-side agent. Surfer plans and delegates real work into Project Threads; you are an input device, not the coordinator.
+You are relaying a SignalSurf member's messages to that workspace's agent, which runs server-side. The member names their agent in SignalSurf Settings ("Surfer" is the default), so call it by the name list_workspaces reports. The agent plans and delegates real work into Project Threads; you are an input device, not the coordinator.
 
-- If the member works in more than one workspace, call list_surfer_workspaces and pass workspaceId; each workspace has its own Surfer and nothing is shared between them.
-- Use message_surfer to talk to Surfer.
-- Use read_surfer_session to see the transcript, pending confirmations, and delegated work.
-- Use answer_surfer_confirmation to approve, reject, or answer pending items.
-- Use close_surfer_session when done.
+- If the member works in more than one workspace, call list_workspaces and pass workspaceId; each workspace has its own agent and nothing is shared between them.
+- Use send_message to talk to the agent.
+- Use read_conversation to see the transcript, pending confirmations, and delegated work.
+- Use answer_question to approve, reject, or answer pending items.
+- Use close_conversation when done.
 
-Never claim work is complete because a call returned; read the session to confirm.`
+Never claim work is complete because a call returned; read the conversation to confirm.`
 
 const uuidSchema = z.string().uuid()
 
 const workspaceIdField = uuidSchema.nullable().optional()
 
-export const listSurferWorkspacesSchema = z.object({}).strict()
+export const listWorkspacesSchema = z.object({}).strict()
 
-export const messageSurferSchema = z
+export const sendMessageSchema = z
   .object({
     workspaceId: workspaceIdField,
     sessionId: uuidSchema.nullable().optional(),
@@ -113,7 +118,7 @@ export const messageSurferSchema = z
   })
   .strict()
 
-export const readSurferSessionSchema = z
+export const readConversationSchema = z
   .object({
     workspaceId: workspaceIdField,
     sessionId: uuidSchema.nullable().optional(),
@@ -122,7 +127,7 @@ export const readSurferSessionSchema = z
   })
   .strict()
 
-export const answerSurferConfirmationSchema = z
+export const answerQuestionSchema = z
   .object({
     workspaceId: workspaceIdField,
     sessionId: uuidSchema,
@@ -133,7 +138,7 @@ export const answerSurferConfirmationSchema = z
   })
   .strict()
 
-export const closeSurferSessionSchema = z
+export const closeConversationSchema = z
   .object({
     workspaceId: workspaceIdField,
     sessionId: uuidSchema,
@@ -141,11 +146,11 @@ export const closeSurferSessionSchema = z
   .strict()
 
 export const SURFER_SESSION_TOOL_SCHEMAS = {
-  list_surfer_workspaces: listSurferWorkspacesSchema,
-  message_surfer: messageSurferSchema,
-  read_surfer_session: readSurferSessionSchema,
-  answer_surfer_confirmation: answerSurferConfirmationSchema,
-  close_surfer_session: closeSurferSessionSchema,
+  list_workspaces: listWorkspacesSchema,
+  send_message: sendMessageSchema,
+  read_conversation: readConversationSchema,
+  answer_question: answerQuestionSchema,
+  close_conversation: closeConversationSchema,
 } as const satisfies Record<SurferSessionToolName, z.ZodTypeAny>
 
 export type SurferSessionAction =
@@ -202,7 +207,7 @@ export class SurferSessionClient {
   async call(action: SurferSessionAction, body: JsonRecord): Promise<JsonRecord> {
     if (!this.endpoint || !this.accessToken) {
       throw unavailable(
-        "Surfer session relay is not configured on this hosted MCP deployment."
+        "Direct Message mode is not configured on this hosted MCP deployment."
       )
     }
     let response: Response
@@ -229,7 +234,7 @@ export class SurferSessionClient {
             : String(error),
       })
       throw unavailable(
-        "SignalSurf could not be reached for this Surfer session.",
+        "SignalSurf could not be reached for this conversation.",
         { action }
       )
     }
@@ -242,7 +247,7 @@ export class SurferSessionClient {
     }
 
     if (response.status >= 500) {
-      throw unavailable("SignalSurf's Surfer session relay is unavailable.", {
+      throw unavailable("SignalSurf is unavailable for this conversation.", {
         action,
         httpStatus: response.status,
       })
@@ -252,7 +257,7 @@ export class SurferSessionClient {
       const message =
         typeof record.error === "string" && record.error
           ? record.error
-          : `Surfer session request failed (${response.status}).`
+          : `SignalSurf rejected this request (${response.status}).`
       const code =
         typeof record.code === "string" && record.code
           ? record.code
@@ -271,14 +276,14 @@ export class SurferSessionClient {
     }
     if (!isRecord(payload) || payload.ok !== true) {
       throw unavailable(
-        "SignalSurf's Surfer session response did not match its public contract.",
+        "SignalSurf's response did not match its public contract.",
         { action, httpStatus: response.status }
       )
     }
     return payload
   }
 
-  async message(input: z.infer<typeof messageSurferSchema>) {
+  async message(input: z.infer<typeof sendMessageSchema>) {
     const occurrenceId = input.occurrenceId ?? randomUUID()
     const result = await this.call("message", {
       workspaceId: input.workspaceId ?? null,
@@ -293,7 +298,7 @@ export class SurferSessionClient {
     const session = isRecord(result.session) ? result.session : null
     const nextStep =
       reply?.status === "pending"
-        ? `Surfer has not replied yet. Call read_surfer_session with sessionId "${
+        ? `Surfer has not replied yet. Call read_conversation with sessionId "${
             typeof session?.id === "string" ? session.id : ""
           }" and afterSequence = ${
             typeof message?.sequence === "number" ? message.sequence : 0
@@ -306,7 +311,7 @@ export class SurferSessionClient {
     }
   }
 
-  async read(input: z.infer<typeof readSurferSessionSchema>) {
+  async read(input: z.infer<typeof readConversationSchema>) {
     return this.call("read", {
       workspaceId: input.workspaceId ?? null,
       sessionId: input.sessionId ?? null,
@@ -316,13 +321,13 @@ export class SurferSessionClient {
   }
 
   async answerConfirmation(
-    input: z.infer<typeof answerSurferConfirmationSchema>
+    input: z.infer<typeof answerQuestionSchema>
   ) {
     const hasDecision = input.decision !== undefined
     const hasAnswer = input.answer !== undefined
     if (hasDecision === hasAnswer) {
       throw new UserFacingError(
-        "answer_surfer_confirmation requires exactly one of decision or answer.",
+        "answer_question requires exactly one of decision or answer.",
         { code: "VALIDATION_ERROR", status: 422 }
       )
     }
@@ -338,7 +343,7 @@ export class SurferSessionClient {
     return { ...result, occurrenceId }
   }
 
-  async close(input: z.infer<typeof closeSurferSessionSchema>) {
+  async close(input: z.infer<typeof closeConversationSchema>) {
     return this.call("close", {
       workspaceId: input.workspaceId ?? null,
       sessionId: input.sessionId,
@@ -373,26 +378,26 @@ export function registerSurferSessionTools(
   }
 
   server.registerTool(
-    "list_surfer_workspaces",
-    config("list_surfer_workspaces"),
+    "list_workspaces",
+    config("list_workspaces"),
     () => runSessionTool(() => client.workspaces())
   )
-  server.registerTool("message_surfer", config("message_surfer"), (args: any) =>
+  server.registerTool("send_message", config("send_message"), (args: any) =>
     runSessionTool(() => client.message(args))
   )
   server.registerTool(
-    "read_surfer_session",
-    config("read_surfer_session"),
+    "read_conversation",
+    config("read_conversation"),
     (args: any) => runSessionTool(() => client.read(args))
   )
   server.registerTool(
-    "answer_surfer_confirmation",
-    config("answer_surfer_confirmation"),
+    "answer_question",
+    config("answer_question"),
     (args: any) => runSessionTool(() => client.answerConfirmation(args))
   )
   server.registerTool(
-    "close_surfer_session",
-    config("close_surfer_session"),
+    "close_conversation",
+    config("close_conversation"),
     (args: any) => runSessionTool(() => client.close(args))
   )
 }
