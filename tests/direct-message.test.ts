@@ -15,6 +15,7 @@ import type { Server } from "node:http"
  */
 
 const productId = "00000000-0000-4000-8000-000000000001"
+const otherProductId = "00000000-0000-4000-8000-000000000002"
 const memberId = "00000000-0000-4000-8000-000000000102"
 const resource = "http://127.0.0.1:3333/mcp"
 const manualDm = "ssmcp_session_token"
@@ -62,7 +63,10 @@ function signalSurfStub() {
       })
     }
     if (body.action === "workspaces") {
-      return jsonResponse(200, { ok: true, workspaces: [] })
+      return jsonResponse(200, {
+        ok: true,
+        workspaces: [{ workspaceId: productId, available: true }],
+      })
     }
     return jsonResponse(200, { ok: true, data: { echoed: body } })
   })
@@ -233,6 +237,80 @@ describe("Direct Message mode over HTTP", () => {
     // Tool mode's product operations are a different, separately approved mode.
     expect(text).not.toContain("get_context")
     expect(text).not.toContain("create_database")
+  })
+
+  it("merges the catalogues of every available granted workspace", async () => {
+    const unavailableWorkspaceId = "00000000-0000-4000-8000-000000000003"
+    const stub = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}"))
+      if (body.action === "workspaces") {
+        return jsonResponse(200, {
+          ok: true,
+          workspaces: [
+            { workspaceId: productId, available: true },
+            { workspaceId: otherProductId, available: true },
+            { workspaceId: unavailableWorkspaceId, available: false },
+          ],
+        })
+      }
+      if (body.action === "catalog") {
+        return jsonResponse(200, {
+          ok: true,
+          tools:
+            body.workspaceId === otherProductId
+              ? [
+                  CATALOG[0],
+                  {
+                    name: "list_projects",
+                    description: "List Projects.",
+                    inputSchema: { type: "object", properties: {} },
+                  },
+                ]
+              : CATALOG,
+          role: "You act as the member who authorized this connection.",
+        })
+      }
+      return jsonResponse(200, { ok: true, data: {} })
+    })
+    const { base } = await start(stub)
+
+    const response = await listTools(base, dmOAuth)
+    expect(response.status).toBe(200)
+    const text = await response.text()
+    expect(text).toContain("start_thread")
+    expect(text).toContain("read_thread")
+    expect(text).toContain("list_projects")
+    expect(
+      stub.mock.calls
+        .map((call) => JSON.parse(String((call[1] as RequestInit).body)))
+        .filter((body) => body.action === "catalog")
+        .map((body) => body.workspaceId)
+        .sort()
+    ).toEqual([otherProductId, productId].sort())
+  })
+
+  it("fails discovery when an available workspace catalogue cannot load", async () => {
+    const stub = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}"))
+      if (body.action === "workspaces") {
+        return jsonResponse(200, {
+          ok: true,
+          workspaces: [{ workspaceId: productId, available: true }],
+        })
+      }
+      return jsonResponse(503, {
+        ok: false,
+        error: "Catalogue unavailable",
+        code: "DIRECT_MESSAGE_UNAVAILABLE",
+      })
+    })
+    const { base } = await start(stub)
+
+    const response = await listTools(base, dmOAuth)
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toMatchObject({
+      code: "DIRECT_MESSAGE_UNAVAILABLE",
+    })
   })
 
   it("runs a capability as the member in one named workspace", async () => {

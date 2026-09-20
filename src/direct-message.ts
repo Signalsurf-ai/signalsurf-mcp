@@ -41,6 +41,11 @@ export type DirectMessageTool = {
   inputSchema: JsonRecord
 }
 
+type DirectMessageWorkspace = JsonRecord & {
+  workspaceId: string
+  available?: boolean
+}
+
 function unavailable(message: string, details?: JsonRecord): UserFacingError {
   return new UserFacingError(message, {
     code: DIRECT_MESSAGE_UNAVAILABLE,
@@ -121,8 +126,16 @@ export class DirectMessageClient {
     return record
   }
 
-  async workspaces(): Promise<JsonRecord> {
-    return this.call({ action: "workspaces" })
+  async workspaces(): Promise<DirectMessageWorkspace[]> {
+    const result = await this.call({ action: "workspaces" })
+    if (!Array.isArray(result.workspaces)) return []
+    return result.workspaces.filter(
+      (workspace): workspace is DirectMessageWorkspace =>
+        !!workspace &&
+        typeof workspace === "object" &&
+        !Array.isArray(workspace) &&
+        typeof (workspace as JsonRecord).workspaceId === "string"
+    )
   }
 
   async catalog(
@@ -178,6 +191,32 @@ export type DirectMessageSurface = {
   register: (server: Server) => void
 }
 
+function mergePublishedTools(
+  catalogs: Array<{ tools: DirectMessageTool[]; role: string | null }>
+): { tools: DirectMessageTool[]; roles: string[] } {
+  const tools = new Map<string, DirectMessageTool>()
+  const roles = new Set<string>()
+  for (const catalog of catalogs) {
+    if (catalog.role) roles.add(catalog.role)
+    for (const tool of catalog.tools) {
+      const existing = tools.get(tool.name)
+      if (
+        existing &&
+        (existing.description !== tool.description ||
+          JSON.stringify(existing.inputSchema) !==
+            JSON.stringify(tool.inputSchema))
+      ) {
+        throw unavailable(
+          `SignalSurf published conflicting definitions for ${tool.name}.`,
+          { tool: tool.name }
+        )
+      }
+      tools.set(tool.name, tool)
+    }
+  }
+  return { tools: [...tools.values()], roles: [...roles] }
+}
+
 /**
  * SignalSurf publishes the member's capabilities and the role they act in, so
  * the connection states both rather than restating a list here.
@@ -185,7 +224,13 @@ export type DirectMessageSurface = {
 export async function loadDirectMessageSurface(
   client: DirectMessageClient
 ): Promise<DirectMessageSurface> {
-  const { tools: published, role } = await client.catalog()
+  const workspaces = await client.workspaces()
+  const workspaceIds = workspaces
+    .filter((workspace) => workspace.available !== false)
+    .map((workspace) => workspace.workspaceId)
+  const { tools: published, roles } = mergePublishedTools(
+    await Promise.all(workspaceIds.map((workspaceId) => client.catalog(workspaceId)))
+  )
   const tools = [
     LIST_WORKSPACES,
     ...published.map((tool) => ({
@@ -195,8 +240,8 @@ export async function loadDirectMessageSurface(
   ]
 
   return {
-    instructions: role
-      ? `${DIRECT_MESSAGE_INSTRUCTIONS}\n\n${role}`
+    instructions: roles.length
+      ? `${DIRECT_MESSAGE_INSTRUCTIONS}\n\n${roles.join("\n\n")}`
       : DIRECT_MESSAGE_INSTRUCTIONS,
     register(server: Server) {
       server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -212,8 +257,7 @@ export async function loadDirectMessageSurface(
         const args = (request.params.arguments ?? {}) as JsonRecord
         try {
           if (name === LIST_WORKSPACES.name) {
-            const result = await client.workspaces()
-            return jsonResult({ workspaces: result.workspaces })
+            return jsonResult({ workspaces: await client.workspaces() })
           }
           if (!tools.some((tool) => tool.name === name)) {
             throw new UserFacingError(`Unknown tool: ${name}`, {

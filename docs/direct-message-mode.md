@@ -44,71 +44,48 @@ default when the client requests `mcp:dm`, which the 401 challenge advertises
 first. Switching modes means authorizing again.
 
 
-## Manual session token (fallback)
+## Manual token (fallback)
 
-For clients without OAuth, a workspace member opens SignalSurf Settings → Agent → Profile → MCP →
-Surfer session access and creates a **Surfer session** token. The token is
-bound to that member and to the workspaces ticked when issuing it (the current
-workspace plus any others the member belongs to, SIG-2669). A member's active
-session tokens never share a workspace. Revoking the token ends access
-immediately. Membership is re-validated in the target workspace on every relay
-call, so losing one workspace stops access there without affecting the others.
+For clients without OAuth, a workspace member can create a Direct Message MCP
+token in SignalSurf Settings. The stored database mode remains
+`surfer_session` for compatibility, but the token does not create a Surfer
+session or transcript. It is bound to the member and the workspaces selected
+when issued. Revocation ends access immediately, and SignalSurf re-validates
+membership in the target workspace on every call.
 
 ## Several workspaces
 
-Each workspace has its own Surfer, sessions, delegation ledger, memory and
-timers; one MCP connection simply talks to each of them. Every session tool
-takes an optional `workspaceId`. It may be omitted when the token reaches a
-single workspace or when `sessionId` already identifies one; otherwise the call
-fails with `WORKSPACE_REQUIRED` instead of guessing. `list_workspaces`
-returns the granted workspaces with the member's current access and open-session
-count in each.
+On connection, the server calls `workspaces`, loads the catalogue for every
+currently available granted workspace, and merges those catalogues by tool
+name. A conflicting definition fails discovery instead of choosing one
+arbitrarily. Workspaces the member has left remain visible from
+`list_workspaces`, but do not prevent the remaining workspace catalogues from
+loading.
 
-## How a session works
+Every published capability accepts `workspaceId`. It may be omitted only when
+the grant reaches one workspace; otherwise SignalSurf returns
+`WORKSPACE_REQUIRED` instead of guessing. A capability that exists in one
+workspace but not another is still discoverable, and SignalSurf checks its
+availability again in the selected workspace when called.
 
-Each session is an independent private conversation between the member and
-Surfer (`agent_conversation` with `thread_kind = surfer_session`). It shares the
-member's canonical Direct Message runtime: the same system prompt, tools,
-authorization policy, workspace Thread pulse, delegation ledger, memory, and
-one-time timers. Sessions never appear in the Direct Message sidebar. Closing a
-session ends its transcript and admits no further Surfer turns; a follow-up
-still scheduled on it moves to the member's canonical Direct Message when that
-Direct Message has no follow-up of its own.
+## Execution and records
 
-The client is only an input device. It relays member text with
-`send_message`; Surfer decides whether to answer privately, look something
-up, or delegate real work into a canonical Project Thread where every
-operation, decision, and result stays publicly recorded with provenance. There
-is no coordinator lease, no turn-claim protocol, and no manifest handed to the
-client.
+The external client is the assistant in this mode. Calls read or write the
+same Project resources the member can use in SignalSurf; there is no hidden
+Surfer conversation behind the MCP connection. Project Threads are the durable
+record of messages, decisions, delegated work, and results. Project Surfer work
+keeps its normal confirmation boundary.
 
-## Tools
-
-- `list_workspaces()` lists the workspaces this token may reach.
-- `send_message({ workspaceId?, sessionId?, message, occurrenceId?, waitSeconds?, clientLabel? })`
-  appends one member message. Omit `sessionId` to open a new session. The
-  call waits up to `waitSeconds` (default 25) for Surfer's reply; otherwise it
-  returns `reply.status = "pending"` plus a `nextStep`. Retrying with the same
-  `occurrenceId` is idempotent.
-- `read_conversation({ workspaceId?, sessionId?, afterSequence?, limit? })` returns the
-  transcript after a sequence, current activity, Surfer's private Working
-  State, delegated Project Thread work with source links, timers, and pending
-  confirmations/decisions. Without `sessionId` it lists the token's sessions.
-- `answer_question({ workspaceId?, sessionId, confirmationId, decision | answer, occurrenceId? })`
-  answers a pending item through its original authority boundary. Ids look like
-  `op:<uuid>` (a confirmation raised inside the private conversation) or
-  `decision:<uuid>` (a shared Project Thread decision projected into the
-  session). Approval resumes exactly the original operation and cannot be
-  replayed or redirected.
-- `close_conversation({ workspaceId?, sessionId })` ends the session (idempotent). A
-  scheduled follow-up moves to the canonical Direct Message; the Direct Message
-  holds one follow-up, so if it already has one the result reports
-  `droppedTimerCount` instead of replacing it.
+`tools/list` is intentionally unavailable when an available workspace
+catalogue cannot be loaded. Returning a partial list would let MCP clients
+cache a false capability surface. Callers should retry the connection after a
+transient `DIRECT_MESSAGE_UNAVAILABLE` response.
 
 ## Relay contract
 
-Every tool posts `{ action, ...fields }` to
-`POST {SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL}/api/mcp/surfer-session` with
+Every Direct Message request posts `{ action, ...fields }` to
+`POST {SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL}/api/mcp/direct-message` with
 the caller's bearer token. Success bodies are `{ ok: true, ... }`; failures are
-`{ ok: false, error, code }` and surface with the same HTTP status and code.
-Network or 5xx failures surface as `SURFER_SESSION_UNAVAILABLE` (503).
+`{ ok: false, error, code }` and preserve the HTTP status and product error
+code. Network and upstream 5xx failures surface as
+`DIRECT_MESSAGE_UNAVAILABLE` (503).
