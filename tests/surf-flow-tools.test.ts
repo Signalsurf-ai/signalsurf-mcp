@@ -17,7 +17,7 @@ function editorContext(): SignalSurfContext {
 function workflowRow(config: Record<string, unknown> = {}) {
   return {
     id: workflowId,
-    product_id: productId,
+    workspace_id: productId,
     name: "My Workflow",
     config,
     tool_config: {},
@@ -193,7 +193,7 @@ describe("create_campaign tool", () => {
       product_tools: [],
       product_unipile_accounts: [
         {
-          product_id: productId,
+          workspace_id: productId,
           unipile_account_id: "mailbox-1",
           provider: "MAIL",
         },
@@ -202,7 +202,7 @@ describe("create_campaign tool", () => {
       databases: [
         {
           id: audienceDatabaseId,
-          product_id: productId,
+          workspace_id: productId,
           name: "Founders",
           data_model: "table",
           schema: {
@@ -232,7 +232,7 @@ describe("create_campaign tool", () => {
     expect(db.tables.product_tools).toEqual([])
     expect(db.tables.campaigns).toEqual([
       expect.objectContaining({
-        product_id: productId,
+        workspace_id: productId,
         name: "Founder outreach",
         goal: "Book product calls",
         audience_database_id: audienceDatabaseId,
@@ -249,7 +249,7 @@ describe("create_campaign tool", () => {
       campaigns: [],
       product_unipile_accounts: [
         {
-          product_id: productId,
+          workspace_id: productId,
           unipile_account_id: "linkedin-1",
           provider: "LINKEDIN",
         },
@@ -258,7 +258,7 @@ describe("create_campaign tool", () => {
       databases: [
         {
           id: audienceDatabaseId,
-          product_id: productId,
+          workspace_id: productId,
           data_model: "table",
           schema: { fields: [{ key: "email", type: "email" }] },
         },
@@ -289,7 +289,7 @@ describe("create_campaign tool", () => {
         campaigns: [],
         product_unipile_accounts: [
           {
-            product_id: productId,
+            workspace_id: productId,
             unipile_account_id: "mailbox-1",
             provider,
           },
@@ -298,7 +298,7 @@ describe("create_campaign tool", () => {
         databases: [
           {
             id: audienceDatabaseId,
-            product_id: productId,
+            workspace_id: productId,
             data_model: "table",
             schema: { fields: [{ key: "email", type: "email" }] },
           },

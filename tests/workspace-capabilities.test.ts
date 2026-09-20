@@ -30,7 +30,7 @@ function policyDb(overrides: Array<Record<string, unknown>> = []) {
     products: [
       { id: productId, organization_id: organizationId, name: "Acme" },
     ],
-    product_capability_overrides: overrides,
+    workspace_capability_overrides: overrides,
     subscriptions: [],
     billing_plan_catalog: [
       {
@@ -88,7 +88,7 @@ describe("hosted MCP Workspace capability projection", () => {
     const db = new FakeSupabase(
       {
         products: [{ id: productId, organization_id: organizationId }],
-        product_capability_overrides: [],
+        workspace_capability_overrides: [],
       },
       {
         tableErrors: {
@@ -109,9 +109,9 @@ describe("hosted MCP Workspace capability projection", () => {
     const db = new FakeSupabase(
       {
         products: [{ id: productId, organization_id: organizationId }],
-        product_capability_overrides: [
+        workspace_capability_overrides: [
           {
-            product_id: productId,
+            workspace_id: productId,
             capability_key: "workflows",
             enabled: false,
           },
@@ -134,12 +134,12 @@ describe("hosted MCP Workspace capability projection", () => {
 
   it("keeps Listening independent from ordinary Workflows", async () => {
     const db = policyDb([
-      { product_id: productId, capability_key: "workflows", enabled: false },
+      { workspace_id: productId, capability_key: "workflows", enabled: false },
     ])
     db.tables.workflows.push(
       {
         id: ordinaryWorkflowId,
-        product_id: productId,
+        workspace_id: productId,
         name: "Hidden ordinary Workflow",
         kind: "workflow",
         is_active: true,
@@ -148,7 +148,7 @@ describe("hosted MCP Workspace capability projection", () => {
       },
       {
         id: listeningWorkflowId,
-        product_id: productId,
+        workspace_id: productId,
         name: "Visible Listening",
         kind: "listening",
         is_active: true,
@@ -211,10 +211,10 @@ describe("hosted MCP Workspace capability projection", () => {
 
   it("omits disabled tools, prompts, discovery entries, and resources", async () => {
     const db = policyDb([
-      { product_id: productId, capability_key: "tables", enabled: false },
-      { product_id: productId, capability_key: "objects", enabled: false },
-      { product_id: productId, capability_key: "listening", enabled: false },
-      { product_id: productId, capability_key: "workflows", enabled: false },
+      { workspace_id: productId, capability_key: "tables", enabled: false },
+      { workspace_id: productId, capability_key: "objects", enabled: false },
+      { workspace_id: productId, capability_key: "listening", enabled: false },
+      { workspace_id: productId, capability_key: "workflows", enabled: false },
     ])
     const client = await connect(db)
 
@@ -251,7 +251,7 @@ describe("hosted MCP Workspace capability projection", () => {
     const client = await connect(
       policyDb([
         {
-          product_id: productId,
+          workspace_id: productId,
           capability_key: "campaigns",
           enabled: false,
         },
@@ -273,7 +273,7 @@ describe("hosted MCP Workspace capability projection", () => {
     const client = await connect(
       policyDb([
         {
-          product_id: productId,
+          workspace_id: productId,
           capability_key: "inbox",
           enabled: false,
         },
@@ -303,8 +303,8 @@ describe("hosted MCP Workspace capability projection", () => {
       "create_table"
     )
 
-    db.tables.product_capability_overrides.push({
-      product_id: productId,
+    db.tables.workspace_capability_overrides.push({
+      workspace_id: productId,
       capability_key: "tables",
       enabled: false,
     })
@@ -325,32 +325,32 @@ describe("hosted MCP Workspace capability projection", () => {
 
   it("filters generic table discovery and rechecks the concrete resource", async () => {
     const db = policyDb([
-      { product_id: productId, capability_key: "tables", enabled: false },
-      { product_id: productId, capability_key: "objects", enabled: false },
+      { workspace_id: productId, capability_key: "tables", enabled: false },
+      { workspace_id: productId, capability_key: "objects", enabled: false },
     ])
     db.tables.databases.push(
       {
         id: hiddenTableId,
-        product_id: productId,
+        workspace_id: productId,
         name: "Hidden table",
         data_model: "table",
-        system_type: null,
+        system_role: null,
         display_order: 0,
         created_at: "2026-08-24T00:00:00Z",
       },
       {
         id: listeningTableId,
-        product_id: productId,
+        workspace_id: productId,
         name: "Visible listening feed",
         data_model: "table",
-        system_type: null,
+        system_role: null,
         display_order: 1,
         created_at: "2026-08-24T00:00:00Z",
       }
     )
     db.tables.workflows.push({
       id: "workflow-listening",
-      product_id: productId,
+      workspace_id: productId,
       kind: "listening",
       database_ids: [listeningTableId],
       deleted_at: null,
@@ -385,7 +385,7 @@ describe("hosted MCP Workspace capability projection", () => {
       {
         ...policyDb([
           {
-            product_id: productId,
+            workspace_id: productId,
             capability_key: "listening",
             enabled: false,
           },
@@ -393,10 +393,10 @@ describe("hosted MCP Workspace capability projection", () => {
         databases: [
           {
             id: hiddenTableId,
-            product_id: productId,
+            workspace_id: productId,
             name: "Ambiguous table",
             data_model: "table",
-            system_type: null,
+            system_role: null,
             display_order: 0,
           },
         ],

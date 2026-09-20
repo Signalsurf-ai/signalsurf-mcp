@@ -25,7 +25,7 @@ function seed() {
     databases: [
       {
         id: databaseId,
-        product_id: context.productId,
+        workspace_id: context.productId,
         name: "Companies",
         description: null,
         icon: null,
@@ -38,7 +38,7 @@ function seed() {
           relations: [{ source: databaseId, type: "works_at", target: "db-2" }],
         },
         item_type: "company",
-        system_type: null,
+        system_role: null,
         view_configs: {},
         display_order: 0,
         created_at: "2026-06-01T00:00:00Z",
@@ -59,17 +59,12 @@ function seed() {
         updated_at: "2026-06-02T00:00:00Z",
       },
     ],
-    product_goals: [
+    workspace_brand_profiles: [
       {
-        product_id: context.productId,
-        user_id: "00000000-0000-4000-8000-000000000010",
+        workspace_id: context.productId,
         brand_name: "Acme",
         brand_description: "Acme makes widgets.",
         product_description: "A widget platform.",
-        product_categories: ["SaaS"],
-        selling_points: ["Fast"],
-        target_audience: "SMB operators",
-        competitors: ["Globex"],
         official_website: "https://acme.example",
         updated_at: "2026-06-02T00:00:00Z",
       },

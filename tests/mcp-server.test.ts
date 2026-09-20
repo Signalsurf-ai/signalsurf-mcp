@@ -29,7 +29,7 @@ describe("MCP server", () => {
       workflows: [
         {
           id: workflowId,
-          product_id: context.productId,
+          workspace_id: context.productId,
           name: "Active",
           description: null,
           is_default: false,
@@ -45,7 +45,7 @@ describe("MCP server", () => {
           tool_config: {},
           variables: {},
           config: {},
-          project_id: null,
+          agent_id: null,
           display_order: 0,
           created_at: "2026-06-01T00:00:00Z",
           updated_at: "2026-06-01T00:00:00Z",
@@ -55,14 +55,14 @@ describe("MCP server", () => {
       databases: [
         {
           id: databaseId,
-          product_id: context.productId,
+          workspace_id: context.productId,
           name: "Companies",
           description: null,
           icon: null,
           color: null,
           schema: null,
           item_type: "company",
-          system_type: null,
+          system_role: null,
           view_configs: {},
           display_order: 0,
           created_at: "2026-06-01T00:00:00Z",
@@ -91,7 +91,7 @@ describe("MCP server", () => {
       product_tools: [
         {
           id: "00000000-0000-4000-8000-000000000901",
-          product_id: context.productId,
+          workspace_id: context.productId,
           tool_type: "slack",
           config: { nickname: "Slack alerts", token: "secret" },
           is_enabled: true,
@@ -99,19 +99,13 @@ describe("MCP server", () => {
           updated_at: "2026-06-01T00:00:00Z",
         },
       ],
-      product_goals: [
+      workspace_brand_profiles: [
         {
-          product_id: context.productId,
-          user_id: "00000000-0000-4000-8000-000000000010",
+          workspace_id: context.productId,
           brand_name: "Acme",
           brand_description: "Acme makes widgets.",
           product_description: "A widget platform.",
-          product_categories: ["SaaS", "Widgets", "SaaS"],
-          selling_points: ["Fast", "Reliable"],
-          target_audience: "SMB operators",
-          competitors: ["Globex", "Initech"],
           official_website: "https://acme.example",
-          brand_voice: { secret: "should-not-leak" },
           updated_at: "2026-06-02T00:00:00Z",
         },
       ],
@@ -161,10 +155,11 @@ describe("MCP server", () => {
       brandName: "Acme",
       brandDescription: "Acme makes widgets.",
       productDescription: "A widget platform.",
-      productCategories: ["SaaS", "Widgets"],
-      sellingPoints: ["Fast", "Reliable"],
-      targetAudience: "SMB operators",
-      competitors: ["Globex", "Initech"],
+      // SIG-2385 kept five brand facts; the retired keys read empty.
+      productCategories: [],
+      sellingPoints: [],
+      targetAudience: null,
+      competitors: [],
       officialWebsite: "https://acme.example",
     })
     expect(brandContext).not.toHaveProperty("brandVoice")
@@ -414,7 +409,7 @@ describe("MCP server", () => {
       workflows: [
         {
           id: "00000000-0000-4000-8000-000000000101",
-          product_id: context.productId,
+          workspace_id: context.productId,
           name: "Primary Product Workflow",
           description: null,
           is_default: false,
@@ -430,7 +425,7 @@ describe("MCP server", () => {
           tool_config: {},
           variables: {},
           config: {},
-          project_id: null,
+          agent_id: null,
           display_order: 0,
           created_at: "2026-06-01T00:00:00Z",
           updated_at: "2026-06-01T00:00:00Z",
@@ -438,7 +433,7 @@ describe("MCP server", () => {
         },
         {
           id: "00000000-0000-4000-8000-000000000102",
-          product_id: secondProductId,
+          workspace_id: secondProductId,
           name: "Second Product Workflow",
           description: null,
           is_default: false,
@@ -454,7 +449,7 @@ describe("MCP server", () => {
           tool_config: {},
           variables: {},
           config: {},
-          project_id: null,
+          agent_id: null,
           display_order: 0,
           created_at: "2026-06-01T00:00:00Z",
           updated_at: "2026-06-01T00:00:00Z",

@@ -53,6 +53,15 @@ export class FakeSupabase {
     this.rpcCalls.push({ name, args })
     const configuredError = this.options.rpcErrors?.[name]
     if (configuredError) return { data: null, error: configuredError }
+    // SIG-2385 replaced `product_goals` with workspace memory behind this RPC.
+    if (name === "get_workspace_brand_profile") {
+      const profile = this.tables.workspace_brand_profiles?.find(
+        (row) => row.workspace_id === args.p_workspace_id
+      )
+      if (!profile) return { data: null, error: null }
+      const { workspace_id: _workspaceId, ...fields } = profile
+      return { data: fields, error: null }
+    }
     if (name === "create_product_for_mcp") {
       const userId = args.p_user_id as string | undefined
       const productName = String(args.p_name ?? "").trim()
@@ -114,22 +123,13 @@ export class FakeSupabase {
       this.upsertRow(
         "product_members",
         {
-          product_id: product.id,
+          workspace_id: product.id,
           user_id: userId,
           role: "owner",
           display_order: args.p_display_order ?? 0,
           updated_at: "rpc-created",
         },
-        ["product_id", "user_id"]
-      )
-      this.upsertRow(
-        "product_goals",
-        {
-          product_id: product.id,
-          user_id: userId,
-          updated_at: "rpc-created",
-        },
-        ["product_id"]
+        ["workspace_id", "user_id"]
       )
 
       return { data: product, error: null }
@@ -172,7 +172,7 @@ export class FakeSupabase {
         const activeJob = this.tables.surf_jobs.find((job) => {
           if (
             job.source_id !== args.p_source_id ||
-            job.product_id !== args.p_product_id ||
+            job.workspace_id !== args.p_workspace_id ||
             !["pending", "processing"].includes(job.status)
           ) {
             return false
@@ -215,7 +215,7 @@ export class FakeSupabase {
           priority: 50,
           attempt_count: 0,
           max_attempts: 3,
-          product_id: args.p_product_id,
+          workspace_id: args.p_workspace_id,
           user_id: args.p_user_id,
           source_id: args.p_source_id,
           workflow_id: args.p_workflow_id,

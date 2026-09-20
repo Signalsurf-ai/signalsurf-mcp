@@ -28,7 +28,7 @@ function dbWithKey(apiKey = "dl_test") {
   return new FakeSupabase({
     integration_accounts: [
       {
-        product_id: context.productId,
+        workspace_id: context.productId,
         integration_type: "deepline",
         credentials: { api_key: apiKey },
       },
@@ -46,7 +46,7 @@ function approvalRow(
     oauth_grant_id: oauthContext.oauthGrantId,
     user_id: oauthContext.userId,
     client_id: oauthContext.oauthClientId,
-    product_id: oauthContext.productId,
+    workspace_id: oauthContext.productId,
     tool_name: "deepline_execute_tool",
     provider_tool_id: "hubspot_create_contact",
     payload_sha256: mcpActionPayloadSha256(payload),
@@ -415,7 +415,7 @@ describe("Deepline capabilities", () => {
       oauth_grant_id: oauthContext.oauthGrantId,
       user_id: oauthContext.userId,
       client_id: oauthContext.oauthClientId,
-      product_id: oauthContext.productId,
+      workspace_id: oauthContext.productId,
       tool_name: "deepline_execute_tool",
       provider_tool_id: "hubspot_create_contact",
       payload_sha256: mcpActionPayloadSha256({

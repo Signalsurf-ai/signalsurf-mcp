@@ -61,7 +61,7 @@ function approvedRow(overrides: Record<string, unknown> = {}) {
     oauth_grant_id: context.oauthGrantId,
     user_id: context.userId,
     client_id: context.oauthClientId,
-    product_id: context.productId,
+    workspace_id: context.productId,
     tool_name: "search_instagram_content",
     provider_tool_id: "instagram_content_search",
     payload_sha256: mcpActionPayloadSha256(approvalPayload),

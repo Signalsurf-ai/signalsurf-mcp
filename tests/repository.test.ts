@@ -41,7 +41,7 @@ function makeDb() {
     workflows: [
       {
         id: workflow1,
-        product_id: context.productId,
+        workspace_id: context.productId,
         name: "Active",
         description: null,
         is_default: false,
@@ -57,7 +57,7 @@ function makeDb() {
         tool_config: {},
         variables: {},
         config: {},
-        project_id: null,
+        agent_id: null,
         display_order: 0,
         created_at: "2026-06-01T00:00:00Z",
         updated_at: "2026-06-01T00:00:00Z",
@@ -65,7 +65,7 @@ function makeDb() {
       },
       {
         id: workflow2,
-        product_id: context.productId,
+        workspace_id: context.productId,
         name: "Second",
         description: null,
         is_default: false,
@@ -81,7 +81,7 @@ function makeDb() {
         tool_config: {},
         variables: {},
         config: {},
-        project_id: null,
+        agent_id: null,
         display_order: 1,
         created_at: "2026-06-01T00:00:00Z",
         updated_at: "2026-06-01T00:00:00Z",
@@ -89,7 +89,7 @@ function makeDb() {
       },
       {
         id: "00000000-0000-4000-8000-000000000102",
-        product_id: context.productId,
+        workspace_id: context.productId,
         name: "Deleted",
         is_default: false,
         is_active: true,
@@ -100,7 +100,7 @@ function makeDb() {
       },
       {
         id: otherProductWorkflow,
-        product_id: "00000000-0000-4000-8000-000000000099",
+        workspace_id: "00000000-0000-4000-8000-000000000099",
         name: "Other Product",
         is_default: false,
         is_active: true,
@@ -110,17 +110,17 @@ function makeDb() {
         deleted_at: null,
       },
     ],
-    database_folders: [
+    agents: [
       {
         id: project1,
-        product_id: context.productId,
+        workspace_id: context.productId,
         name: "GTM",
       },
     ],
     databases: [
       {
         id: db1,
-        product_id: context.productId,
+        workspace_id: context.productId,
         name: "Companies",
         description: null,
         icon: null,
@@ -134,7 +134,7 @@ function makeDb() {
           ],
         },
         item_type: "company",
-        system_type: null,
+        system_role: null,
         view_configs: {},
         display_order: 0,
         created_at: "2026-06-01T00:00:00Z",
@@ -142,14 +142,14 @@ function makeDb() {
       },
       {
         id: db2,
-        product_id: context.productId,
+        workspace_id: context.productId,
         name: "People",
         description: null,
         icon: null,
         color: null,
         schema: null,
         item_type: "person",
-        system_type: null,
+        system_role: null,
         view_configs: {},
         display_order: 1,
         created_at: "2026-06-01T00:00:00Z",
@@ -157,14 +157,14 @@ function makeDb() {
       },
       {
         id: otherProductDb,
-        product_id: "00000000-0000-4000-8000-000000000099",
+        workspace_id: "00000000-0000-4000-8000-000000000099",
         name: "Other",
         description: null,
         icon: null,
         color: null,
         schema: null,
         item_type: "company",
-        system_type: null,
+        system_role: null,
         view_configs: {},
         display_order: 0,
         created_at: "2026-06-01T00:00:00Z",
@@ -186,7 +186,7 @@ function makeDb() {
         note: null,
         origin: "mcp",
         origin_ref: null,
-        entry_key_hash: null,
+        ingest_key: null,
         raw_signal_id: null,
         triggered: false,
         created_at: "2026-06-01T00:00:00Z",
@@ -206,7 +206,7 @@ function makeDb() {
         note: null,
         origin: "mcp",
         origin_ref: null,
-        entry_key_hash: null,
+        ingest_key: null,
         raw_signal_id: null,
         triggered: false,
         created_at: "2026-06-01T00:00:00Z",
@@ -220,7 +220,7 @@ function makeDb() {
         note: null,
         origin: "mcp",
         origin_ref: null,
-        entry_key_hash: null,
+        ingest_key: null,
         raw_signal_id: null,
         triggered: false,
         created_at: "2026-06-01T00:00:00Z",
@@ -265,22 +265,17 @@ function makeDb() {
     ],
     product_members: [
       {
-        product_id: context.productId,
+        workspace_id: context.productId,
         user_id: context.userId,
         role: "owner",
       },
     ],
-    product_goals: [
+    workspace_brand_profiles: [
       {
-        product_id: context.productId,
-        user_id: context.userId,
+        workspace_id: context.productId,
         brand_name: "Acme",
         brand_description: "Acme makes widgets.",
         product_description: "A widget platform.",
-        product_categories: ["SaaS", "Widgets", "SaaS"],
-        selling_points: ["Fast", "Reliable"],
-        target_audience: "SMB operators",
-        competitors: ["Globex", "Initech"],
         official_website: "https://acme.example",
         brand_voice: { secret: "should-not-leak" },
         updated_at: "2026-06-02T00:00:00Z",
@@ -289,7 +284,7 @@ function makeDb() {
     surf_jobs: [
       {
         id: pendingJob,
-        product_id: context.productId,
+        workspace_id: context.productId,
         user_id: context.userId,
         workflow_id: workflow1,
         source_id: source1,
@@ -341,7 +336,7 @@ function makeDb() {
     product_tools: [
       {
         id: tool1,
-        product_id: context.productId,
+        workspace_id: context.productId,
         user_id: context.userId,
         tool_type: "slack",
         config: { nickname: "Slack alerts", token: "secret" },
@@ -351,7 +346,7 @@ function makeDb() {
       },
       {
         id: tool2,
-        product_id: context.productId,
+        workspace_id: context.productId,
         user_id: context.userId,
         tool_type: "webhook",
         config: { nickname: "Webhook" },
@@ -361,7 +356,7 @@ function makeDb() {
       },
       {
         id: "00000000-0000-4000-8000-000000000903",
-        product_id: "00000000-0000-4000-8000-000000000099",
+        workspace_id: "00000000-0000-4000-8000-000000000099",
         user_id: "00000000-0000-4000-8000-000000000099",
         tool_type: "slack",
         config: {},
@@ -373,7 +368,7 @@ function makeDb() {
     account_list_profiles: [
       {
         id: accountListProfile1,
-        product_id: context.productId,
+        workspace_id: context.productId,
         name: "Seed SaaS GTM",
         description: "Founder-led GTM buyers",
         status: "active",
@@ -402,7 +397,7 @@ function makeDb() {
       },
       {
         id: archivedAccountListProfile,
-        product_id: context.productId,
+        workspace_id: context.productId,
         name: "Archived ICP",
         description: null,
         status: "archived",
@@ -421,7 +416,7 @@ function makeDb() {
       },
       {
         id: otherProductAccountListProfile,
-        product_id: "00000000-0000-4000-8000-000000000099",
+        workspace_id: "00000000-0000-4000-8000-000000000099",
         name: "Other Product ICP",
         description: null,
         status: "active",
@@ -472,7 +467,7 @@ describe("SignalSurfRepository", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
-  it("reads product-scoped brand context without leaking other goal fields", async () => {
+  it("reads the workspace brand profile and never leaks brand voice", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
@@ -483,10 +478,12 @@ describe("SignalSurfRepository", () => {
       brandName: "Acme",
       brandDescription: "Acme makes widgets.",
       productDescription: "A widget platform.",
-      productCategories: ["SaaS", "Widgets"],
-      sellingPoints: ["Fast", "Reliable"],
-      targetAudience: "SMB operators",
-      competitors: ["Globex", "Initech"],
+      // SIG-2385 kept only five brand facts; the retired keys stay empty so
+      // the public tool contract is unchanged.
+      productCategories: [],
+      sellingPoints: [],
+      targetAudience: null,
+      competitors: [],
       officialWebsite: "https://acme.example",
       updatedAt: "2026-06-02T00:00:00Z",
     })
@@ -553,7 +550,7 @@ describe("SignalSurfRepository", () => {
     })
     expect(db.tables.surf_jobs).toHaveLength(1)
     expect(db.tables.surf_jobs[0]).toMatchObject({
-      product_id: context.productId,
+      workspace_id: context.productId,
       user_id: context.userId,
       workflow_id: workflow1,
       source_id: source1,
@@ -647,7 +644,7 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     db.tables.surf_jobs.push({
       id: otherProductJob,
-      product_id: "00000000-0000-4000-8000-000000000099",
+      workspace_id: "00000000-0000-4000-8000-000000000099",
       user_id: "00000000-0000-4000-8000-000000000099",
       workflow_id: "00000000-0000-4000-8000-000000000103",
       source_id: otherProductSource,
@@ -696,7 +693,7 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     db.tables.surf_jobs.push({
       id: completedJob,
-      product_id: context.productId,
+      workspace_id: context.productId,
       user_id: context.userId,
       workflow_id: workflow1,
       source_id: source1,
@@ -1083,7 +1080,7 @@ describe("SignalSurfRepository", () => {
     })
 
     const inserted = db.tables.entries.find(
-      (entry) => entry.entry_key_hash === "github:agenticnick"
+      (entry) => entry.ingest_key === "github:agenticnick"
     )
     expect(inserted).toMatchObject({
       database_id: db1,
@@ -1102,12 +1099,12 @@ describe("SignalSurfRepository", () => {
     })
     expect(
       db.tables.entries.filter(
-        (entry) => entry.entry_key_hash === "github:agenticnick"
+        (entry) => entry.ingest_key === "github:agenticnick"
       )
     ).toHaveLength(1)
     expect(
       db.tables.entries.find(
-        (entry) => entry.entry_key_hash === "github:agenticnick"
+        (entry) => entry.ingest_key === "github:agenticnick"
       )?.data
     ).toMatchObject({
       name: "Nick Updated",
@@ -1214,7 +1211,7 @@ describe("SignalSurfRepository", () => {
     ).toHaveLength(1)
     expect(db.tables.platform_search_config).toMatchObject([
       {
-        product_id: context.productId,
+        workspace_id: context.productId,
         workflow_id: workflow1,
         platform: "threads-keyword-search",
         keywords: ["x402", "MCP"],
@@ -1222,7 +1219,7 @@ describe("SignalSurfRepository", () => {
     ])
     expect(db.tables.tracked_accounts).toMatchObject([
       {
-        product_id: context.productId,
+        workspace_id: context.productId,
         workflow_id: workflow1,
         platform: "threads-keyword-search",
         username: "blockrun",
@@ -1234,7 +1231,7 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     db.tables.platform_search_config = [
       {
-        product_id: context.productId,
+        workspace_id: context.productId,
         workflow_id: workflow1,
         platform: "threads-keyword-search",
         is_enabled: true,
@@ -1243,7 +1240,7 @@ describe("SignalSurfRepository", () => {
     ]
     db.tables.tracked_accounts = [
       {
-        product_id: context.productId,
+        workspace_id: context.productId,
         workflow_id: workflow1,
         platform: "threads-keyword-search",
         username: "old-account",
@@ -1295,7 +1292,7 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     db.tables.surf_jobs.push({
       id: completedJob,
-      product_id: context.productId,
+      workspace_id: context.productId,
       user_id: context.userId,
       workflow_id: workflow1,
       source_id: source1,
@@ -1370,7 +1367,7 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     db.tables.platform_search_config = [
       {
-        product_id: context.productId,
+        workspace_id: context.productId,
         workflow_id: workflow1,
         platform: "threads-keyword-search",
         is_enabled: true,
@@ -1379,7 +1376,7 @@ describe("SignalSurfRepository", () => {
     ]
     db.tables.tracked_accounts = [
       {
-        product_id: context.productId,
+        workspace_id: context.productId,
         workflow_id: workflow1,
         platform: "threads-keyword-search",
         username: "old-account",
@@ -1388,7 +1385,7 @@ describe("SignalSurfRepository", () => {
     ]
     db.tables.surf_jobs.push({
       id: completedJob,
-      product_id: context.productId,
+      workspace_id: context.productId,
       user_id: context.userId,
       workflow_id: workflow1,
       source_id: source1,
@@ -1642,7 +1639,7 @@ describe("SignalSurfRepository", () => {
     })
     expect(db.tables.account_list_profiles.at(-1)).toMatchObject({
       id: result.profileId,
-      product_id: context.productId,
+      workspace_id: context.productId,
       name: "Enterprise RevOps",
       status: "active",
       source: "manual",
@@ -1732,7 +1729,7 @@ describe("SignalSurfRepository", () => {
     db.tables.mcp_tokens = [
       {
         id: "00000000-0000-4000-8000-000000000501",
-        product_id: context.productId,
+        workspace_id: context.productId,
         created_by: context.userId,
         name: "hosted-agent",
         role: "editor",
@@ -1862,18 +1859,10 @@ describe("SignalSurfRepository", () => {
     expect(db.tables.product_members).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          product_id: result.productId,
+          workspace_id: result.productId,
           user_id: context.userId,
           role: "owner",
           display_order: 3,
-        }),
-      ])
-    )
-    expect(db.tables.product_goals).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          product_id: result.productId,
-          user_id: context.userId,
         }),
       ])
     )
@@ -1900,7 +1889,7 @@ describe("SignalSurfRepository", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" })
   })
 
-  it("creates prompt templates from scoring rubric and surf prompt", async () => {
+  it("stores the scoring rubric and Surfer prompt in their own columns", async () => {
     const db = makeDb()
     db.tables.databases = db.tables.databases.filter((row) => row.id === db1)
     const repo = new SignalSurfRepository(db as any)
@@ -1915,8 +1904,8 @@ describe("SignalSurfRepository", () => {
     expect(inserted).toMatchObject({
       name: "New point",
       database_ids: [db1],
-      prompt_template:
-        "## Scoring Rubric\n\nScore qualified leads highly.\n\nFind recent funding events.",
+      scoring_rubric: "Score qualified leads highly.",
+      surf_prompt: "Find recent funding events.",
     })
   })
 
@@ -1932,7 +1921,7 @@ describe("SignalSurfRepository", () => {
 
     expect(created.workflow).toMatchObject({ projectId: project1 })
     expect(db.tables.workflows.at(-1)).toMatchObject({
-      project_id: project1,
+      agent_id: project1,
     })
     expect(db.tables).not.toHaveProperty("workflow" + "_folders")
 
@@ -1944,7 +1933,7 @@ describe("SignalSurfRepository", () => {
     expect(updated.workflow).toMatchObject({ projectId: project1 })
   })
 
-  it("uses explicit prompt templates instead of synthesized prompt sections", async () => {
+  it("stores a legacy promptTemplate as the Surfer prompt", async () => {
     const db = makeDb()
     db.tables.databases = db.tables.databases.filter((row) => row.id === db1)
     const repo = new SignalSurfRepository(db as any)
@@ -1952,12 +1941,13 @@ describe("SignalSurfRepository", () => {
     await repo.createWorkflow(context, {
       name: "Explicit point",
       promptTemplate: "Use this exact prompt.",
-      scoringRubric: "Ignored for prompt_template.",
-      surfPrompt: "Also ignored for prompt_template.",
+      scoringRubric: "Kept in its own column.",
     })
 
     const inserted = db.tables.workflows.at(-1)
-    expect(inserted?.prompt_template).toBe("Use this exact prompt.")
+    expect(inserted?.surf_prompt).toBe("Use this exact prompt.")
+    expect(inserted?.scoring_rubric).toBe("Kept in its own column.")
+    expect(inserted).not.toHaveProperty("prompt_template")
   })
 
   it("shallow-merges Workflow patches and recomputes prompt templates", async () => {
@@ -2150,7 +2140,6 @@ describe("SignalSurfRepository", () => {
 
     const created = await repo.createTable(context, {
       name: "Agent Accounts",
-      itemType: "account",
       schema: {
         template_key: "outbound_accounts",
         schema_version: 2,
@@ -2183,7 +2172,7 @@ describe("SignalSurfRepository", () => {
     expect(created.database).toMatchObject({
       databaseId: expect.any(String),
       name: "Agent Accounts",
-      itemType: "account",
+      itemType: null,
       displayOrder: 8,
       schema: {
         fields: [
@@ -2241,7 +2230,7 @@ describe("SignalSurfRepository", () => {
       type?: string
     }>
     expect(upgraded.database).toMatchObject({
-      itemType: "outbound_account",
+      itemType: null,
       schema: {
         template_key: "outbound_accounts",
         schema_version: 3,
@@ -2306,7 +2295,8 @@ describe("SignalSurfRepository", () => {
       accountSchema.fields?.map((field) => [field.key, field]) ?? []
     )
 
-    expect(accounts.database).toMatchObject({ itemType: "outbound_account" })
+    // SIG-2672: `databases.item_type` is gone, so the retired key reads null.
+    expect(accounts.database).toMatchObject({ itemType: null })
     expect(accountSchema).toMatchObject({
       template_key: "outbound_accounts",
       database_kind: "outbound.account_list",
@@ -2423,7 +2413,7 @@ describe("SignalSurfRepository", () => {
       contactSchema.fields?.map((field) => [field.key, field]) ?? []
     )
 
-    expect(contacts.database).toMatchObject({ itemType: "contact" })
+    expect(contacts.database).toMatchObject({ itemType: null })
     expect(contactSchema.template_key).toBe("contacts")
     expect(contactFields.get("email")).toMatchObject({ type: "email" })
     expect(contactFields.get("linkedin_url")).toMatchObject({
@@ -2528,14 +2518,14 @@ describe("SignalSurfRepository", () => {
     const systemDb = "00000000-0000-4000-8000-000000000298"
     db.tables.databases.push({
       id: systemDb,
-      product_id: context.productId,
+      workspace_id: context.productId,
       name: "System Table",
       description: null,
       icon: null,
       color: null,
       schema: null,
       item_type: "system",
-      system_type: "account_list_profiles",
+      system_role: "account_list_profiles",
       view_configs: {},
       display_order: 10,
       created_at: "2026-06-01T00:00:00Z",

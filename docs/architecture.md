@@ -300,5 +300,8 @@ git diff --check
 High-risk changes should also include targeted tests:
 
 - Auth/transport changes: `tests/auth.test.ts`, `tests/http.test.ts`
+- Table/column/RPC names: `pnpm check:schema-usage` against
+  `schema/public-snapshot.json`. FakeSupabase answers any name, so only this
+  check sees a rename (SIG-2672).
 - Tool registration/resource changes: `tests/mcp-server.test.ts`
 - Product-scope or mutation changes: `tests/repository.test.ts`

@@ -7,13 +7,14 @@
     "signalsurf-mcp": "dist/index.js"
   },
   "scripts": {
-    "dev": "tsx src/index.ts",
     "build": "tsc -p tsconfig.json",
+    "check:pr": "pnpm check:surfer-parity && pnpm check:schema-usage && pnpm typecheck && pnpm test && pnpm build",
+    "check:schema-usage": "node scripts/check-schema-usage.mjs",
     "check:surfer-parity": "node scripts/check-surfer-parity.mjs",
+    "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "check:pr": "pnpm check:surfer-parity && pnpm typecheck && pnpm test && pnpm build"
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "files": [
     "dist",
