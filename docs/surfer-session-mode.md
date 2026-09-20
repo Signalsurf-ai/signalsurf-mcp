@@ -7,7 +7,7 @@ one a request sees.
 | Mode | Token | Tools | Who acts |
 | --- | --- | --- | --- |
 | Tools mode | OAuth grant with product scopes, or a manual token with `mode = tools` | The public product-operation catalog (`PUBLIC_MCP_TOOLS`), OAuth scopes, resources, prompts, and the one-time approval flow | The external client drives SignalSurf directly |
-| Direct Message mode | OAuth grant with `mcp:dm`, or a manual token issued in SignalSurf Settings with `mode = surfer_session` | `list_surfer_workspaces`, `message_surfer`, `read_surfer_session`, `answer_surfer_confirmation`, `close_surfer_session` | Surfer, SignalSurf's server-side agent, acting as the token's member |
+| Direct Message mode | OAuth grant with `mcp:dm`, or a manual token issued in SignalSurf Settings with `mode = surfer_session` | `list_workspaces`, `send_message`, `read_conversation`, `answer_question`, `close_conversation` | Surfer, SignalSurf's server-side agent, acting as the token's member |
 
 Session mode changes nothing about tool mode: its tools are not part of
 `PUBLIC_MCP_TOOLS`, the public tool contract, or the Surfer parity registry.
@@ -48,7 +48,7 @@ Each workspace has its own Surfer, sessions, delegation ledger, memory and
 timers; one MCP connection simply talks to each of them. Every session tool
 takes an optional `workspaceId`. It may be omitted when the token reaches a
 single workspace or when `sessionId` already identifies one; otherwise the call
-fails with `WORKSPACE_REQUIRED` instead of guessing. `list_surfer_workspaces`
+fails with `WORKSPACE_REQUIRED` instead of guessing. `list_workspaces`
 returns the granted workspaces with the member's current access and open-session
 count in each.
 
@@ -64,7 +64,7 @@ still scheduled on it moves to the member's canonical Direct Message when that
 Direct Message has no follow-up of its own.
 
 The client is only an input device. It relays member text with
-`message_surfer`; Surfer decides whether to answer privately, look something
+`send_message`; Surfer decides whether to answer privately, look something
 up, or delegate real work into a canonical Project Thread where every
 operation, decision, and result stays publicly recorded with provenance. There
 is no coordinator lease, no turn-claim protocol, and no manifest handed to the
@@ -72,23 +72,23 @@ client.
 
 ## Tools
 
-- `list_surfer_workspaces()` lists the workspaces this token may reach.
-- `message_surfer({ workspaceId?, sessionId?, message, occurrenceId?, waitSeconds?, clientLabel? })`
+- `list_workspaces()` lists the workspaces this token may reach.
+- `send_message({ workspaceId?, sessionId?, message, occurrenceId?, waitSeconds?, clientLabel? })`
   appends one member message. Omit `sessionId` to open a new session. The
   call waits up to `waitSeconds` (default 25) for Surfer's reply; otherwise it
   returns `reply.status = "pending"` plus a `nextStep`. Retrying with the same
   `occurrenceId` is idempotent.
-- `read_surfer_session({ workspaceId?, sessionId?, afterSequence?, limit? })` returns the
+- `read_conversation({ workspaceId?, sessionId?, afterSequence?, limit? })` returns the
   transcript after a sequence, current activity, Surfer's private Working
   State, delegated Project Thread work with source links, timers, and pending
   confirmations/decisions. Without `sessionId` it lists the token's sessions.
-- `answer_surfer_confirmation({ workspaceId?, sessionId, confirmationId, decision | answer, occurrenceId? })`
+- `answer_question({ workspaceId?, sessionId, confirmationId, decision | answer, occurrenceId? })`
   answers a pending item through its original authority boundary. Ids look like
   `op:<uuid>` (a confirmation raised inside the private conversation) or
   `decision:<uuid>` (a shared Project Thread decision projected into the
   session). Approval resumes exactly the original operation and cannot be
   replayed or redirected.
-- `close_surfer_session({ workspaceId?, sessionId })` ends the session (idempotent). A
+- `close_conversation({ workspaceId?, sessionId })` ends the session (idempotent). A
   scheduled follow-up moves to the canonical Direct Message; the Direct Message
   holds one follow-up, so if it already has one the result reports
   `droppedTimerCount` instead of replacing it.
