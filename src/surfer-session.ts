@@ -42,15 +42,15 @@ const mutatingAnnotations = {
 } as const
 
 /**
- * The member names their agent in SignalSurf Settings ("Surfer" is only the
- * default), so neither the tool names nor their descriptions state a name.
+ * Members rename their Surfer per workspace, so the tool names state the
+ * action rather than a name, and `list_workspaces` reports the configured one.
  * `list_workspaces` reports the configured name per workspace.
  */
 export const SURFER_SESSION_TOOLS = {
   list_workspaces: {
     title: "List workspaces",
     description:
-      "List the SignalSurf workspaces this connection may reach, each with the member's current access, that workspace's agent name, and its open-conversation count. Every workspace has its own agent; nothing is shared between workspaces. Call this first when the member works in more than one workspace.",
+      "List the SignalSurf workspaces this connection may reach, each with the member's current access, that workspace's Surfer name, and its open-conversation count. Every workspace has its own Surfer; nothing is shared between workspaces. Call this first when the member works in more than one workspace.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -61,13 +61,13 @@ export const SURFER_SESSION_TOOLS = {
   send_message: {
     title: "Send a message",
     description:
-      'Send one member message to the workspace\'s SignalSurf agent, which runs server-side. Omit sessionId to open a new conversation; pass an existing id to continue it. Waits up to waitSeconds for the reply. When reply.status is "pending", follow nextStep and call read_conversation with afterSequence = message.sequence. Retry a failed call with the same occurrenceId to avoid duplicate messages. workspaceId picks which granted workspace to talk to (see list_workspaces); omit it only when the connection reaches one workspace or sessionId already identifies it.',
+      'Send one member message to the workspace\'s Surfer, SignalSurf\'s server-side AI. Omit sessionId to open a new conversation; pass an existing id to continue it. Waits up to waitSeconds for the reply. When reply.status is "pending", follow nextStep and call read_conversation with afterSequence = message.sequence. Retry a failed call with the same occurrenceId to avoid duplicate messages. workspaceId picks which granted workspace to talk to (see list_workspaces); omit it only when the connection reaches one workspace or sessionId already identifies it.',
     annotations: mutatingAnnotations,
   },
   read_conversation: {
     title: "Read a conversation",
     description:
-      "Read a conversation with the workspace's agent: transcript events after a sequence number, current activity, working state, delegated Project Thread work, timers, and pending confirmations/decisions. Omit sessionId to list this connection's conversations. This is the only way to confirm the agent actually did something; a returned tool call is not completion. workspaceId picks which granted workspace to read (see list_workspaces); omit it only when the connection reaches one workspace or sessionId already identifies it.",
+      "Read a conversation with the workspace's Surfer: transcript events after a sequence number, current activity, working state, delegated Project Thread work, timers, and pending confirmations/decisions. Omit sessionId to list this connection's conversations. This is the only way to confirm Surfer actually did something; a returned tool call is not completion. workspaceId picks which granted workspace to read (see list_workspaces); omit it only when the connection reaches one workspace or sessionId already identifies it.",
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -91,10 +91,10 @@ export const SURFER_SESSION_TOOLS = {
 
 export const SURFER_SESSION_INSTRUCTIONS = `SignalSurf MCP — Direct Message mode.
 
-You are relaying a SignalSurf member's messages to that workspace's agent, which runs server-side. The member names their agent in SignalSurf Settings ("Surfer" is the default), so call it by the name list_workspaces reports. The agent plans and delegates real work into Project Threads; you are an input device, not the coordinator.
+You are relaying a SignalSurf member's messages to that workspace's Surfer, SignalSurf's server-side AI. The member can rename their Surfer per workspace, so address it by the name list_workspaces reports. Surfer plans and delegates real work into Project Threads; you are an input device, not the coordinator.
 
-- If the member works in more than one workspace, call list_workspaces and pass workspaceId; each workspace has its own agent and nothing is shared between them.
-- Use send_message to talk to the agent.
+- If the member works in more than one workspace, call list_workspaces and pass workspaceId; each workspace has its own Surfer and nothing is shared between them.
+- Use send_message to talk to Surfer.
 - Use read_conversation to see the transcript, pending confirmations, and delegated work.
 - Use answer_question to approve, reject, or answer pending items.
 - Use close_conversation when done.
@@ -298,7 +298,7 @@ export class SurferSessionClient {
     const session = isRecord(result.session) ? result.session : null
     const nextStep =
       reply?.status === "pending"
-        ? `Surfer has not replied yet. Call read_conversation with sessionId "${
+        ? `The reply is still pending. Call read_conversation with sessionId "${
             typeof session?.id === "string" ? session.id : ""
           }" and afterSequence = ${
             typeof message?.sequence === "number" ? message.sequence : 0
