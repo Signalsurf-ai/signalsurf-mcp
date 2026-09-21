@@ -1,6 +1,4 @@
-import http from "node:http"
-import type { Server } from "node:http"
-
+import http, { type Server } from "node:http"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { sha256Hex } from "../src/auth.js"
@@ -9,8 +7,7 @@ import {
   MCP_OFFLINE_ACCESS_SCOPE,
   MCP_RESOURCE_SCOPES,
 } from "../src/capabilities.js"
-import type { AppConfig } from "../src/config.js"
-import { loadConfig } from "../src/config.js"
+import { loadConfig, type AppConfig } from "../src/config.js"
 import { createHttpApp } from "../src/http.js"
 import { SignalSurfRepository } from "../src/repository.js"
 import { FakeSupabase } from "./fake-supabase.js"
@@ -212,12 +209,18 @@ describe("HTTP transport", () => {
   })
 
   it("resolves hosted database tokens for HTTP auth", async () => {
+    const userId = "00000000-0000-4000-8000-000000000102"
     const db = new FakeSupabase({
+      products: [{ id: productId, organization_id: null }],
+      product_members: [
+        { workspace_id: productId, user_id: userId, role: "member" },
+      ],
+      organization_members: [],
       mcp_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000101",
           workspace_id: productId,
-          created_by: "00000000-0000-4000-8000-000000000102",
+          created_by: userId,
           name: "hosted-agent",
           role: "editor",
           token_sha256: sha256Hex(token),
@@ -294,12 +297,18 @@ describe("HTTP transport", () => {
   })
 
   it("does not trust spoofed forwarded IPs unless proxy trust is enabled", async () => {
+    const userId = "00000000-0000-4000-8000-000000000102"
     const db = new FakeSupabase({
+      products: [{ id: productId, organization_id: null }],
+      product_members: [
+        { workspace_id: productId, user_id: userId, role: "member" },
+      ],
+      organization_members: [],
       mcp_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000101",
           workspace_id: productId,
-          created_by: null,
+          created_by: userId,
           name: "hosted-agent",
           role: "editor",
           token_sha256: sha256Hex(token),
@@ -439,13 +448,19 @@ describe("HTTP transport", () => {
 
   it("resolves OAuth access tokens with harmless additive scopes", async () => {
     const resourceUrl = "https://mcp.example.com/mcp"
+    const userId = "00000000-0000-4000-8000-000000000202"
     const db = new FakeSupabase({
+      products: [{ id: productId, organization_id: null }],
+      product_members: [
+        { workspace_id: productId, user_id: userId, role: "member" },
+      ],
+      organization_members: [],
       mcp_tokens: [],
       mcp_oauth_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
-          user_id: "00000000-0000-4000-8000-000000000202",
+          user_id: userId,
           workspace_id: productId,
           scope: "mcp:read mcp:write offline_access openid profile",
           resource: resourceUrl,
@@ -498,13 +513,19 @@ describe("HTTP transport", () => {
 
   it("returns an OAuth insufficient-scope challenge for scoped HTTP tool calls", async () => {
     const resourceUrl = "https://mcp.example.com/mcp"
+    const userId = "00000000-0000-4000-8000-000000000202"
     const db = new FakeSupabase({
+      products: [{ id: productId, organization_id: null }],
+      product_members: [
+        { workspace_id: productId, user_id: userId, role: "member" },
+      ],
+      organization_members: [],
       mcp_tokens: [],
       mcp_oauth_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
-          user_id: "00000000-0000-4000-8000-000000000202",
+          user_id: userId,
           workspace_id: productId,
           scope: "mcp:tables.read mcp:tables.write",
           resource: resourceUrl,
@@ -573,13 +594,14 @@ describe("HTTP transport", () => {
   it("requires explicit productId for multi-product OAuth HTTP tool calls", async () => {
     const resourceUrl = "https://mcp.example.com/mcp"
     const secondProductId = "00000000-0000-4000-8000-000000000002"
+    const userId = "00000000-0000-4000-8000-000000000202"
     const db = new FakeSupabase({
       mcp_tokens: [],
       mcp_oauth_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
-          user_id: "00000000-0000-4000-8000-000000000202",
+          user_id: userId,
           workspace_id: productId,
           workspace_ids: [productId, secondProductId],
           scope: "mcp:read",
@@ -618,6 +640,11 @@ describe("HTTP transport", () => {
           name: "Second Workspace",
         },
       ],
+      product_members: [
+        { workspace_id: productId, user_id: userId, role: "member" },
+        { workspace_id: secondProductId, user_id: userId, role: "member" },
+      ],
+      organization_members: [],
       workflows: [
         {
           id: "00000000-0000-4000-8000-000000000301",

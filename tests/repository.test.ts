@@ -453,14 +453,12 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    await expect(repo.getWorkflow(context, workflow1)).resolves.toMatchObject(
-      {
-        workflow: {
-          workflowId: workflow1,
-          name: "Active",
-        },
-      }
-    )
+    await expect(repo.getWorkflow(context, workflow1)).resolves.toMatchObject({
+      workflow: {
+        workflowId: workflow1,
+        name: "Active",
+      },
+    })
 
     await expect(
       repo.getWorkflow(context, otherProductWorkflow)
@@ -1460,13 +1458,11 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    await expect(repo.listWorkflowTools(context, workflow1)).resolves.toEqual(
-      {
-        workflowId: workflow1,
-        toolIds: [],
-        totalCount: 0,
-      }
-    )
+    await expect(repo.listWorkflowTools(context, workflow1)).resolves.toEqual({
+      workflowId: workflow1,
+      toolIds: [],
+      totalCount: 0,
+    })
 
     await expect(
       repo.attachWorkflowTool(context, {
@@ -1724,7 +1720,7 @@ describe("SignalSurfRepository", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
-  it("does not expose hosted token creators as interactive user context", async () => {
+  it("keeps the token creator for per-call Workspace revalidation", async () => {
     const db = makeDb()
     db.tables.mcp_tokens = [
       {
@@ -1754,15 +1750,20 @@ describe("SignalSurfRepository", () => {
       role: "editor",
       tokenName: "hosted-agent",
     })
-    expect(hostedContext?.userId).toBeUndefined()
+    expect(hostedContext?.userId).toBe(context.userId)
 
     await repo.deleteWorkflows(hostedContext!, [workflow1])
 
-    expect(db.tables.user_preferences[0].current_workflow_id).toBe(workflow1)
+    expect(db.tables.user_preferences[0].current_workflow_id).toBe(workflow2)
   })
 
   it("resolves OAuth tokens with every authorized product id", async () => {
     const db = makeDb()
+    db.tables.product_members.push({
+      workspace_id: secondProductId,
+      user_id: context.userId,
+      role: "member",
+    })
     db.tables.mcp_tokens = []
     db.tables.mcp_oauth_clients = [
       {
@@ -1809,84 +1810,6 @@ describe("SignalSurfRepository", () => {
       role: "viewer",
       tokenName: "OAuth: Typeless",
     })
-  })
-
-  it("creates products through hosted OAuth and expands the active grant", async () => {
-    const db = makeDb()
-    const oauthTokenId = "00000000-0000-4000-8000-000000000601"
-    db.tables.mcp_oauth_tokens = [
-      {
-        id: oauthTokenId,
-        workspace_id: context.productId,
-        workspace_ids: [context.productId],
-      },
-    ]
-    const oauthContext: SignalSurfContext = {
-      ...context,
-      productIds: [context.productId],
-      products: [
-        {
-          productId: context.productId,
-          name: "Primary Product",
-          organizationId: org1,
-          organizationName: "Primary Workspace",
-        },
-      ],
-      scopes: ["mcp:products.write"],
-      authKind: "oauth",
-      oauthTokenId,
-    }
-    const repo = new SignalSurfRepository(db as any)
-
-    const result = await repo.createProduct(oauthContext, {
-      name: "Agent-created Product",
-      displayOrder: 3,
-    })
-
-    expect(result.product).toMatchObject({
-      productId: expect.any(String),
-      name: "Agent-created Product",
-      organizationId: org1,
-      organizationName: "Primary Workspace",
-      ownerId: context.userId,
-    })
-    expect(db.tables.products.at(-1)).toMatchObject({
-      id: result.productId,
-      organization_id: org1,
-      owner_id: context.userId,
-      name: "Agent-created Product",
-    })
-    expect(db.tables.product_members).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          workspace_id: result.productId,
-          user_id: context.userId,
-          role: "owner",
-          display_order: 3,
-        }),
-      ])
-    )
-    expect(db.tables.mcp_oauth_tokens[0].workspace_ids).toEqual([
-      context.productId,
-      result.productId,
-    ])
-    expect(oauthContext.productIds).toEqual([
-      context.productId,
-      result.productId,
-    ])
-    expect(oauthContext.products?.at(-1)).toMatchObject({
-      productId: result.productId,
-      name: "Agent-created Product",
-    })
-  })
-
-  it("rejects product creation outside hosted OAuth grants", async () => {
-    const db = makeDb()
-    const repo = new SignalSurfRepository(db as any)
-
-    await expect(
-      repo.createProduct(context, { name: "Manual token product" })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" })
   })
 
   it("stores the scoring rubric and Surfer prompt in their own columns", async () => {

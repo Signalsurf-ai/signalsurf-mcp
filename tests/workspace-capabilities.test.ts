@@ -31,7 +31,15 @@ function policyDb(overrides: Array<Record<string, unknown>> = []) {
       { id: productId, organization_id: organizationId, name: "Acme" },
     ],
     workspace_capability_overrides: overrides,
-    subscriptions: [],
+    subscriptions: [
+      {
+        workspace_id: productId,
+        plan_name: "individual",
+        status: "active",
+        current_period_end: null,
+        created_at: "2026-09-21T00:00:00Z",
+      },
+    ],
     billing_plan_catalog: [
       {
         plan_key: "individual",
@@ -84,7 +92,7 @@ describe("hosted MCP Workspace capability projection", () => {
     ).toEqual(["tables", "campaigns"])
   })
 
-  it("keeps existing workspaces enabled during a rolling schema deploy", async () => {
+  it("fails closed during a rolling subscription-schema deploy", async () => {
     const db = new FakeSupabase(
       {
         products: [{ id: productId, organization_id: organizationId }],
@@ -102,18 +110,18 @@ describe("hosted MCP Workspace capability projection", () => {
 
     await expect(
       loadWorkspaceCapabilities(db as any, [productId])
-    ).resolves.toEqual({ [productId]: [...WORKSPACE_CAPABILITIES] })
+    ).resolves.toEqual({ [productId]: [] })
   })
 
-  it("preserves explicit disables when later plan tables are rolling out", async () => {
+  it("keeps only explicit enables when later plan tables are rolling out", async () => {
     const db = new FakeSupabase(
       {
         products: [{ id: productId, organization_id: organizationId }],
         workspace_capability_overrides: [
           {
             workspace_id: productId,
-            capability_key: "workflows",
-            enabled: false,
+            capability_key: "listening",
+            enabled: true,
           },
         ],
       },
@@ -128,8 +136,8 @@ describe("hosted MCP Workspace capability projection", () => {
     )
 
     const capabilities = await loadWorkspaceCapabilities(db as any, [productId])
-    expect(capabilities[productId]).not.toContain("workflows")
     expect(capabilities[productId]).toContain("listening")
+    expect(capabilities[productId]).not.toContain("workflows")
   })
 
   it("keeps Listening independent from ordinary Workflows", async () => {
@@ -159,8 +167,8 @@ describe("hosted MCP Workspace capability projection", () => {
     const client = await connect(db)
     const toolNames = (await client.listTools()).tools.map((tool) => tool.name)
     expect(toolNames).toContain("list_workflows")
-    expect(toolNames).not.toContain("create_workflow")
-    expect(toolNames).not.toContain("describe_node_types")
+    expect(toolNames).toContain("create_workflow")
+    expect(toolNames).toContain("describe_node_types")
 
     const listed = await client.callTool({
       name: "list_workflows",
@@ -169,7 +177,7 @@ describe("hosted MCP Workspace capability projection", () => {
     const listedText =
       listed.content?.[0]?.type === "text" ? listed.content[0].text : ""
     expect(JSON.parse(listedText).data.workflows).toEqual([
-      expect.objectContaining({ workflowId: listeningWorkflowId }),
+      expect.objectContaining({ workflowId: ordinaryWorkflowId }),
     ])
 
     const flowEdit = await client.callTool({
@@ -185,7 +193,7 @@ describe("hosted MCP Workspace capability projection", () => {
       name: "get_workflow",
       arguments: { workflowId: ordinaryWorkflowId },
     })
-    expect(denied.isError).toBe(true)
+    expect(denied.isError).toBeFalsy()
     const allowed = await client.callTool({
       name: "get_workflow",
       arguments: { workflowId: listeningWorkflowId },
@@ -193,7 +201,7 @@ describe("hosted MCP Workspace capability projection", () => {
     expect(allowed.isError).toBeFalsy()
 
     const prompts = await client.listPrompts()
-    expect(prompts.prompts.map((prompt) => prompt.name)).not.toContain(
+    expect(prompts.prompts.map((prompt) => prompt.name)).toContain(
       "set_up_workflow"
     )
     const contextResult = await client.callTool({
@@ -209,7 +217,7 @@ describe("hosted MCP Workspace capability projection", () => {
     )
   })
 
-  it("omits disabled tools, prompts, discovery entries, and resources", async () => {
+  it("keeps disabled modules discoverable and read-only", async () => {
     const db = policyDb([
       { workspace_id: productId, capability_key: "tables", enabled: false },
       { workspace_id: productId, capability_key: "objects", enabled: false },
@@ -220,19 +228,19 @@ describe("hosted MCP Workspace capability projection", () => {
 
     const tools = await client.listTools()
     const toolNames = tools.tools.map((tool) => tool.name)
-    expect(toolNames).not.toContain("list_tables")
-    expect(toolNames).not.toContain("create_table")
-    expect(toolNames).not.toContain("list_workflows")
-    expect(toolNames).not.toContain("list_signals")
+    expect(toolNames).toContain("list_tables")
+    expect(toolNames).toContain("create_table")
+    expect(toolNames).toContain("list_workflows")
+    expect(toolNames).toContain("list_signals")
     expect(toolNames).toContain("create_campaign")
     expect(toolNames).toContain("find_capabilities")
 
-    await expect(client.listPrompts()).rejects.toThrow("Method not found")
+    expect((await client.listPrompts()).prompts.length).toBeGreaterThan(0)
 
     const resources = await client.listResources()
     const resourceUris = resources.resources.map((resource) => resource.uri)
-    expect(resourceUris).not.toContain("signalsurf://workflows")
-    expect(resourceUris).not.toContain("signalsurf://databases")
+    expect(resourceUris).toContain("signalsurf://workflows")
+    expect(resourceUris).toContain("signalsurf://databases")
 
     const discovery = await client.callTool({
       name: "find_capabilities",
@@ -241,10 +249,14 @@ describe("hosted MCP Workspace capability projection", () => {
     const text =
       discovery.content?.[0]?.type === "text" ? discovery.content[0].text : ""
     const body = JSON.parse(text)
-    expect(
-      body.data.tools.map((tool: { name: string }) => tool.name)
-    ).not.toEqual(expect.arrayContaining(["list_tables", "list_workflows"]))
-    expect(body.data.prompts).toEqual([])
+    expect(body.data.tools.length).toBeGreaterThan(0)
+    expect(body.data.prompts.length).toBeGreaterThan(0)
+
+    const mutation = await client.callTool({
+      name: "create_table",
+      arguments: { name: "Upgrade required" },
+    })
+    expect(mutation.isError).toBe(true)
   })
 
   it("removes Campaign OAuth capability from the model-visible manifest", async () => {
@@ -269,7 +281,7 @@ describe("hosted MCP Workspace capability projection", () => {
     )
   })
 
-  it("projects sender infrastructure tools and OAuth capability behind Inbox", async () => {
+  it("keeps retained sender reads visible while Inbox is inactive", async () => {
     const client = await connect(
       policyDb([
         {
@@ -281,9 +293,9 @@ describe("hosted MCP Workspace capability projection", () => {
     )
 
     const tools = (await client.listTools()).tools.map((tool) => tool.name)
-    expect(tools).not.toContain("inspect_sender_infrastructure")
-    expect(tools).not.toContain("plan_sender_capacity")
-    expect(tools).not.toContain("search_sender_domains")
+    expect(tools).toContain("inspect_sender_infrastructure")
+    expect(tools).toContain("plan_sender_capacity")
+    expect(tools).toContain("search_sender_domains")
 
     const result = await client.callTool({
       name: "get_context",
@@ -291,9 +303,15 @@ describe("hosted MCP Workspace capability projection", () => {
     })
     const text =
       result.content?.[0]?.type === "text" ? result.content[0].text : ""
-    expect(JSON.parse(text).data.capabilities.effective).not.toContain(
+    expect(JSON.parse(text).data.capabilities.effective).toContain(
       "sender_infrastructure.read"
     )
+
+    const externalLookup = await client.callTool({
+      name: "search_sender_domains",
+      arguments: { domains: ["example.com"] },
+    })
+    expect(externalLookup.isError).toBe(true)
   })
 
   it("rechecks policy before a stale registered tool can mutate", async () => {
@@ -323,7 +341,7 @@ describe("hosted MCP Workspace capability projection", () => {
     expect(db.tables.databases).toEqual([])
   })
 
-  it("filters generic table discovery and rechecks the concrete resource", async () => {
+  it("keeps retained table discovery and reads available", async () => {
     const db = policyDb([
       { workspace_id: productId, capability_key: "tables", enabled: false },
       { workspace_id: productId, capability_key: "objects", enabled: false },
@@ -367,20 +385,17 @@ describe("hosted MCP Workspace capability projection", () => {
     const listedText =
       listed.content?.[0]?.type === "text" ? listed.content[0].text : ""
     expect(JSON.parse(listedText).data.databases).toEqual([
-      expect.objectContaining({ databaseId: listeningTableId }),
+      expect.objectContaining({ databaseId: hiddenTableId }),
     ])
 
     const denied = await client.callTool({
       name: "read_table",
       arguments: { databaseId: hiddenTableId },
     })
-    const deniedText =
-      denied.content?.[0]?.type === "text" ? denied.content[0].text : ""
-    expect(denied.isError).toBe(true)
-    expect(JSON.parse(deniedText)).toMatchObject({ code: "FORBIDDEN" })
+    expect(denied.isError).toBeFalsy()
   })
 
-  it("fails closed when Listening database classification is unavailable", async () => {
+  it("does not require module classification for retained reads", async () => {
     const db = new FakeSupabase(
       {
         ...policyDb([
@@ -413,7 +428,7 @@ describe("hosted MCP Workspace capability projection", () => {
       arguments: {},
     })
 
-    expect(listed.isError).toBe(true)
+    expect(listed.isError).toBeFalsy()
     expect(db.tables.databases).toHaveLength(1)
   })
 })

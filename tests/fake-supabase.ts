@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto"
-
 type Row = Record<string, any>
 
 type TableStore = Record<string, Row[]>
@@ -61,78 +59,6 @@ export class FakeSupabase {
       if (!profile) return { data: null, error: null }
       const { workspace_id: _workspaceId, ...fields } = profile
       return { data: fields, error: null }
-    }
-    if (name === "create_product_for_mcp") {
-      const userId = args.p_user_id as string | undefined
-      const productName = String(args.p_name ?? "").trim()
-      if (!userId) return { data: null, error: { message: "user id required" } }
-      if (!productName)
-        return { data: null, error: { message: "product name required" } }
-
-      let organizationId = args.p_organization_id as string | undefined
-      if (!organizationId) {
-        const member = this.tables.organization_members?.find(
-          (row) => row.user_id === userId
-        )
-        organizationId = member?.organization_id
-      }
-      if (!organizationId) {
-        organizationId = randomUUID()
-        this.tables.organizations ??= []
-        this.tables.organizations.push({
-          id: organizationId,
-          owner_id: userId,
-          name: "Personal Workspace",
-          created_at: "rpc-created",
-          updated_at: "rpc-created",
-        })
-      }
-
-      const membership = this.tables.organization_members?.find(
-        (row) =>
-          row.organization_id === organizationId && row.user_id === userId
-      )
-      if (
-        args.p_organization_id &&
-        !["owner", "editor"].includes(membership?.role)
-      ) {
-        return { data: null, error: { message: "organization access denied" } }
-      }
-
-      const product = {
-        id: randomUUID(),
-        organization_id: organizationId,
-        owner_id: userId,
-        name: productName,
-        created_at: "rpc-created",
-        updated_at: "rpc-created",
-      }
-      this.tables.products ??= []
-      this.tables.products.push(product)
-
-      this.upsertRow(
-        "organization_members",
-        {
-          organization_id: organizationId,
-          user_id: userId,
-          role: "owner",
-          updated_at: "rpc-created",
-        },
-        ["organization_id", "user_id"]
-      )
-      this.upsertRow(
-        "product_members",
-        {
-          workspace_id: product.id,
-          user_id: userId,
-          role: "owner",
-          display_order: args.p_display_order ?? 0,
-          updated_at: "rpc-created",
-        },
-        ["workspace_id", "user_id"]
-      )
-
-      return { data: product, error: null }
     }
     if (name === "update_entry_with_source") {
       const row = this.tables.entries.find(
@@ -348,7 +274,8 @@ class FakeQuery implements PromiseLike<any> {
   overlaps(key: string, values: unknown[]) {
     this.filters.push(
       (row) =>
-        Array.isArray(row[key]) && row[key].some((value: unknown) => values.includes(value))
+        Array.isArray(row[key]) &&
+        row[key].some((value: unknown) => values.includes(value))
     )
     return this
   }

@@ -3,7 +3,6 @@ export const MCP_LEGACY_WRITE_SCOPE = "mcp:write"
 export const MCP_OFFLINE_ACCESS_SCOPE = "offline_access"
 
 export const MCP_GRANULAR_SCOPES = [
-  "mcp:products.write",
   "mcp:workflows.read",
   "mcp:workflows.write",
   "mcp:workflows.execute",
@@ -67,7 +66,6 @@ export type McpScope = (typeof MCP_SUPPORTED_SCOPES)[number]
 
 export type McpCapability =
   | "context.read"
-  | "products.write"
   | "workflows.read"
   | "workflows.write"
   | "workflows.execute"
@@ -93,7 +91,6 @@ export type PublicMcpToolName =
   | "get_brand_context"
   | "get_enrichment_context"
   | "find_capabilities"
-  | "create_product"
   | "list_workflows"
   | "get_workflow"
   | "create_workflow"
@@ -234,15 +231,6 @@ export const PUBLIC_MCP_TOOLS = {
     surferSurface: "tool discovery",
     publicStatus: "supported",
     annotations: READ_ANNOTATIONS,
-  },
-  create_product: {
-    title: "Create Product",
-    description:
-      "Create a new SignalSurf product for the authenticated user and expand the active hosted OAuth grant so the product can be used by follow-up MCP tool calls.",
-    requiredCapability: "products.write",
-    surferSurface: "product setup",
-    publicStatus: "supported",
-    annotations: CREATE_ANNOTATIONS,
   },
   list_workflows: {
     title: "List Workflows",
@@ -720,7 +708,6 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   ],
   [MCP_LEGACY_WRITE_SCOPE]: [
     "context.read",
-    "products.write",
     "workflows.read",
     "workflows.write",
     "workflows.execute",
@@ -742,7 +729,6 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "sender_infrastructure.read",
   ],
   [MCP_OFFLINE_ACCESS_SCOPE]: [],
-  "mcp:products.write": ["context.read", "products.write"],
   "mcp:workflows.read": ["context.read", "workflows.read"],
   "mcp:workflows.write": [
     "context.read",
@@ -791,7 +777,6 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
 
 const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "context.read": [MCP_LEGACY_READ_SCOPE],
-  "products.write": ["mcp:products.write"],
   "workflows.read": ["mcp:workflows.read"],
   "workflows.write": ["mcp:workflows.write"],
   "workflows.execute": ["mcp:workflows.execute"],

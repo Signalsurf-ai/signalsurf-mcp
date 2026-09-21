@@ -1,12 +1,12 @@
+import type { Server } from "node:http"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { sha256Hex } from "../src/auth.js"
+import type { AppConfig } from "../src/config.js"
 import { DirectMessageClient } from "../src/direct-message.js"
 import { createHttpApp } from "../src/http.js"
 import { SignalSurfRepository } from "../src/repository.js"
 import { FakeSupabase } from "./fake-supabase.js"
-import type { AppConfig } from "../src/config.js"
-import type { Server } from "node:http"
 
 /**
  * SIG-2681: Direct Message mode gives an MCP client the member's own Surfer
@@ -110,6 +110,11 @@ function oauthRow(id: string, value: string, scope: string) {
 
 async function start(stub = signalSurfStub()) {
   const db = new FakeSupabase({
+    products: [{ id: productId, organization_id: null, name: "Workspace" }],
+    product_members: [
+      { workspace_id: productId, user_id: memberId, role: "member" },
+    ],
+    organization_members: [],
     mcp_tokens: [
       {
         id: "00000000-0000-4000-8000-000000000101",
@@ -375,6 +380,8 @@ describe("Direct Message mode over HTTP", () => {
     expect(metadata.scopes_supported[0]).toBe("mcp:dm")
     const challenge = await listTools(base)
     expect(challenge.status).toBe(401)
-    expect(challenge.headers.get("www-authenticate")).toContain('scope="mcp:dm ')
+    expect(challenge.headers.get("www-authenticate")).toContain(
+      'scope="mcp:dm '
+    )
   })
 })
