@@ -17,6 +17,11 @@ import {
   requiredCapabilitiesForTool,
   type PublicMcpToolName,
 } from "./capabilities.js"
+import {
+  DirectMessageClient,
+  loadDirectMessageSurface,
+  type DirectMessageClientOptions,
+} from "./direct-message.js"
 import { jsonErrorResult, jsonResource, runJsonTool } from "./mcp-results.js"
 import { registerPrompts, workspaceVisiblePromptCatalog } from "./prompts.js"
 import { SignalSurfRepository } from "./repository.js"
@@ -25,7 +30,6 @@ import {
   addDatabaseFieldSchema,
   cancelSurfJobSchema,
   createCampaignSchema,
-  createProductSchema,
   createRelationFieldSchema,
   createTableRowSchema,
   createTableSchema,
@@ -50,6 +54,7 @@ import {
   getSurfJobSchema,
   getTableRowSchema,
   getWorkflowSchema,
+  inspectSenderInfrastructureSchema,
   instagramContentSearchSchema,
   listDatabaseFieldsSchema,
   listDatabaseViewsSchema,
@@ -60,14 +65,13 @@ import {
   listWorkflowSourcesSchema,
   listWorkflowToolsSchema,
   listWorkflowsSchema,
+  planSenderCapacitySchema,
   readTableSchema,
   readTableViewSchema,
-  inspectSenderInfrastructureSchema,
-  planSenderCapacitySchema,
-  searchSenderDomainsSchema,
   removeDatabaseFieldSchema,
   runEnrichSchema,
   runWorkflowSchema,
+  searchSenderDomainsSchema,
   testWorkflowNodeSchema,
   toolOutputSchema,
   updateDatabaseFieldSchema,
@@ -77,11 +81,6 @@ import {
   updateWorkflowSourceSchema,
   waitForSurfJobSchema,
 } from "./schemas.js"
-import {
-  DirectMessageClient,
-  loadDirectMessageSurface,
-  type DirectMessageClientOptions,
-} from "./direct-message.js"
 import { searchCapabilities } from "./tool-search.js"
 import type { SignalSurfContext } from "./types.js"
 import {
@@ -89,7 +88,6 @@ import {
   assertWorkspaceToolAllowed,
   isToolVisibleAcrossProducts,
   projectMcpCapabilitiesForWorkspace,
-  workspaceCapabilityEnabled,
   workspaceCapabilityForTool,
 } from "./workspace-capabilities.js"
 
@@ -296,17 +294,32 @@ function registerTools(
       name,
       toolConfig(name, inputSchema),
       async (args: any) => {
-        if (workspaceCapabilityForTool(name) !== null) {
+        try {
+          if (typeof repository.revalidateContext === "function") {
+            await repository.revalidateContext(context)
+          }
+          context.workspaceCapabilitiesByProduct =
+            await loadRepositoryCapabilities(
+              repository,
+              authorizedProductIds(context)
+            )
+        } catch (error) {
+          return jsonErrorResult(error)
+        }
+        try {
+          for (const capability of requiredCapabilitiesForTool(name)) {
+            assertCanUseCapability(context, capability)
+          }
+        } catch (error) {
+          return jsonErrorResult(error)
+        }
+        if (
+          workspaceCapabilityForTool(name) !== null &&
+          (!PUBLIC_MCP_TOOLS[name].annotations.readOnlyHint ||
+            PUBLIC_MCP_TOOLS[name].annotations.openWorldHint)
+        ) {
           try {
             const selectedContext = toolContext(args)
-            selectedContext.workspaceCapabilitiesByProduct =
-              await loadRepositoryCapabilities(repository, [
-                selectedContext.productId,
-              ])
-            context.workspaceCapabilitiesByProduct = {
-              ...context.workspaceCapabilitiesByProduct,
-              ...selectedContext.workspaceCapabilitiesByProduct,
-            }
             assertWorkspaceToolAllowed(selectedContext, name)
           } catch (error) {
             return jsonErrorResult(error)
@@ -348,7 +361,6 @@ function registerTools(
             canUseCapability(context, "workflows.execute") ||
             canUseCapability(context, "deepline.execute"),
           write:
-            canUseCapability(context, "products.write") ||
             canUseCapability(context, "workflows.execute") ||
             canUseCapability(context, "workflows.write") ||
             canUseCapability(context, "workflows.delete") ||
@@ -412,13 +424,6 @@ function registerTools(
           { tools, prompts: visiblePromptCatalog }
         )
       })
-  )
-
-  registerPublicTool("create_product", createProductSchema, async (args: any) =>
-    runJsonTool(async () => {
-      assertToolAllowed("create_product")
-      return repository.createProduct(context, args)
-    })
   )
 
   registerPublicTool("list_workflows", listWorkflowsSchema, async (args: any) =>
@@ -912,7 +917,16 @@ function registerResources(
   context: SignalSurfContext
 ) {
   const contextProductIds = authorizedProductIds(context)
-  const contextProducts = authorizedProducts(context)
+
+  async function revalidateResourceContext() {
+    if (typeof repository.revalidateContext === "function") {
+      await repository.revalidateContext(context)
+    }
+    context.workspaceCapabilitiesByProduct = await loadRepositoryCapabilities(
+      repository,
+      authorizedProductIds(context)
+    )
+  }
 
   server.registerResource(
     "signalsurf_context",
@@ -923,11 +937,12 @@ function registerResources(
       mimeType: "application/json",
     },
     async (uri) => {
+      await revalidateResourceContext()
       assertCanUseCapability(context, "context.read")
       return jsonResource(uri.href, {
         productId: context.productId,
-        productIds: contextProductIds,
-        products: contextProducts,
+        productIds: authorizedProductIds(context),
+        products: authorizedProducts(context),
         userId: context.userId ?? null,
         role: context.role,
         tokenName: context.tokenName ?? null,
@@ -942,161 +957,163 @@ function registerResources(
 
   if (contextProductIds.length > 1) return
 
-  if (
-    workspaceCapabilityEnabled(context, "workflows") ||
-    workspaceCapabilityEnabled(context, "listening")
-  ) {
-    server.registerResource(
-      "signalsurf_workflows",
-      "signalsurf://workflows",
-      {
-        title: "SignalSurf Workflows",
-        description: "Non-deleted Workflows for the current product.",
-        mimeType: "application/json",
-      },
-      async (uri) => {
-        assertCanUseCapability(context, "workflows.read")
-        return jsonResource(
-          uri.href,
-          await repository.listWorkflows(resolveProductContext(context), {
+  server.registerResource(
+    "signalsurf_workflows",
+    "signalsurf://workflows",
+    {
+      title: "SignalSurf Workflows",
+      description: "Non-deleted Workflows for the current product.",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      await revalidateResourceContext()
+      assertCanUseCapability(context, "workflows.read")
+      return jsonResource(
+        uri.href,
+        await repository.listWorkflows(resolveProductContext(context), {
+          limit: 200,
+        })
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_workflow",
+    new ResourceTemplate("signalsurf://workflows/{workflowId}", {
+      list: async () => {
+        await revalidateResourceContext()
+        if (!canUseCapability(context, "workflows.read")) {
+          return { resources: [] }
+        }
+        const { workflows } = await repository.listWorkflows(
+          resolveProductContext(context),
+          {
             limit: 200,
-          })
+          }
         )
-      }
-    )
-
-    server.registerResource(
-      "signalsurf_workflow",
-      new ResourceTemplate("signalsurf://workflows/{workflowId}", {
-        list: async () => {
-          if (!canUseCapability(context, "workflows.read")) {
-            return { resources: [] }
-          }
-          const { workflows } = await repository.listWorkflows(
-            resolveProductContext(context),
-            {
-              limit: 200,
-            }
-          )
-          return {
-            resources: workflows.map(
-              (workflow: { workflowId: string; name: string }) => ({
-                uri: `signalsurf://workflows/${workflow.workflowId}`,
-                name: `Workflow: ${workflow.name}`,
-                title: workflow.name,
-                description: `SignalSurf Workflow ${workflow.name}`,
-                mimeType: "application/json",
-              })
-            ),
-          }
-        },
-      }),
-      {
-        title: "SignalSurf Workflow",
-        description: "One Workflow by workflowId.",
-        mimeType: "application/json",
+        return {
+          resources: workflows.map(
+            (workflow: { workflowId: string; name: string }) => ({
+              uri: `signalsurf://workflows/${workflow.workflowId}`,
+              name: `Workflow: ${workflow.name}`,
+              title: workflow.name,
+              description: `SignalSurf Workflow ${workflow.name}`,
+              mimeType: "application/json",
+            })
+          ),
+        }
       },
-      async (uri, variables) => {
-        assertCanUseCapability(context, "workflows.read")
-        return jsonResource(
-          uri.href,
-          await repository.getWorkflow(
-            resolveProductContext(context),
-            String(variables.workflowId ?? "")
-          )
+    }),
+    {
+      title: "SignalSurf Workflow",
+      description: "One Workflow by workflowId.",
+      mimeType: "application/json",
+    },
+    async (uri, variables) => {
+      await revalidateResourceContext()
+      assertCanUseCapability(context, "workflows.read")
+      return jsonResource(
+        uri.href,
+        await repository.getWorkflow(
+          resolveProductContext(context),
+          String(variables.workflowId ?? "")
         )
-      }
-    )
+      )
+    }
+  )
 
-    server.registerResource(
-      "signalsurf_workflow_sources",
-      new ResourceTemplate("signalsurf://workflows/{workflowId}/sources", {
-        list: async () => {
-          if (
-            !canUseCapability(context, "sources.read") ||
-            !canUseCapability(context, "workflows.read")
-          ) {
-            return { resources: [] }
+  server.registerResource(
+    "signalsurf_workflow_sources",
+    new ResourceTemplate("signalsurf://workflows/{workflowId}/sources", {
+      list: async () => {
+        await revalidateResourceContext()
+        if (
+          !canUseCapability(context, "sources.read") ||
+          !canUseCapability(context, "workflows.read")
+        ) {
+          return { resources: [] }
+        }
+        const { workflows } = await repository.listWorkflows(
+          resolveProductContext(context),
+          {
+            limit: 200,
           }
-          const { workflows } = await repository.listWorkflows(
-            resolveProductContext(context),
-            {
-              limit: 200,
-            }
-          )
-          return {
-            resources: workflows.map(
-              (workflow: { workflowId: string; name: string }) => ({
-                uri: `signalsurf://workflows/${workflow.workflowId}/sources`,
-                name: `Sources: ${workflow.name}`,
-                title: `${workflow.name} Sources`,
-                description: `Safe source metadata for SignalSurf Workflow ${workflow.name}`,
-                mimeType: "application/json",
-              })
-            ),
-          }
-        },
-      }),
-      {
-        title: "SignalSurf Workflow Sources",
-        description: "Safe source metadata for one Workflow.",
-        mimeType: "application/json",
-      },
-      async (uri, variables) => {
-        assertCanUseCapability(context, "sources.read")
-        return jsonResource(
-          uri.href,
-          await repository.listWorkflowSources(
-            resolveProductContext(context),
-            String(variables.workflowId ?? "")
-          )
         )
-      }
-    )
+        return {
+          resources: workflows.map(
+            (workflow: { workflowId: string; name: string }) => ({
+              uri: `signalsurf://workflows/${workflow.workflowId}/sources`,
+              name: `Sources: ${workflow.name}`,
+              title: `${workflow.name} Sources`,
+              description: `Safe source metadata for SignalSurf Workflow ${workflow.name}`,
+              mimeType: "application/json",
+            })
+          ),
+        }
+      },
+    }),
+    {
+      title: "SignalSurf Workflow Sources",
+      description: "Safe source metadata for one Workflow.",
+      mimeType: "application/json",
+    },
+    async (uri, variables) => {
+      await revalidateResourceContext()
+      assertCanUseCapability(context, "sources.read")
+      return jsonResource(
+        uri.href,
+        await repository.listWorkflowSources(
+          resolveProductContext(context),
+          String(variables.workflowId ?? "")
+        )
+      )
+    }
+  )
 
-    server.registerResource(
-      "signalsurf_workflow_tools",
-      new ResourceTemplate("signalsurf://workflows/{workflowId}/tools", {
-        list: async () => {
-          if (!canUseCapability(context, "workflows.read")) {
-            return { resources: [] }
+  server.registerResource(
+    "signalsurf_workflow_tools",
+    new ResourceTemplate("signalsurf://workflows/{workflowId}/tools", {
+      list: async () => {
+        await revalidateResourceContext()
+        if (!canUseCapability(context, "workflows.read")) {
+          return { resources: [] }
+        }
+        const { workflows } = await repository.listWorkflows(
+          resolveProductContext(context),
+          {
+            limit: 200,
           }
-          const { workflows } = await repository.listWorkflows(
-            resolveProductContext(context),
-            {
-              limit: 200,
-            }
-          )
-          return {
-            resources: workflows.map(
-              (workflow: { workflowId: string; name: string }) => ({
-                uri: `signalsurf://workflows/${workflow.workflowId}/tools`,
-                name: `Tools: ${workflow.name}`,
-                title: `${workflow.name} Tools`,
-                description: `Tool ids attached to SignalSurf Workflow ${workflow.name}`,
-                mimeType: "application/json",
-              })
-            ),
-          }
-        },
-      }),
-      {
-        title: "SignalSurf Workflow Tools",
-        description: "Tool ids attached to one Workflow.",
-        mimeType: "application/json",
-      },
-      async (uri, variables) => {
-        assertCanUseCapability(context, "workflows.read")
-        return jsonResource(
-          uri.href,
-          await repository.listWorkflowTools(
-            resolveProductContext(context),
-            String(variables.workflowId ?? "")
-          )
         )
-      }
-    )
-  }
+        return {
+          resources: workflows.map(
+            (workflow: { workflowId: string; name: string }) => ({
+              uri: `signalsurf://workflows/${workflow.workflowId}/tools`,
+              name: `Tools: ${workflow.name}`,
+              title: `${workflow.name} Tools`,
+              description: `Tool ids attached to SignalSurf Workflow ${workflow.name}`,
+              mimeType: "application/json",
+            })
+          ),
+        }
+      },
+    }),
+    {
+      title: "SignalSurf Workflow Tools",
+      description: "Tool ids attached to one Workflow.",
+      mimeType: "application/json",
+    },
+    async (uri, variables) => {
+      await revalidateResourceContext()
+      assertCanUseCapability(context, "workflows.read")
+      return jsonResource(
+        uri.href,
+        await repository.listWorkflowTools(
+          resolveProductContext(context),
+          String(variables.workflowId ?? "")
+        )
+      )
+    }
+  )
 
   server.registerResource(
     "signalsurf_product_tools",
@@ -1107,6 +1124,7 @@ function registerResources(
       mimeType: "application/json",
     },
     async (uri) => {
+      await revalidateResourceContext()
       assertCanUseCapability(context, "workflows.read")
       return jsonResource(
         uri.href,
@@ -1117,134 +1135,133 @@ function registerResources(
     }
   )
 
-  if (
-    workspaceCapabilityEnabled(context, "workflows") ||
-    workspaceCapabilityEnabled(context, "listening")
-  ) {
-    server.registerResource(
-      "signalsurf_surf_jobs",
-      "signalsurf://surf-jobs",
-      {
-        title: "SignalSurf Surf Jobs",
-        description: "Recent Workflow execution jobs for the current product.",
-        mimeType: "application/json",
-      },
-      async (uri) => {
-        assertCanUseCapability(context, "workflows.read")
-        return jsonResource(
-          uri.href,
-          await repository.listSurfJobs(resolveProductContext(context), {
+  server.registerResource(
+    "signalsurf_surf_jobs",
+    "signalsurf://surf-jobs",
+    {
+      title: "SignalSurf Surf Jobs",
+      description: "Recent Workflow execution jobs for the current product.",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      await revalidateResourceContext()
+      assertCanUseCapability(context, "workflows.read")
+      return jsonResource(
+        uri.href,
+        await repository.listSurfJobs(resolveProductContext(context), {
+          limit: 100,
+        })
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_surf_job",
+    new ResourceTemplate("signalsurf://surf-jobs/{jobId}", {
+      list: async () => {
+        await revalidateResourceContext()
+        if (!canUseCapability(context, "workflows.read")) {
+          return { resources: [] }
+        }
+        const { jobs } = await repository.listSurfJobs(
+          resolveProductContext(context),
+          {
             limit: 100,
-          })
-        )
-      }
-    )
-
-    server.registerResource(
-      "signalsurf_surf_job",
-      new ResourceTemplate("signalsurf://surf-jobs/{jobId}", {
-        list: async () => {
-          if (!canUseCapability(context, "workflows.read")) {
-            return { resources: [] }
           }
-          const { jobs } = await repository.listSurfJobs(
-            resolveProductContext(context),
-            {
-              limit: 100,
-            }
-          )
-          return {
-            resources: jobs.map((job: { jobId: string; status: string }) => ({
-              uri: `signalsurf://surf-jobs/${job.jobId}`,
-              name: `Surf Job: ${job.jobId}`,
-              title: `Surf Job ${job.jobId}`,
-              description: `SignalSurf surf job with status ${job.status}`,
-              mimeType: "application/json",
-            })),
-          }
-        },
-      }),
-      {
-        title: "SignalSurf Surf Job",
-        description: "One Workflow execution job by job id.",
-        mimeType: "application/json",
-      },
-      async (uri, variables) => {
-        assertCanUseCapability(context, "workflows.read")
-        return jsonResource(
-          uri.href,
-          await repository.getSurfJob(
-            resolveProductContext(context),
-            String(variables.jobId ?? "")
-          )
         )
-      }
-    )
-  }
-
-  if (workspaceCapabilityEnabled(context, "tables")) {
-    server.registerResource(
-      "signalsurf_databases",
-      "signalsurf://databases",
-      {
-        title: "SignalSurf Databases",
-        description: "Databases/tables for the current product.",
-        mimeType: "application/json",
+        return {
+          resources: jobs.map((job: { jobId: string; status: string }) => ({
+            uri: `signalsurf://surf-jobs/${job.jobId}`,
+            name: `Surf Job: ${job.jobId}`,
+            title: `Surf Job ${job.jobId}`,
+            description: `SignalSurf surf job with status ${job.status}`,
+            mimeType: "application/json",
+          })),
+        }
       },
-      async (uri) => {
-        assertCanUseCapability(context, "tables.read")
-        return jsonResource(
-          uri.href,
-          await repository.listDatabases(resolveProductContext(context), {
+    }),
+    {
+      title: "SignalSurf Surf Job",
+      description: "One Workflow execution job by job id.",
+      mimeType: "application/json",
+    },
+    async (uri, variables) => {
+      await revalidateResourceContext()
+      assertCanUseCapability(context, "workflows.read")
+      return jsonResource(
+        uri.href,
+        await repository.getSurfJob(
+          resolveProductContext(context),
+          String(variables.jobId ?? "")
+        )
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_databases",
+    "signalsurf://databases",
+    {
+      title: "SignalSurf Databases",
+      description: "Databases/tables for the current product.",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      await revalidateResourceContext()
+      assertCanUseCapability(context, "tables.read")
+      return jsonResource(
+        uri.href,
+        await repository.listDatabases(resolveProductContext(context), {
+          limit: 200,
+        })
+      )
+    }
+  )
+
+  server.registerResource(
+    "signalsurf_database_rows",
+    new ResourceTemplate("signalsurf://databases/{databaseId}/rows", {
+      list: async () => {
+        await revalidateResourceContext()
+        if (!canUseCapability(context, "tables.read")) {
+          return { resources: [] }
+        }
+        const { databases } = await repository.listDatabases(
+          resolveProductContext(context),
+          {
             limit: 200,
-          })
+          }
         )
-      }
-    )
-
-    server.registerResource(
-      "signalsurf_database_rows",
-      new ResourceTemplate("signalsurf://databases/{databaseId}/rows", {
-        list: async () => {
-          if (!canUseCapability(context, "tables.read")) {
-            return { resources: [] }
-          }
-          const { databases } = await repository.listDatabases(
-            resolveProductContext(context),
-            {
-              limit: 200,
-            }
-          )
-          return {
-            resources: databases.map(
-              (database: { databaseId: string; name: string }) => ({
-                uri: `signalsurf://databases/${database.databaseId}/rows`,
-                name: `Rows: ${database.name}`,
-                title: `${database.name} Rows`,
-                description: `Rows for SignalSurf database ${database.name}`,
-                mimeType: "application/json",
-              })
-            ),
-          }
-        },
-      }),
-      {
-        title: "SignalSurf Database Rows",
-        description:
-          "Rows for one SignalSurf database. Use the databaseId template variable.",
-        mimeType: "application/json",
+        return {
+          resources: databases.map(
+            (database: { databaseId: string; name: string }) => ({
+              uri: `signalsurf://databases/${database.databaseId}/rows`,
+              name: `Rows: ${database.name}`,
+              title: `${database.name} Rows`,
+              description: `Rows for SignalSurf database ${database.name}`,
+              mimeType: "application/json",
+            })
+          ),
+        }
       },
-      async (uri, variables) => {
-        assertCanUseCapability(context, "tables.read")
-        const databaseId = String(variables.databaseId ?? "")
-        return jsonResource(
-          uri.href,
-          await repository.readTable(resolveProductContext(context), {
-            databaseId,
-            limit: 100,
-          })
-        )
-      }
-    )
-  }
+    }),
+    {
+      title: "SignalSurf Database Rows",
+      description:
+        "Rows for one SignalSurf database. Use the databaseId template variable.",
+      mimeType: "application/json",
+    },
+    async (uri, variables) => {
+      await revalidateResourceContext()
+      assertCanUseCapability(context, "tables.read")
+      const databaseId = String(variables.databaseId ?? "")
+      return jsonResource(
+        uri.href,
+        await repository.readTable(resolveProductContext(context), {
+          databaseId,
+          limit: 100,
+        })
+      )
+    }
+  )
 }

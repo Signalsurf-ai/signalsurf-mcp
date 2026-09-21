@@ -10,8 +10,7 @@ import {
   resolveTokenContext,
   sha256Hex,
 } from "../src/auth.js"
-import type { AppConfig } from "../src/config.js"
-import { loadConfig } from "../src/config.js"
+import { loadConfig, type AppConfig } from "../src/config.js"
 import { UserFacingError } from "../src/errors.js"
 
 describe("auth", () => {
@@ -144,15 +143,12 @@ describe("auth", () => {
     expect(() => assertCanUseCapability(context, "tables.delete")).toThrow(
       "Token scope does not allow"
     )
-    expect(() => assertCanUseCapability(context, "products.write")).toThrow(
-      "Token scope does not allow"
-    )
     expect(() => assertCanUseCapability(context, "workflows.write")).toThrow(
       "Token scope does not allow"
     )
-    expect(() =>
-      assertCanUseCapability(context, "workflows.execute")
-    ).toThrow("Token scope does not allow")
+    expect(() => assertCanUseCapability(context, "workflows.execute")).toThrow(
+      "Token scope does not allow"
+    )
     expect(() => assertCanUseCapability(context, "schemas.write")).toThrow(
       "Token scope does not allow"
     )
@@ -288,7 +284,6 @@ describe("auth", () => {
       })
     ).toEqual([
       "context.read",
-      "products.write",
       "workflows.read",
       "workflows.write",
       "workflows.execute",

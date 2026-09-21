@@ -25,8 +25,8 @@ not need this repository, a Supabase key, or a local server.
    `get_context` first, choose from the returned `products[].name` list, and
    pass that product's `productId` to product-scoped tool calls.
 
-The hosted MCP currently supports product creation, product-scoped Workflow
-CRUD, table create/update, table schema edits, Workflow execution, signal
+The hosted MCP connects only to existing Workspaces. It supports Workspace-scoped
+Workflow CRUD, table create/update, table schema edits, Workflow execution, signal
 creation/configuration/deletion, signal toggles, tool attachment, and table row
 read/create/update/delete. It is a safe public subset of Surfer, the agent in
 SignalSurf Web's right panel; it does not expose every internal chat tool.
@@ -204,7 +204,7 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 
 ## What It Exposes
 
-- `get_context`, `get_brand_context`, `create_product`
+- `get_context`, `get_brand_context`
 - `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `run_workflow`, `get_surf_job`, `wait_for_surf_job`, `list_surf_jobs`, `cancel_surf_job`, `delete_workflow`
 - `list_tables`, `create_table`, `update_table`, `delete_table`, `list_table_views`, `read_table`, `read_table_view`, `get_table_row`
 - `create_table_row`, `update_table_rows`, `delete_table_rows`
@@ -235,7 +235,6 @@ or granular scopes. The protected resource metadata advertises the registered
 granular SignalSurf resource scopes so the consent screen can name each
 capability instead of hiding them behind broad write access:
 
-- `mcp:products.write`
 - `mcp:workflows.read`
 - `mcp:workflows.write`
 - `mcp:workflows.execute`
@@ -312,13 +311,6 @@ Context:
   description, product categories, selling points, target audience, competitors,
   and official website). Fields are empty until the product completes brand
   setup. Pass `productId` when this connection can access multiple products.
-
-Products:
-
-- `create_product`: creates a new SignalSurf product through the hosted OAuth
-  connection, seeds owner membership and product goals, then expands the active
-  OAuth grant to include the returned `productId`. Follow-up calls should pass
-  that returned `productId` explicitly.
 
 Workflows:
 
@@ -456,9 +448,8 @@ Roles:
 
 OAuth scopes can narrow those role grants. For example, an editor OAuth token
 with `mcp:tables.write` can create and update rows but cannot delete rows or
-create Workflows. Product creation additionally requires hosted OAuth because
-the active grant must be expanded to the new product. Manual fallback tokens
-without `scopes` keep the legacy role-only behavior.
+create Workflows. MCP never creates Organizations or Workspaces. Manual fallback
+tokens without `scopes` keep the legacy role-only behavior.
 
 Resources:
 

@@ -22,8 +22,8 @@ The server always resolves a `SignalSurfContext` before any tool runs:
 - `products`: authorized product metadata in the same order as `productIds`,
   including `productId`, human-readable `name`, optional `organizationId`, and
   optional `organizationName`
-- `userId`: optional user context, used for hosted OAuth product creation and
-  Workflow delete cleanup
+- `userId`: optional user context used to revalidate current Workspace access
+  on every request and for user-specific cleanup
 - `role`: `viewer`, `editor`, or `owner`
 - `tokenName`: optional source label for MCP row mutations
 - `scopes`: optional OAuth/static-token scopes that can narrow role access
@@ -96,11 +96,10 @@ agents should choose from the human-readable product/workspace names in
 
 Hosted token revocation is immediate: SignalSurf Web sets `revoked_at`, and
 database auth only resolves rows where `revoked_at IS NULL`.
-Database-backed hosted tokens are product-scoped service credentials, so
-`created_by` is not exposed as `context.userId` to MCP tools. User-specific
-cleanup, such as repairing `user_preferences.current_workflow_id`, runs only
-when the resolved context includes `userId`; OAuth contexts include it, while
-manual hosted fallback tokens do not.
+Database-backed hosted tokens retain `created_by` as `context.userId` so the
+server can revalidate current Workspace membership on every tool and resource
+call. Removing a member from a Workspace invalidates that Workspace immediately,
+even for a previously established MCP connection.
 
 OAuth access tokens are user-consented, so the resolved MCP context includes
 `userId`. `mcp:read` maps to `viewer`; `mcp:write` and granular write/delete
@@ -115,8 +114,7 @@ not match `SIGNALSURF_MCP_RESOURCE_URL`.
 The public scope and tool contract lives in `src/capabilities.ts` and is
 documented in `docs/capabilities.md`. Broad legacy scopes remain for client
 compatibility, while granular scopes support least-privilege access to Surf
-Points, execution, table data, schemas, safe source controls, and product
-creation.
+Points, execution, table data, schemas, and safe source controls.
 
 Every chargeable Deepline search, enrichment, or generic execution has an
 additional per-action boundary. This server creates or reuses a redacted,
@@ -135,8 +133,8 @@ service-role access behind explicit product checks:
 
 - Workflows: `workflows.product_id = context.productId` and
   `deleted_at IS NULL`
-- Products: `create_product` requires hosted OAuth user context and expands only
-  the active OAuth grant after the database creates the product
+- Workspaces: MCP may connect only to existing authorized Workspaces; it never
+  creates or joins an Organization or Workspace
 - Databases: `databases.product_id = context.productId`
 - Table creation/update: full custom schemas are accepted only after every
   relation target is validated against a product-owned database
@@ -152,14 +150,6 @@ Rows without `database_id` are intentionally inaccessible through MCP because
 they cannot be product-scoped safely.
 
 ## Mutation Semantics
-
-Product creation is hosted-OAuth-only. `create_product` calls SignalSurf Web's
-service-role-only `create_product_for_mcp` RPC, which creates the product,
-seeds owner membership, and seeds `product_goals`. After the product exists, the
-MCP server updates the active OAuth token's `product_ids` grant and mutates the
-current in-process context so follow-up tool calls can use the returned
-`productId`. Manual fallback tokens cannot create products because they have no
-grant record to expand.
 
 Workflow deletion is a soft delete. It sets `deleted_at`, cancels pending
 `surf_jobs`, and repairs `user_preferences.current_workflow_id` when the token

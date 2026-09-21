@@ -37,13 +37,7 @@ export const planSenderCapacitySchema = {
     .default(30)
     .optional(),
   utilizationPercent: z.number().min(1).max(100).default(80).optional(),
-  mailboxesPerDomain: z
-    .number()
-    .int()
-    .min(1)
-    .max(1000)
-    .default(3)
-    .optional(),
+  mailboxesPerDomain: z.number().int().min(1).max(1000).default(3).optional(),
   custom: z
     .object({
       additionalMailboxes: z.number().int().min(0).max(1_000_000),
@@ -138,12 +132,6 @@ export const sourceTypeSchema = z.enum([
 export const toolOutputSchema = {
   ok: z.boolean(),
   data: z.unknown().optional(),
-}
-
-export const createProductSchema = {
-  name: z.string().trim().min(1).max(100),
-  organizationId: uuidSchema.optional(),
-  displayOrder: z.number().int().min(0).max(100000).default(0).optional(),
 }
 
 export const getBrandContextSchema = {
@@ -755,7 +743,6 @@ export const PUBLIC_MCP_TOOL_SCHEMAS = {
   get_brand_context: getBrandContextSchema,
   get_enrichment_context: getEnrichmentContextSchema,
   find_capabilities: findCapabilitiesSchema,
-  create_product: createProductSchema,
   list_workflows: listWorkflowsSchema,
   get_workflow: getWorkflowSchema,
   create_workflow: createWorkflowSchema,

@@ -10,7 +10,6 @@
     "add_table_field",
     "cancel_surf_job",
     "create_campaign",
-    "create_product",
     "create_relation_field",
     "create_signal",
     "create_workflow",

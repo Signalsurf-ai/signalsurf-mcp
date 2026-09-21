@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { SignalSurfRepository } from "../src/repository.js"
 import { createSignalSurfMcpServer } from "../src/server.js"
 import type { SignalSurfContext } from "../src/types.js"
+import { WORKSPACE_CAPABILITIES } from "../src/workspace-capabilities.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 const productId = "00000000-0000-4000-8000-000000000001"
@@ -49,6 +50,14 @@ afterEach(async () => {
 })
 
 async function connect(db: FakeSupabase, context = editorContext()) {
+  db.tables.products ??= [{ id: productId, organization_id: null }]
+  db.tables.workspace_capability_overrides ??= WORKSPACE_CAPABILITIES.map(
+    (capability_key) => ({
+      workspace_id: productId,
+      capability_key,
+      enabled: true,
+    })
+  )
   const server = await createSignalSurfMcpServer({
     context,
     repository: new SignalSurfRepository(db as any),

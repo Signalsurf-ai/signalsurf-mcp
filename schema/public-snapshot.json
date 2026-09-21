@@ -387,12 +387,20 @@
       "mode",
       "name",
       "revoked_at",
-      "role",
       "token_prefix",
       "token_sha256",
       "updated_at",
       "workspace_id",
       "workspace_ids"
+    ],
+    "organization_members": [
+      "created_at",
+      "id",
+      "joined_at",
+      "organization_id",
+      "role",
+      "updated_at",
+      "user_id"
     ],
     "organizations": [
       "created_at",
@@ -415,6 +423,16 @@
       "search_limit_per_keyword",
       "updated_at",
       "workflow_id",
+      "workspace_id"
+    ],
+    "product_members": [
+      "created_at",
+      "display_order",
+      "id",
+      "joined_at",
+      "role",
+      "updated_at",
+      "user_id",
       "workspace_id"
     ],
     "product_tools": [
@@ -620,15 +638,10 @@
     ]
   },
   "functions": {
-    "create_product_for_mcp": [
-      "p_user_id uuid, p_name text, p_organization_id uuid DEFAULT NULL::uuid, p_display_order integer DEFAULT 0"
-    ],
     "enqueue_enrich_jobs": [
       "p_entries jsonb, p_source_id uuid, p_workflow_id uuid, p_workspace_id uuid, p_user_id uuid, p_target_field text, p_preserve_existing boolean, p_triggered_by text DEFAULT 'agent'::text"
     ],
-    "get_workspace_brand_profile": [
-      "p_workspace_id uuid"
-    ],
+    "get_workspace_brand_profile": ["p_workspace_id uuid"],
     "record_credit_usage": [
       "p_user_id uuid, p_action_type text, p_credits integer, p_monthly_quota integer, p_period_start timestamp with time zone, p_metadata jsonb DEFAULT '{}'::jsonb, p_organization_id uuid DEFAULT NULL::uuid, p_unbooked_idempotency_key text DEFAULT NULL::text"
     ],

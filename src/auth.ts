@@ -237,7 +237,6 @@ export function listContextCapabilities(
       ]
     : [
         "context.read",
-        "products.write",
         "workflows.read",
         "workflows.write",
         "workflows.execute",
