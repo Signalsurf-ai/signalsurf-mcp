@@ -8,17 +8,17 @@ import type { SignalSurfContext } from "../src/types.js"
 import { WORKSPACE_CAPABILITIES } from "../src/workspace-capabilities.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
-const productId = "00000000-0000-4000-8000-000000000001"
+const workspaceId = "00000000-0000-4000-8000-000000000001"
 const workflowId = "00000000-0000-4000-8000-000000000101"
 
 function editorContext(): SignalSurfContext {
-  return { productId, role: "editor" }
+  return { workspaceId, role: "editor" }
 }
 
 function workflowRow(config: Record<string, unknown> = {}) {
   return {
     id: workflowId,
-    workspace_id: productId,
+    workspace_id: workspaceId,
     name: "My Workflow",
     config,
     tool_config: {},
@@ -50,10 +50,10 @@ afterEach(async () => {
 })
 
 async function connect(db: FakeSupabase, context = editorContext()) {
-  db.tables.products ??= [{ id: productId, organization_id: null }]
+  db.tables.workspaces ??= [{ id: workspaceId, organization_id: null }]
   db.tables.workspace_capability_overrides ??= WORKSPACE_CAPABILITIES.map(
     (capability_key) => ({
-      workspace_id: productId,
+      workspace_id: workspaceId,
       capability_key,
       enabled: true,
     })
@@ -118,7 +118,7 @@ describe("edit_workflow_flows tool", () => {
   it("is blocked for a viewer token", async () => {
     const client = await connect(
       new FakeSupabase({ workflows: [workflowRow()] }),
-      { productId, role: "viewer" }
+      { workspaceId, role: "viewer" }
     )
     const result = await client.callTool({
       name: "edit_workflow_flows",
@@ -183,7 +183,7 @@ describe("create_campaign tool", () => {
       name: "create_campaign",
       arguments: {
         name: "Founder outreach",
-        goal: "Book product calls",
+        goal: "Book workspace calls",
         audienceDatabaseId: "00000000-0000-4000-8000-000000000201",
         steps: [{ copy: "hello" }],
       },
@@ -199,10 +199,10 @@ describe("create_campaign tool", () => {
     const db = new FakeSupabase({
       campaigns: [],
       workflows: [],
-      product_tools: [],
-      product_unipile_accounts: [
+      workspace_tools: [],
+      workspace_unipile_accounts: [
         {
-          workspace_id: productId,
+          workspace_id: workspaceId,
           unipile_account_id: "mailbox-1",
           provider: "MAIL",
         },
@@ -211,7 +211,7 @@ describe("create_campaign tool", () => {
       databases: [
         {
           id: audienceDatabaseId,
-          workspace_id: productId,
+          workspace_id: workspaceId,
           name: "Founders",
           data_model: "table",
           schema: {
@@ -221,7 +221,7 @@ describe("create_campaign tool", () => {
       ],
     })
     const client = await connect(db, {
-      productId,
+      workspaceId,
       role: "editor",
       workspaceCapabilities: ["campaigns"],
     })
@@ -229,7 +229,7 @@ describe("create_campaign tool", () => {
       name: "create_campaign",
       arguments: {
         name: "Founder outreach",
-        goal: "Book product calls",
+        goal: "Book workspace calls",
         audienceDatabaseId,
         mailbox: "mailbox-1",
         steps: [{ copy: "hello", delayDays: 1 }],
@@ -238,12 +238,12 @@ describe("create_campaign tool", () => {
 
     expect(result.isError).toBeFalsy()
     expect(db.tables.workflows).toEqual([])
-    expect(db.tables.product_tools).toEqual([])
+    expect(db.tables.workspace_tools).toEqual([])
     expect(db.tables.campaigns).toEqual([
       expect.objectContaining({
-        workspace_id: productId,
+        workspace_id: workspaceId,
         name: "Founder outreach",
-        goal: "Book product calls",
+        goal: "Book workspace calls",
         audience_database_id: audienceDatabaseId,
         recipient_field: "email",
         status: "draft",
@@ -256,9 +256,9 @@ describe("create_campaign tool", () => {
     const audienceDatabaseId = "00000000-0000-4000-8000-000000000201"
     const db = new FakeSupabase({
       campaigns: [],
-      product_unipile_accounts: [
+      workspace_unipile_accounts: [
         {
-          workspace_id: productId,
+          workspace_id: workspaceId,
           unipile_account_id: "linkedin-1",
           provider: "LINKEDIN",
         },
@@ -267,7 +267,7 @@ describe("create_campaign tool", () => {
       databases: [
         {
           id: audienceDatabaseId,
-          workspace_id: productId,
+          workspace_id: workspaceId,
           data_model: "table",
           schema: { fields: [{ key: "email", type: "email" }] },
         },
@@ -296,9 +296,9 @@ describe("create_campaign tool", () => {
       const audienceDatabaseId = "00000000-0000-4000-8000-000000000201"
       const db = new FakeSupabase({
         campaigns: [],
-        product_unipile_accounts: [
+        workspace_unipile_accounts: [
           {
-            workspace_id: productId,
+            workspace_id: workspaceId,
             unipile_account_id: "mailbox-1",
             provider,
           },
@@ -307,14 +307,14 @@ describe("create_campaign tool", () => {
         databases: [
           {
             id: audienceDatabaseId,
-            workspace_id: productId,
+            workspace_id: workspaceId,
             data_model: "table",
             schema: { fields: [{ key: "email", type: "email" }] },
           },
         ],
       })
       const client = await connect(db, {
-        productId,
+        workspaceId,
         role: "editor",
         workspaceCapabilities: ["campaigns"],
       })
@@ -323,7 +323,7 @@ describe("create_campaign tool", () => {
         name: "create_campaign",
         arguments: {
           name: `${provider} outreach`,
-          goal: "Book product calls",
+          goal: "Book workspace calls",
           audienceDatabaseId,
           mailbox: "mailbox-1",
           steps: [{ copy: "hello" }],

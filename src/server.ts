@@ -5,11 +5,11 @@ import {
 
 import {
   assertCanUseCapability,
-  authorizedProductIds,
-  authorizedProducts,
+  authorizedWorkspaceIds,
+  authorizedWorkspaces,
   canUseCapability,
   listContextCapabilities,
-  resolveProductContext,
+  resolveWorkspaceContext,
 } from "./auth.js"
 import {
   PUBLIC_MCP_TOOLS,
@@ -60,7 +60,7 @@ import {
   listDatabaseViewsSchema,
   listDatabasesSchema,
   listEnrichSchema,
-  listProductToolsSchema,
+  listWorkspaceToolsSchema,
   listSurfJobsSchema,
   listWorkflowSourcesSchema,
   listWorkflowToolsSchema,
@@ -86,7 +86,7 @@ import type { SignalSurfContext } from "./types.js"
 import {
   WORKSPACE_CAPABILITIES,
   assertWorkspaceToolAllowed,
-  isToolVisibleAcrossProducts,
+  isToolVisibleAcrossWorkspaces,
   projectMcpCapabilitiesForWorkspace,
   workspaceCapabilityForTool,
 } from "./workspace-capabilities.js"
@@ -100,7 +100,7 @@ export type CreateServerOptions = {
 
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
 
-Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter — productId from get_context (when multiple products), databaseId from list_tables, workflowId from list_workflows. Never pass a null or guessed id.
+Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter — workspaceId from get_context (when multiple workspaces), databaseId from list_tables, workflowId from list_workflows. Never pass a null or guessed id.
 
 Execution model: enrichment runs on the SignalSurf server brain via Enrich and Workflows. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
 
@@ -116,7 +116,7 @@ I want to… →
 - Inspect data → list_tables, read_table, list_database_fields.
 - Plan or inspect sender infrastructure → inspect_sender_infrastructure, then plan_sender_capacity; use search_sender_domains for live Domain availability. Exact pricing, purchases, registrant details, and secrets stay in the secure SignalSurf app.
 
-When multiple products are authorized, pass products[].productId (from get_context) on every product-scoped call.`
+When multiple workspaces are authorized, pass workspaces[].workspaceId (from get_context) on every workspace-scoped call.`
 
 export function workspaceProjectedServerInstructions(
   context: SignalSurfContext
@@ -126,25 +126,25 @@ export function workspaceProjectedServerInstructions(
     "Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter; never pass a null or guessed id.",
     "Not sure which available capability fits → call find_capabilities(query).",
   ]
-  if (isToolVisibleAcrossProducts(context, "list_tables")) {
+  if (isToolVisibleAcrossWorkspaces(context, "list_tables")) {
     sections.push(
       "For available Table work, resolve databaseId with list_tables before reading or changing rows, fields, views, or Enrich configuration.",
       "Use the enrich_table prompt for guided whole-column enrichment and get_enrichment_context before choosing column instructions."
     )
   }
-  if (isToolVisibleAcrossProducts(context, "create_workflow")) {
+  if (isToolVisibleAcrossWorkspaces(context, "create_workflow")) {
     sections.push(
       "For available Workflow work, resolve workflowId with list_workflows; use set_up_workflow for guided setup and poll jobs after execution."
     )
   }
-  if (isToolVisibleAcrossProducts(context, "create_campaign")) {
+  if (isToolVisibleAcrossWorkspaces(context, "create_campaign")) {
     sections.push(
       "For available Campaign work, use create_campaign instead of hand-wiring a sending flow."
     )
   }
-  if (authorizedProductIds(context).length > 1) {
+  if (authorizedWorkspaceIds(context).length > 1) {
     sections.push(
-      "When multiple products are authorized, pass products[].productId from get_context on every product-scoped call."
+      "When multiple workspaces are authorized, pass workspaces[].workspaceId from get_context on every workspace-scoped call."
     )
   }
   return sections.join("\n\n")
@@ -157,22 +157,22 @@ export async function createSignalSurfMcpServer(
   if (context.mode === "surfer_session") {
     return createDirectMessageServer(options.surferSession ?? {})
   }
-  // OAuth/database tokens resolve product names during token resolution; static
+  // OAuth/database tokens resolve workspace names during token resolution; static
   // env tokens do not. Resolve them once here so every response (get_context and
   // the signalsurf://context resource) reports real names instead of raw UUIDs.
-  if (!context.products?.length) {
+  if (!context.workspaces?.length) {
     try {
-      const resolved = await repository.resolveProductContexts(
-        authorizedProductIds(context)
+      const resolved = await repository.resolveWorkspaceContexts(
+        authorizedWorkspaceIds(context)
       )
-      if (resolved.length) context.products = resolved
+      if (resolved.length) context.workspaces = resolved
     } catch {
       // Name resolution is best-effort; fall back to UUID display on failure.
     }
   }
-  context.workspaceCapabilitiesByProduct = await loadRepositoryCapabilities(
+  context.workspaceCapabilitiesByWorkspaceId = await loadRepositoryCapabilities(
     repository,
-    authorizedProductIds(context)
+    authorizedWorkspaceIds(context)
   )
   const server = new McpServer(
     {
@@ -192,15 +192,15 @@ export async function createSignalSurfMcpServer(
   registerResources(server, repository, context)
   registerTools(server, repository, context)
   registerPrompts(server, {
-    tables: isToolVisibleAcrossProducts(context, "list_tables"),
-    workflows: isToolVisibleAcrossProducts(context, "create_workflow"),
+    tables: isToolVisibleAcrossWorkspaces(context, "list_tables"),
+    workflows: isToolVisibleAcrossWorkspaces(context, "create_workflow"),
   })
   return server
 }
 
 /**
  * Session mode registers only the Surfer relay tools: no tool-mode tools,
- * resources, or prompts, and no product-context resolution.
+ * resources, or prompts, and no workspace-context resolution.
  */
 async function createDirectMessageServer(
   relay: DirectMessageClientOptions
@@ -226,13 +226,13 @@ async function createDirectMessageServer(
 
 async function loadRepositoryCapabilities(
   repository: SignalSurfRepository,
-  productIds: readonly string[]
+  workspaceIds: readonly string[]
 ) {
   if (typeof repository.loadWorkspaceCapabilities === "function") {
-    return repository.loadWorkspaceCapabilities(productIds)
+    return repository.loadWorkspaceCapabilities(workspaceIds)
   }
   return Object.fromEntries(
-    productIds.map((productId) => [productId, [...WORKSPACE_CAPABILITIES]])
+    workspaceIds.map((workspaceId) => [workspaceId, [...WORKSPACE_CAPABILITIES]])
   )
 }
 
@@ -243,12 +243,12 @@ function registerTools(
 ) {
   const registeredTools = new Set<PublicMcpToolName>()
   const visibleToolNames = PUBLIC_MCP_TOOL_NAMES.filter((name) =>
-    isToolVisibleAcrossProducts(context, name)
+    isToolVisibleAcrossWorkspaces(context, name)
   )
   const visibleToolNameSet = new Set(visibleToolNames)
   const visiblePromptCatalog = workspaceVisiblePromptCatalog({
-    tables: isToolVisibleAcrossProducts(context, "list_tables"),
-    workflows: isToolVisibleAcrossProducts(context, "create_workflow"),
+    tables: isToolVisibleAcrossWorkspaces(context, "list_tables"),
+    workflows: isToolVisibleAcrossWorkspaces(context, "create_workflow"),
   })
 
   function toolConfig(name: PublicMcpToolName, inputSchema?: any) {
@@ -269,9 +269,9 @@ function registerTools(
   }
 
   function toolContext(args: any): SignalSurfContext {
-    return resolveProductContext(
+    return resolveWorkspaceContext(
       context,
-      typeof args?.productId === "string" ? args.productId : undefined
+      typeof args?.workspaceId === "string" ? args.workspaceId : undefined
     )
   }
 
@@ -298,10 +298,10 @@ function registerTools(
           if (typeof repository.revalidateContext === "function") {
             await repository.revalidateContext(context)
           }
-          context.workspaceCapabilitiesByProduct =
+          context.workspaceCapabilitiesByWorkspaceId =
             await loadRepositoryCapabilities(
               repository,
-              authorizedProductIds(context)
+              authorizedWorkspaceIds(context)
             )
         } catch (error) {
           return jsonErrorResult(error)
@@ -333,12 +333,12 @@ function registerTools(
   registerPublicTool("get_context", undefined, async () =>
     runJsonTool(async () => {
       assertToolAllowed("get_context")
-      const productIds = authorizedProductIds(context)
-      const products = authorizedProducts(context)
+      const workspaceIds = authorizedWorkspaceIds(context)
+      const workspaces = authorizedWorkspaces(context)
       return {
-        productId: context.productId,
-        productIds,
-        products,
+        workspaceId: context.workspaceId,
+        workspaceIds,
+        workspaces,
         userId: context.userId ?? null,
         role: context.role,
         tokenName: context.tokenName ?? null,
@@ -790,12 +790,12 @@ function registerTools(
   )
 
   registerPublicTool(
-    "list_product_tools",
-    listProductToolsSchema,
+    "list_workspace_tools",
+    listWorkspaceToolsSchema,
     async (args: any) =>
       runJsonTool(async () => {
-        assertToolAllowed("list_product_tools")
-        return repository.listProductTools(toolContext(args), args)
+        assertToolAllowed("list_workspace_tools")
+        return repository.listWorkspaceTools(toolContext(args), args)
       })
   )
 
@@ -916,15 +916,15 @@ function registerResources(
   repository: SignalSurfRepository,
   context: SignalSurfContext
 ) {
-  const contextProductIds = authorizedProductIds(context)
+  const contextWorkspaceIds = authorizedWorkspaceIds(context)
 
   async function revalidateResourceContext() {
     if (typeof repository.revalidateContext === "function") {
       await repository.revalidateContext(context)
     }
-    context.workspaceCapabilitiesByProduct = await loadRepositoryCapabilities(
+    context.workspaceCapabilitiesByWorkspaceId = await loadRepositoryCapabilities(
       repository,
-      authorizedProductIds(context)
+      authorizedWorkspaceIds(context)
     )
   }
 
@@ -933,16 +933,16 @@ function registerResources(
     "signalsurf://context",
     {
       title: "SignalSurf MCP Context",
-      description: "Product and role context for this MCP connection.",
+      description: "Workspace and role context for this MCP connection.",
       mimeType: "application/json",
     },
     async (uri) => {
       await revalidateResourceContext()
       assertCanUseCapability(context, "context.read")
       return jsonResource(uri.href, {
-        productId: context.productId,
-        productIds: authorizedProductIds(context),
-        products: authorizedProducts(context),
+        workspaceId: context.workspaceId,
+        workspaceIds: authorizedWorkspaceIds(context),
+        workspaces: authorizedWorkspaces(context),
         userId: context.userId ?? null,
         role: context.role,
         tokenName: context.tokenName ?? null,
@@ -955,14 +955,14 @@ function registerResources(
     }
   )
 
-  if (contextProductIds.length > 1) return
+  if (contextWorkspaceIds.length > 1) return
 
   server.registerResource(
     "signalsurf_workflows",
     "signalsurf://workflows",
     {
       title: "SignalSurf Workflows",
-      description: "Non-deleted Workflows for the current product.",
+      description: "Non-deleted Workflows for the current workspace.",
       mimeType: "application/json",
     },
     async (uri) => {
@@ -970,7 +970,7 @@ function registerResources(
       assertCanUseCapability(context, "workflows.read")
       return jsonResource(
         uri.href,
-        await repository.listWorkflows(resolveProductContext(context), {
+        await repository.listWorkflows(resolveWorkspaceContext(context), {
           limit: 200,
         })
       )
@@ -986,7 +986,7 @@ function registerResources(
           return { resources: [] }
         }
         const { workflows } = await repository.listWorkflows(
-          resolveProductContext(context),
+          resolveWorkspaceContext(context),
           {
             limit: 200,
           }
@@ -1015,7 +1015,7 @@ function registerResources(
       return jsonResource(
         uri.href,
         await repository.getWorkflow(
-          resolveProductContext(context),
+          resolveWorkspaceContext(context),
           String(variables.workflowId ?? "")
         )
       )
@@ -1034,7 +1034,7 @@ function registerResources(
           return { resources: [] }
         }
         const { workflows } = await repository.listWorkflows(
-          resolveProductContext(context),
+          resolveWorkspaceContext(context),
           {
             limit: 200,
           }
@@ -1063,7 +1063,7 @@ function registerResources(
       return jsonResource(
         uri.href,
         await repository.listWorkflowSources(
-          resolveProductContext(context),
+          resolveWorkspaceContext(context),
           String(variables.workflowId ?? "")
         )
       )
@@ -1079,7 +1079,7 @@ function registerResources(
           return { resources: [] }
         }
         const { workflows } = await repository.listWorkflows(
-          resolveProductContext(context),
+          resolveWorkspaceContext(context),
           {
             limit: 200,
           }
@@ -1108,7 +1108,7 @@ function registerResources(
       return jsonResource(
         uri.href,
         await repository.listWorkflowTools(
-          resolveProductContext(context),
+          resolveWorkspaceContext(context),
           String(variables.workflowId ?? "")
         )
       )
@@ -1116,11 +1116,11 @@ function registerResources(
   )
 
   server.registerResource(
-    "signalsurf_product_tools",
-    "signalsurf://product-tools",
+    "signalsurf_workspace_tools",
+    "signalsurf://workspace-tools",
     {
-      title: "SignalSurf Product Tools",
-      description: "Safe product tool metadata for the current product.",
+      title: "SignalSurf Workspace Tools",
+      description: "Safe workspace tool metadata for the current workspace.",
       mimeType: "application/json",
     },
     async (uri) => {
@@ -1128,7 +1128,7 @@ function registerResources(
       assertCanUseCapability(context, "workflows.read")
       return jsonResource(
         uri.href,
-        await repository.listProductTools(resolveProductContext(context), {
+        await repository.listWorkspaceTools(resolveWorkspaceContext(context), {
           limit: 200,
         })
       )
@@ -1140,7 +1140,7 @@ function registerResources(
     "signalsurf://surf-jobs",
     {
       title: "SignalSurf Surf Jobs",
-      description: "Recent Workflow execution jobs for the current product.",
+      description: "Recent Workflow execution jobs for the current workspace.",
       mimeType: "application/json",
     },
     async (uri) => {
@@ -1148,7 +1148,7 @@ function registerResources(
       assertCanUseCapability(context, "workflows.read")
       return jsonResource(
         uri.href,
-        await repository.listSurfJobs(resolveProductContext(context), {
+        await repository.listSurfJobs(resolveWorkspaceContext(context), {
           limit: 100,
         })
       )
@@ -1164,7 +1164,7 @@ function registerResources(
           return { resources: [] }
         }
         const { jobs } = await repository.listSurfJobs(
-          resolveProductContext(context),
+          resolveWorkspaceContext(context),
           {
             limit: 100,
           }
@@ -1191,7 +1191,7 @@ function registerResources(
       return jsonResource(
         uri.href,
         await repository.getSurfJob(
-          resolveProductContext(context),
+          resolveWorkspaceContext(context),
           String(variables.jobId ?? "")
         )
       )
@@ -1203,7 +1203,7 @@ function registerResources(
     "signalsurf://databases",
     {
       title: "SignalSurf Databases",
-      description: "Databases/tables for the current product.",
+      description: "Databases/tables for the current workspace.",
       mimeType: "application/json",
     },
     async (uri) => {
@@ -1211,7 +1211,7 @@ function registerResources(
       assertCanUseCapability(context, "tables.read")
       return jsonResource(
         uri.href,
-        await repository.listDatabases(resolveProductContext(context), {
+        await repository.listDatabases(resolveWorkspaceContext(context), {
           limit: 200,
         })
       )
@@ -1227,7 +1227,7 @@ function registerResources(
           return { resources: [] }
         }
         const { databases } = await repository.listDatabases(
-          resolveProductContext(context),
+          resolveWorkspaceContext(context),
           {
             limit: 200,
           }
@@ -1257,7 +1257,7 @@ function registerResources(
       const databaseId = String(variables.databaseId ?? "")
       return jsonResource(
         uri.href,
-        await repository.readTable(resolveProductContext(context), {
+        await repository.readTable(resolveWorkspaceContext(context), {
           databaseId,
           limit: 100,
         })

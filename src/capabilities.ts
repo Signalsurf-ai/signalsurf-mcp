@@ -53,7 +53,7 @@ export const MCP_RESOURCE_SCOPES = [
 ] as const
 
 // SIG-2673: a grant approved in Direct Message mode carries only this scope
-// (plus offline_access). It exposes no product tools; the server relays to the
+// (plus offline_access). It exposes no workspace tools; the server relays to the
 // member's Surfer instead. Advertised first so clients request both modes and
 // the member picks one on the consent page.
 export const MCP_DM_SCOPE = "mcp:dm"
@@ -130,7 +130,7 @@ export type PublicMcpToolName =
   | "disable_enrich"
   | "list_enrich"
   | "run_enrich"
-  | "list_product_tools"
+  | "list_workspace_tools"
   | "list_workflow_tools"
   | "search_instagram_content"
   | "deepline_search_people"
@@ -199,7 +199,7 @@ export const PUBLIC_MCP_TOOLS = {
   get_context: {
     title: "Get SignalSurf MCP Context",
     description:
-      "Return authorized product ids and names, user, role, scopes, and capability context bound to this MCP connection.",
+      "Return authorized workspace ids and names, user, role, scopes, and capability context bound to this MCP connection.",
     requiredCapability: "context.read",
     surferSurface: "connection context",
     publicStatus: "supported",
@@ -208,7 +208,7 @@ export const PUBLIC_MCP_TOOLS = {
   get_brand_context: {
     title: "Get Brand Context",
     description:
-      "Read the active product's brand and positioning context: brand name, brand description, product description, product categories, selling points, target audience, competitors, and official website. Pass productId when this connection can access multiple products. Returns empty fields when the product has not completed brand setup.",
+      "Read the active workspace's brand and positioning context: brand name, brand description, product description, product categories, selling points, target audience, competitors, and official website. Pass workspaceId when this connection can access multiple workspaces. Returns empty fields when the workspace has not completed brand setup.",
     requiredCapability: "context.read",
     surferSurface: "connection context",
     publicStatus: "supported",
@@ -217,7 +217,7 @@ export const PUBLIC_MCP_TOOLS = {
   get_enrichment_context: {
     title: "Get Enrichment Context",
     description:
-      "Bundle everything an agent needs before filling or enriching a table column: brand/positioning context, the table schema (fields, types, options, entry key, relations), the most popular existing values per tag/array field, and SignalSurf field conventions. Call this before writing whatToDo for enable_enrich or before manual row edits. Pass productId when this connection can access multiple products; pass fieldKey to scope popular values to one column.",
+      "Bundle everything an agent needs before filling or enriching a table column: brand/positioning context, the table schema (fields, types, options, entry key, relations), the most popular existing values per tag/array field, and SignalSurf field conventions. Call this before writing whatToDo for enable_enrich or before manual row edits. Pass workspaceId when this connection can access multiple workspaces; pass fieldKey to scope popular values to one column.",
     requiredCapability: "tables.read",
     surferSurface: "enrichment context",
     publicStatus: "supported",
@@ -235,7 +235,7 @@ export const PUBLIC_MCP_TOOLS = {
   list_workflows: {
     title: "List Workflows",
     description:
-      "List SignalSurf Workflows for an authorized product. Pass productId when this connection can access multiple products. Soft-deleted rows are never returned; pass includeInactive=false to hide paused Workflows.",
+      "List SignalSurf Workflows for an authorized workspace. Pass workspaceId when this connection can access multiple workspaces. Soft-deleted rows are never returned; pass includeInactive=false to hide paused Workflows.",
     requiredCapability: "workflows.read",
     surferSurface: "manage_workflows",
     publicStatus: "supported",
@@ -244,7 +244,7 @@ export const PUBLIC_MCP_TOOLS = {
   get_workflow: {
     title: "Get Workflow",
     description:
-      "Read one SignalSurf Workflow after verifying it belongs to an authorized product.",
+      "Read one SignalSurf Workflow after verifying it belongs to an authorized workspace.",
     requiredCapability: "workflows.read",
     surferSurface: "manage_workflows",
     publicStatus: "supported",
@@ -253,7 +253,7 @@ export const PUBLIC_MCP_TOOLS = {
   create_workflow: {
     title: "Create Workflow",
     description:
-      "Create a Workflow in an authorized product. Pass productId when this connection can access multiple products, projectId to place it in an existing Project, and databaseIds when the product has multiple databases.",
+      "Create a Workflow in an authorized workspace. Pass workspaceId when this connection can access multiple workspaces, projectId to place it in an existing Project, and databaseIds when the workspace has multiple databases.",
     requiredCapability: "workflows.write",
     surferSurface: "manage_workflows",
     publicStatus: "supported",
@@ -262,7 +262,7 @@ export const PUBLIC_MCP_TOOLS = {
   update_workflow: {
     title: "Update Workflow",
     description:
-      "Modify Workflow metadata, Project placement, prompt fields, target tables, and JSON config for an authorized product. To attach or detach product integration tools, set toolConfigPatch.auto_tool_ids using tool ids from list_product_tools/list_workflow_tools (shallow-merged). Pass productId when this connection can access multiple products.",
+      "Modify Workflow metadata, Project placement, prompt fields, target tables, and JSON config for an authorized workspace. To attach or detach workspace integration tools, set toolConfigPatch.auto_tool_ids using tool ids from list_workspace_tools/list_workflow_tools (shallow-merged). Pass workspaceId when this connection can access multiple workspaces.",
     requiredCapability: "workflows.write",
     surferSurface: "manage_workflows",
     publicStatus: "supported",
@@ -271,7 +271,7 @@ export const PUBLIC_MCP_TOOLS = {
   run_workflow: {
     title: "Run Workflow",
     description:
-      "Queue an authorized Workflow for execution by creating a pending SignalSurf surf job. Pass productId when this connection can access multiple products.",
+      "Queue an authorized Workflow for execution by creating a pending SignalSurf surf job. Pass workspaceId when this connection can access multiple workspaces.",
     requiredCapability: "workflows.execute",
     surferSurface: "run_workflow",
     publicStatus: "supported",
@@ -280,7 +280,7 @@ export const PUBLIC_MCP_TOOLS = {
   get_surf_job: {
     title: "Get Surf Job",
     description:
-      "Read one SignalSurf surf job after verifying the job belongs to a Workflow in an authorized product.",
+      "Read one SignalSurf surf job after verifying the job belongs to a Workflow in an authorized workspace.",
     requiredCapability: "workflows.read",
     surferSurface: "run_workflow",
     publicStatus: "supported",
@@ -298,7 +298,7 @@ export const PUBLIC_MCP_TOOLS = {
   list_surf_jobs: {
     title: "List Surf Jobs",
     description:
-      "List SignalSurf surf jobs for an authorized product, optionally filtered by workflowId or status.",
+      "List SignalSurf surf jobs for an authorized workspace, optionally filtered by workflowId or status.",
     requiredCapability: "workflows.read",
     surferSurface: "run_workflow",
     publicStatus: "supported",
@@ -307,7 +307,7 @@ export const PUBLIC_MCP_TOOLS = {
   cancel_surf_job: {
     title: "Cancel Surf Job",
     description:
-      "Cancel a pending SignalSurf surf job after verifying it belongs to an authorized product.",
+      "Cancel a pending SignalSurf surf job after verifying it belongs to an authorized workspace.",
     requiredCapability: "workflows.execute",
     surferSurface: "run_workflow",
     publicStatus: "supported",
@@ -316,7 +316,7 @@ export const PUBLIC_MCP_TOOLS = {
   delete_workflow: {
     title: "Delete Workflow",
     description:
-      "Soft-delete one or more Workflows in an authorized product and cancel pending jobs. Pass productId when this connection can access multiple products. This does not hard-delete historical rows.",
+      "Soft-delete one or more Workflows in an authorized workspace and cancel pending jobs. Pass workspaceId when this connection can access multiple workspaces. This does not hard-delete historical rows.",
     requiredCapability: "workflows.delete",
     surferSurface: "manage_workflows",
     publicStatus: "supported",
@@ -370,7 +370,7 @@ export const PUBLIC_MCP_TOOLS = {
   list_tables: {
     title: "List Tables",
     description:
-      "List tables available in an authorized product. Pass productId when this connection can access multiple products. System tables are hidden unless includeSystem is true.",
+      "List tables available in an authorized workspace. Pass workspaceId when this connection can access multiple workspaces. System tables are hidden unless includeSystem is true.",
     requiredCapability: "tables.read",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -388,7 +388,7 @@ export const PUBLIC_MCP_TOOLS = {
   update_table: {
     title: "Update Table",
     description:
-      "Update SignalSurf table metadata, custom schema, saved-view config, and folder placement after product-scope verification. Pass template to upgrade a compatible existing table to the canonical outbound_accounts or contacts baseline while preserving additive custom fields.",
+      "Update SignalSurf table metadata, custom schema, saved-view config, and folder placement after workspace-scope verification. Pass template to upgrade a compatible existing table to the canonical outbound_accounts or contacts baseline while preserving additive custom fields.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -397,7 +397,7 @@ export const PUBLIC_MCP_TOOLS = {
   delete_table: {
     title: "Delete Table",
     description:
-      "Delete one or more user-facing SignalSurf tables after product-scope verification, then unlink the deleted table ids from active Workflows. Pass productId when this connection can access multiple products.",
+      "Delete one or more user-facing SignalSurf tables after workspace-scope verification, then unlink the deleted table ids from active Workflows. Pass workspaceId when this connection can access multiple workspaces.",
     requiredCapability: "tables.delete",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -406,7 +406,7 @@ export const PUBLIC_MCP_TOOLS = {
   list_table_views: {
     title: "List Table Views",
     description:
-      "List saved views configured for a SignalSurf table in an authorized product.",
+      "List saved views configured for a SignalSurf table in an authorized workspace.",
     requiredCapability: "tables.read",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -415,7 +415,7 @@ export const PUBLIC_MCP_TOOLS = {
   read_table: {
     title: "Read Table",
     description:
-      "Read rows from a SignalSurf table in an authorized product. Pass productId when this connection can access multiple products. Supports pagination, JSON containment filters, and UI-style data filters/sorts.",
+      "Read rows from a SignalSurf table in an authorized workspace. Pass workspaceId when this connection can access multiple workspaces. Supports pagination, JSON containment filters, and UI-style data filters/sorts.",
     requiredCapability: "tables.read",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -433,7 +433,7 @@ export const PUBLIC_MCP_TOOLS = {
   get_table_row: {
     title: "Get Table Row",
     description:
-      "Read one table row by rowId after verifying product scope. Pass productId when this connection can access multiple products.",
+      "Read one table row by rowId after verifying workspace scope. Pass workspaceId when this connection can access multiple workspaces.",
     requiredCapability: "tables.read",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -442,7 +442,7 @@ export const PUBLIC_MCP_TOOLS = {
   create_table_row: {
     title: "Create Table Row",
     description:
-      "Create a row/item in a SignalSurf table after verifying it belongs to an authorized product. Pass productId when this connection can access multiple products.",
+      "Create a row/item in a SignalSurf table after verifying it belongs to an authorized workspace. Pass workspaceId when this connection can access multiple workspaces.",
     requiredCapability: "tables.write",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -451,7 +451,7 @@ export const PUBLIC_MCP_TOOLS = {
   update_table_rows: {
     title: "Update Table Rows",
     description:
-      "Modify one or more rows/items in an authorized product in a single call — always pass `edits` as an array, length 1 for a single row, N to apply distinct edits to several rows at once (e.g. after enrichment); one atomic write for the data/dataPatch part. Input { productId, edits }. Each edit is { rowId, databaseId?, data?, dataPatch?, note?, workflowId? } — use dataPatch for shallow field updates or data to replace the row's data object (exactly one of the two), note to set the row's note, workflowId to reassign its Workflow, and databaseId as an optional ownership check. rowIds must be unique. If any rowId is not found/authorized or any edit is invalid, the whole call is rejected and nothing is written.",
+      "Modify one or more rows/items in an authorized workspace in a single call — always pass `edits` as an array, length 1 for a single row, N to apply distinct edits to several rows at once (e.g. after enrichment); one atomic write for the data/dataPatch part. Input { workspaceId, edits }. Each edit is { rowId, databaseId?, data?, dataPatch?, note?, workflowId? } — use dataPatch for shallow field updates or data to replace the row's data object (exactly one of the two), note to set the row's note, workflowId to reassign its Workflow, and databaseId as an optional ownership check. rowIds must be unique. If any rowId is not found/authorized or any edit is invalid, the whole call is rejected and nothing is written.",
     requiredCapability: "tables.write",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -460,7 +460,7 @@ export const PUBLIC_MCP_TOOLS = {
   delete_table_rows: {
     title: "Delete Table Rows",
     description:
-      "Delete one or more table rows/items after verifying every row belongs to an authorized product. Pass productId when this connection can access multiple products.",
+      "Delete one or more table rows/items after verifying every row belongs to an authorized workspace. Pass workspaceId when this connection can access multiple workspaces.",
     requiredCapability: "tables.delete",
     surferSurface: "manage_data",
     publicStatus: "supported",
@@ -504,7 +504,7 @@ export const PUBLIC_MCP_TOOLS = {
   create_relation_field: {
     title: "Create Relation Field",
     description:
-      "Create an item_ref relation field from one authorized table to another product-owned table.",
+      "Create an item_ref relation field from one authorized table to another workspace-owned table.",
     requiredCapability: "schemas.write",
     surferSurface: "manage_projects/manage_databases",
     publicStatus: "supported",
@@ -531,7 +531,7 @@ export const PUBLIC_MCP_TOOLS = {
   update_signal: {
     title: "Update Signal",
     description:
-      "Update one signal after verifying its Workflow belongs to an authorized product. Supports signal name, active state (enable/pause via isActive), typed config rebuilds, and safe pull_config/metadata/data_schema replacements or shallow patches.",
+      "Update one signal after verifying its Workflow belongs to an authorized workspace. Supports signal name, active state (enable/pause via isActive), typed config rebuilds, and safe pull_config/metadata/data_schema replacements or shallow patches.",
     requiredCapability: "sources.write",
     surferSurface: "manage_workflows",
     publicStatus: "supported",
@@ -540,16 +540,16 @@ export const PUBLIC_MCP_TOOLS = {
   delete_signal: {
     title: "Delete Signal",
     description:
-      "Hard-delete one or more signals after product-scope validation and remove non-terminal jobs for those signal ids.",
+      "Hard-delete one or more signals after workspace-scope validation and remove non-terminal jobs for those signal ids.",
     requiredCapability: "sources.write",
     surferSurface: "manage_workflows",
     publicStatus: "supported",
     annotations: DELETE_ANNOTATIONS,
   },
-  list_product_tools: {
-    title: "List Product Tools",
+  list_workspace_tools: {
+    title: "List Workspace Tools",
     description:
-      "List safe product tool metadata that can be attached to Workflows. Tool config secrets are not exposed.",
+      "List safe workspace tool metadata that can be attached to Workflows. Tool config secrets are not exposed.",
     requiredCapability: "workflows.read",
     surferSurface: "manage_workflows",
     publicStatus: "supported",
@@ -567,7 +567,7 @@ export const PUBLIC_MCP_TOOLS = {
   deepline_search_people: {
     title: "Search People via Deepline",
     description:
-      "Search people through Deepline's managed Crustdata V3 search for an authorized product after consuming an exact, unexpired one-time Web approval. Pass provider-neutral nested people/company filters or the backward-compatible Apollo-shaped names (person_titles, person_seniorities, person_locations, organization_locations, organization_num_employees_ranges, contact_email_status). Apollo remains an explicit BYOC deployment override. Returns preview rows + match counts; emails require the separate enrich step.",
+      "Search people through Deepline's managed Crustdata V3 search for an authorized workspace after consuming an exact, unexpired one-time Web approval. Pass provider-neutral nested people/company filters or the backward-compatible Apollo-shaped names (person_titles, person_seniorities, person_locations, organization_locations, organization_num_employees_ranges, contact_email_status). Apollo remains an explicit BYOC deployment override. Returns preview rows + match counts; emails require the separate enrich step.",
     requiredCapability: "deepline.read",
     surferSurface: "account_list_icp_builder",
     publicStatus: "supported",
@@ -576,7 +576,7 @@ export const PUBLIC_MCP_TOOLS = {
   search_instagram_content: {
     title: "Search Instagram Public Content",
     description:
-      "Search the broader public Instagram post corpus for an authorized product after consuming an exact, unexpired one-time Web approval. Returns post evidence plus deduplicated creator accounts. Costs three SignalSurf credits per requested page. This is a separate discovery lane and is never used as a fallback for Instagram Reels Search.",
+      "Search the broader public Instagram post corpus for an authorized workspace after consuming an exact, unexpired one-time Web approval. Returns post evidence plus deduplicated creator accounts. Costs three SignalSurf credits per requested page. This is a separate discovery lane and is never used as a fallback for Instagram Reels Search.",
     requiredCapability: "creator_discovery.read",
     surferSurface: "creator_discovery",
     publicStatus: "supported",
@@ -585,7 +585,7 @@ export const PUBLIC_MCP_TOOLS = {
   deepline_search_companies: {
     title: "Search Companies via Deepline",
     description:
-      "Search companies through Deepline's managed Crustdata V3 search for an authorized product after consuming an exact, unexpired one-time Web approval. Pass provider-neutral company filters or the backward-compatible Apollo-shaped names (q_organization_keyword_tags, q_organization_domains_list, organization_locations, organization_not_locations, organization_num_employees_ranges); funding_stages is also supported. Apollo remains an explicit BYOC deployment override.",
+      "Search companies through Deepline's managed Crustdata V3 search for an authorized workspace after consuming an exact, unexpired one-time Web approval. Pass provider-neutral company filters or the backward-compatible Apollo-shaped names (q_organization_keyword_tags, q_organization_domains_list, organization_locations, organization_not_locations, organization_num_employees_ranges); funding_stages is also supported. Apollo remains an explicit BYOC deployment override.",
     requiredCapability: "deepline.read",
     surferSurface: "account_list_icp_builder",
     publicStatus: "supported",
@@ -594,7 +594,7 @@ export const PUBLIC_MCP_TOOLS = {
   deepline_enrich_contact: {
     title: "Find a Contact Email via Deepline",
     description:
-      "Find a verified work email for a person via Deepline (leadmagic email finder) after consuming an exact, unexpired one-time Web approval. Requires firstName + lastName and at least one of domain / companyName. Spends Deepline credits ONLY on a hit (misses are free). Requires a Deepline integration key on the product.",
+      "Find a verified work email for a person via Deepline (leadmagic email finder) after consuming an exact, unexpired one-time Web approval. Requires firstName + lastName and at least one of domain / companyName. Spends Deepline credits ONLY on a hit (misses are free). Requires a Deepline integration key on the workspace.",
     requiredCapability: "deepline.enrich",
     surferSurface: "account_list_icp_builder",
     publicStatus: "supported",
@@ -603,7 +603,7 @@ export const PUBLIC_MCP_TOOLS = {
   deepline_search_catalog: {
     title: "Search Deepline Tool Catalog",
     description:
-      "Search Deepline's live v2 tool catalog for an authorized product to discover provider tool ids before execution. An empty query returns the first tools in the catalog. Requires a Deepline integration key on the product.",
+      "Search Deepline's live v2 tool catalog for an authorized workspace to discover provider tool ids before execution. An empty query returns the first tools in the catalog. Requires a Deepline integration key on the workspace.",
     requiredCapability: "deepline.read",
     surferSurface: "deepline",
     publicStatus: "supported",
@@ -612,7 +612,7 @@ export const PUBLIC_MCP_TOOLS = {
   deepline_execute_tool: {
     title: "Execute Deepline Tool",
     description:
-      "Execute a selected Deepline v2 tool id with a JSON payload for an authorized product. Requires an approved, unexpired, one-time action request bound to the active OAuth grant, product, tool id, and exact payload. Use deepline_search_catalog first unless the tool id is already known. May spend Deepline credits depending on the provider and result. Requires a Deepline integration key on the product.",
+      "Execute a selected Deepline v2 tool id with a JSON payload for an authorized workspace. Requires an approved, unexpired, one-time action request bound to the active OAuth grant, workspace, tool id, and exact payload. Use deepline_search_catalog first unless the tool id is already known. May spend Deepline credits depending on the provider and result. Requires a Deepline integration key on the workspace.",
     requiredCapability: "deepline.execute",
     surferSurface: "deepline",
     publicStatus: "supported",
@@ -621,7 +621,7 @@ export const PUBLIC_MCP_TOOLS = {
   enable_enrich: {
     title: "Enable Enrich",
     description:
-      "Enable Enrich on one table column: bind a hidden Workflow + manual-trigger source to (databaseId, fieldKey) with a 'what to do' instruction the brain uses to fill that single column from each row's context. Optionally pass auto ('on_created' to auto-fill new rows, 'off' to clear auto-fill) and runCondition for the column's 'only run if' gate. Re-enabling an off column restores it and updates the instruction. Pass productId when this connection can access multiple products.",
+      "Enable Enrich on one table column: bind a hidden Workflow + manual-trigger source to (databaseId, fieldKey) with a 'what to do' instruction the brain uses to fill that single column from each row's context. Optionally pass auto ('on_created' to auto-fill new rows, 'off' to clear auto-fill) and runCondition for the column's 'only run if' gate. Re-enabling an off column restores it and updates the instruction. Pass workspaceId when this connection can access multiple workspaces.",
     requiredCapability: "sources.write",
     surferSurface: "manage_workflows",
     publicStatus: "supported",
@@ -657,7 +657,7 @@ export const PUBLIC_MCP_TOOLS = {
   inspect_sender_infrastructure: {
     title: "Inspect Sender Infrastructure",
     description:
-      "Read the active product's managed Domain inventory, mailbox lifecycle and health evidence, Warm-up and Placement metrics, editable sender settings, connected Email/LinkedIn/Instagram bindings, and sender entitlement. Secrets and mailbox credentials are never returned.",
+      "Read the active workspace's managed Domain inventory, mailbox lifecycle and health evidence, Warm-up and Placement metrics, editable sender settings, connected Email/LinkedIn/Instagram bindings, and sender entitlement. Secrets and mailbox credentials are never returned.",
     requiredCapability: "sender_infrastructure.read",
     surferSurface: "sender infrastructure",
     publicStatus: "supported",

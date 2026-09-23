@@ -8,7 +8,7 @@ import type { SignalSurfContext } from "../src/types.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 const context: SignalSurfContext = {
-  productId: "00000000-0000-4000-8000-000000000001",
+  workspaceId: "00000000-0000-4000-8000-000000000001",
   userId: "00000000-0000-4000-8000-000000000010",
   role: "viewer",
   authKind: "oauth",
@@ -26,9 +26,9 @@ const approvalPayload = {
 
 function seed(overrides: Record<string, unknown[]> = {}) {
   return {
-    products: [
+    workspaces: [
       {
-        id: context.productId,
+        id: context.workspaceId,
         owner_id: context.userId,
         organization_id: "00000000-0000-4000-8000-000000000020",
       },
@@ -61,7 +61,7 @@ function approvedRow(overrides: Record<string, unknown> = {}) {
     oauth_grant_id: context.oauthGrantId,
     user_id: context.userId,
     client_id: context.oauthClientId,
-    workspace_id: context.productId,
+    workspace_id: context.workspaceId,
     tool_name: "search_instagram_content",
     provider_tool_id: "instagram_content_search",
     payload_sha256: mcpActionPayloadSha256(approvalPayload),

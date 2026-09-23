@@ -40,10 +40,10 @@ describe("public MCP tool contract", () => {
   })
 
   it("pins every executable tool input schema to the shared fingerprint artifact", async () => {
-    const db = new FakeSupabase({ products: [], organizations: [] })
+    const db = new FakeSupabase({ workspaces: [], organizations: [] })
     const server = await createSignalSurfMcpServer({
       context: {
-        productId: "00000000-0000-4000-8000-000000000001",
+        workspaceId: "00000000-0000-4000-8000-000000000001",
         role: "viewer",
       },
       repository: new SignalSurfRepository(db as never),

@@ -11,7 +11,7 @@ import { UserFacingError } from "./errors.js"
 import type {
   AccessRole,
   SignalSurfContext,
-  SignalSurfProductContext,
+  SignalSurfWorkspaceContext,
 } from "./types.js"
 
 const roleRank: Record<AccessRole, number> = {
@@ -43,19 +43,19 @@ function matchesToken(entry: TokenEntry, token: string): boolean {
 }
 
 function contextFromTokenEntry(entry: TokenEntry): SignalSurfContext {
-  const productId = entry.productId ?? entry.productIds![0]!
+  const workspaceId = entry.workspaceId ?? entry.workspaceIds![0]!
   const context: SignalSurfContext = {
-    productId,
+    workspaceId,
     userId: entry.userId,
     role: entry.role,
     tokenName: entry.name,
     scopes: entry.scopes,
   }
-  if (entry.productIds?.length) {
-    // Keep the primary productId inside the authorized list so a mixed
-    // { productId, productIds } config can never advertise a primary product
+  if (entry.workspaceIds?.length) {
+    // Keep the primary workspaceId inside the authorized list so a mixed
+    // { workspaceId, workspaceIds } config can never advertise a primary workspace
     // that is not actually authorized.
-    context.productIds = [...new Set([productId, ...entry.productIds])]
+    context.workspaceIds = [...new Set([workspaceId, ...entry.workspaceIds])]
   }
   return context
 }
@@ -74,7 +74,7 @@ export function resolveTokenContext(
   if (config.authDisabled) {
     if (!config.directContext) {
       throw new UserFacingError(
-        "SIGNALSURF_MCP_AUTH_DISABLED requires SIGNALSURF_MCP_PRODUCT_ID",
+        "SIGNALSURF_MCP_AUTH_DISABLED requires SIGNALSURF_MCP_WORKSPACE_ID",
         { code: "CONFIG_ERROR", status: 500 }
       )
     }
@@ -259,54 +259,54 @@ export function listContextCapabilities(
       ]
 }
 
-export function authorizedProductIds(context: SignalSurfContext): string[] {
-  const ids = context.productIds?.length
-    ? context.productIds
-    : [context.productId]
+export function authorizedWorkspaceIds(context: SignalSurfContext): string[] {
+  const ids = context.workspaceIds?.length
+    ? context.workspaceIds
+    : [context.workspaceId]
   return [...new Set(ids.filter(Boolean))]
 }
 
-export function authorizedProducts(
+export function authorizedWorkspaces(
   context: SignalSurfContext
-): SignalSurfProductContext[] {
-  const productIds = authorizedProductIds(context)
-  const productsById = new Map(
-    (context.products ?? []).map((product) => [product.productId, product])
+): SignalSurfWorkspaceContext[] {
+  const workspaceIds = authorizedWorkspaceIds(context)
+  const workspacesById = new Map(
+    (context.workspaces ?? []).map((workspace) => [workspace.workspaceId, workspace])
   )
 
-  return productIds.map((productId) => {
-    const product = productsById.get(productId)
+  return workspaceIds.map((workspaceId) => {
+    const workspace = workspacesById.get(workspaceId)
     return {
-      productId,
-      name: product?.name?.trim() || productId,
-      organizationId: product?.organizationId ?? null,
-      organizationName: product?.organizationName ?? null,
+      workspaceId,
+      name: workspace?.name?.trim() || workspaceId,
+      organizationId: workspace?.organizationId ?? null,
+      organizationName: workspace?.organizationName ?? null,
     }
   })
 }
 
-export function resolveProductContext(
+export function resolveWorkspaceContext(
   context: SignalSurfContext,
-  requestedProductId?: string
+  requestedWorkspaceId?: string
 ): SignalSurfContext {
-  const productIds = authorizedProductIds(context)
-  const products = authorizedProducts(context)
-  if (!requestedProductId) {
-    if (productIds.length > 1) {
+  const workspaceIds = authorizedWorkspaceIds(context)
+  const workspaces = authorizedWorkspaces(context)
+  if (!requestedWorkspaceId) {
+    if (workspaceIds.length > 1) {
       throw new UserFacingError(
-        "productId is required because this MCP connection can access multiple SignalSurf products.",
+        "workspaceId is required because this MCP connection can access multiple SignalSurf workspaces.",
         { code: "BAD_REQUEST", status: 400 }
       )
     }
-    return { ...context, productId: productIds[0]!, productIds, products }
+    return { ...context, workspaceId: workspaceIds[0]!, workspaceIds, workspaces }
   }
 
-  if (!productIds.includes(requestedProductId)) {
+  if (!workspaceIds.includes(requestedWorkspaceId)) {
     throw new UserFacingError(
-      "This MCP connection is not authorized for the requested product.",
+      "This MCP connection is not authorized for the requested workspace.",
       { code: "FORBIDDEN", status: 403 }
     )
   }
 
-  return { ...context, productId: requestedProductId, productIds, products }
+  return { ...context, workspaceId: requestedWorkspaceId, workspaceIds, workspaces }
 }

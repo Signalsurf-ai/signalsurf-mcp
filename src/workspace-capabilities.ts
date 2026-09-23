@@ -15,7 +15,7 @@ export const WORKSPACE_CAPABILITIES = [
 ] as const
 
 export type WorkspaceCapability = (typeof WORKSPACE_CAPABILITIES)[number]
-export type WorkspaceCapabilitiesByProduct = Record<
+export type WorkspaceCapabilitiesByWorkspaceId = Record<
   string,
   readonly WorkspaceCapability[]
 >
@@ -154,19 +154,19 @@ function isRollingSchemaMiss(error: { code?: string } | null | undefined) {
 }
 
 function capabilitiesWithOverrides(
-  productIds: readonly string[],
+  workspaceIds: readonly string[],
   overrides: readonly {
     workspace_id: string
     capability_key: unknown
     enabled: unknown
   }[]
-): WorkspaceCapabilitiesByProduct {
+): WorkspaceCapabilitiesByWorkspaceId {
   return Object.fromEntries(
-    productIds.map((productId) => [
-      productId,
+    workspaceIds.map((workspaceId) => [
+      workspaceId,
       resolveEffectiveWorkspaceCapabilities(
         [],
-        overrides.filter((row) => row.workspace_id === productId)
+        overrides.filter((row) => row.workspace_id === workspaceId)
       ),
     ])
   )
@@ -174,29 +174,29 @@ function capabilitiesWithOverrides(
 
 export async function loadWorkspaceCapabilities(
   db: SupabaseLike,
-  productIds: readonly string[]
-): Promise<WorkspaceCapabilitiesByProduct> {
+  workspaceIds: readonly string[]
+): Promise<WorkspaceCapabilitiesByWorkspaceId> {
   const noneEnabled = Object.fromEntries(
-    productIds.map((productId) => [productId, []])
+    workspaceIds.map((workspaceId) => [workspaceId, []])
   )
-  if (productIds.length === 0) return noneEnabled
+  if (workspaceIds.length === 0) return noneEnabled
 
-  const [productsResult, overridesResult] = await Promise.all([
+  const [workspacesResult, overridesResult] = await Promise.all([
     db
-      .from("products")
+      .from("workspaces")
       .select("id")
-      .in("id", [...productIds]),
+      .in("id", [...workspaceIds]),
     db
       .from("workspace_capability_overrides")
       .select("workspace_id, capability_key, enabled")
-      .in("workspace_id", [...productIds]),
+      .in("workspace_id", [...workspaceIds]),
   ])
   if (isRollingSchemaMiss(overridesResult.error)) return noneEnabled
-  if (productsResult.error || overridesResult.error) {
+  if (workspacesResult.error || overridesResult.error) {
     throw new Error("Workspace capabilities are unavailable")
   }
 
-  const products = (productsResult.data ?? []) as Array<{
+  const workspaces = (workspacesResult.data ?? []) as Array<{
     id: string
   }>
   const overrideRows = (overridesResult.data ?? []) as Array<{
@@ -205,14 +205,14 @@ export async function loadWorkspaceCapabilities(
     enabled: unknown
   }>
   const subscriptionsResult = await db
-    .from("subscriptions")
+    .from("workspace_subscriptions")
     .select("workspace_id, plan_name, created_at")
-    .in("workspace_id", [...productIds])
+    .in("workspace_id", [...workspaceIds])
     .in("status", ["active", "trialing"])
     .or("current_period_end.is.null,current_period_end.gte.now()")
     .order("created_at", { ascending: false })
   if (isRollingSchemaMiss(subscriptionsResult.error)) {
-    return capabilitiesWithOverrides(productIds, overrideRows)
+    return capabilitiesWithOverrides(workspaceIds, overrideRows)
   }
   if (subscriptionsResult.error) {
     throw new Error("Workspace capabilities are unavailable")
@@ -228,14 +228,14 @@ export async function loadWorkspaceCapabilities(
   }
   const planKeys = [...new Set(planByWorkspace.values())]
   if (planKeys.length === 0) {
-    return capabilitiesWithOverrides(productIds, overrideRows)
+    return capabilitiesWithOverrides(workspaceIds, overrideRows)
   }
   const plansResult = await db
     .from("billing_plan_catalog")
     .select("plan_key, workspace_capabilities")
     .in("plan_key", planKeys)
   if (isRollingSchemaMiss(plansResult.error)) {
-    return capabilitiesWithOverrides(productIds, overrideRows)
+    return capabilitiesWithOverrides(workspaceIds, overrideRows)
   }
   if (plansResult.error) {
     throw new Error("Workspace capabilities are unavailable")
@@ -253,42 +253,42 @@ export async function loadWorkspaceCapabilities(
         : WORKSPACE_CAPABILITIES,
     ])
   )
-  const overridesByProduct = new Map<
+  const overridesByWorkspace = new Map<
     string,
     Array<{ capability_key: unknown; enabled: unknown }>
   >()
   for (const row of overrideRows) {
-    const rows = overridesByProduct.get(row.workspace_id) ?? []
+    const rows = overridesByWorkspace.get(row.workspace_id) ?? []
     rows.push(row)
-    overridesByProduct.set(row.workspace_id, rows)
+    overridesByWorkspace.set(row.workspace_id, rows)
   }
 
-  const productById = new Map(products.map((product) => [product.id, product]))
+  const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]))
   return Object.fromEntries(
-    productIds.map((productId) => {
-      const product = productById.get(productId)
-      if (!product) {
+    workspaceIds.map((workspaceId) => {
+      const workspace = workspaceById.get(workspaceId)
+      if (!workspace) {
         return [
-          productId,
+          workspaceId,
           resolveEffectiveWorkspaceCapabilities(
             [],
-            overridesByProduct.get(productId) ?? []
+            overridesByWorkspace.get(workspaceId) ?? []
           ),
         ]
       }
-      const planKey = planByWorkspace.get(product.id)
+      const planKey = planByWorkspace.get(workspace.id)
       return [
-        productId,
+        workspaceId,
         resolveEffectiveWorkspaceCapabilities(
           planKey ? (defaultsByPlan.get(planKey) ?? []) : [],
-          overridesByProduct.get(product.id) ?? []
+          overridesByWorkspace.get(workspace.id) ?? []
         ),
       ]
     })
   )
 }
 
-export function isToolVisibleAcrossProducts(
+export function isToolVisibleAcrossWorkspaces(
   context: SignalSurfContext,
   toolName: PublicMcpToolName
 ): boolean {
@@ -304,11 +304,11 @@ export function assertWorkspaceToolAllowed(
   const requirement = workspaceCapabilityRequirementForTool(toolName)
   if (!requirement) return
   const enabled =
-    context.workspaceCapabilitiesByProduct?.[context.productId] ??
+    context.workspaceCapabilitiesByWorkspaceId?.[context.workspaceId] ??
     WORKSPACE_CAPABILITIES
   if (requirementAllowed(enabled, requirement)) return
   console.warn("[mcp] Workspace capability denied", {
-    productId: context.productId,
+    workspaceId: context.workspaceId,
     requirement,
     toolName,
   })
@@ -323,7 +323,7 @@ export function workspaceCapabilityEnabled(
   capability: WorkspaceCapability
 ): boolean {
   return (
-    context.workspaceCapabilitiesByProduct?.[context.productId] ??
+    context.workspaceCapabilitiesByWorkspaceId?.[context.workspaceId] ??
     WORKSPACE_CAPABILITIES
   ).includes(capability)
 }
@@ -350,9 +350,9 @@ export function projectMcpCapabilitiesForWorkspace(
   context: SignalSurfContext,
   capabilities: readonly McpCapability[]
 ): McpCapability[] {
-  const productIds = context.productIds?.length
-    ? context.productIds
-    : [context.productId]
+  const workspaceIds = context.workspaceIds?.length
+    ? context.workspaceIds
+    : [context.workspaceId]
   return capabilities.filter((capability) => {
     // Subscription capabilities make module operations read-only; they do not
     // hide retained Workspace data from a token that already has a read scope.
@@ -361,10 +361,10 @@ export function projectMcpCapabilitiesForWorkspace(
     }
     const required = workspaceCapabilitiesForMcpCapability(capability)
     if (required.length === 0) return true
-    return productIds.every((productId) =>
+    return workspaceIds.every((workspaceId) =>
       required.some((workspaceCapability) =>
         (
-          context.workspaceCapabilitiesByProduct?.[productId] ??
+          context.workspaceCapabilitiesByWorkspaceId?.[workspaceId] ??
           WORKSPACE_CAPABILITIES
         ).includes(workspaceCapability)
       )

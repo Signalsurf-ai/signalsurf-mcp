@@ -12,7 +12,7 @@ import { createHttpApp } from "../src/http.js"
 import { SignalSurfRepository } from "../src/repository.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
-const productId = "00000000-0000-4000-8000-000000000001"
+const workspaceId = "00000000-0000-4000-8000-000000000001"
 const token = "ssmcp_test_token"
 
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
@@ -32,7 +32,7 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
       {
         name: "test-token",
         tokenSha256: sha256Hex(token),
-        productId,
+        workspaceId,
         role: "editor",
       },
     ],
@@ -211,15 +211,15 @@ describe("HTTP transport", () => {
   it("resolves hosted database tokens for HTTP auth", async () => {
     const userId = "00000000-0000-4000-8000-000000000102"
     const db = new FakeSupabase({
-      products: [{ id: productId, organization_id: null }],
-      product_members: [
-        { workspace_id: productId, user_id: userId, role: "member" },
+      workspaces: [{ id: workspaceId, organization_id: null }],
+      workspace_members: [
+        { workspace_id: workspaceId, user_id: userId, role: "member" },
       ],
       organization_members: [],
       mcp_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000101",
-          workspace_id: productId,
+          workspace_id: workspaceId,
           created_by: userId,
           name: "hosted-agent",
           role: "editor",
@@ -262,7 +262,7 @@ describe("HTTP transport", () => {
       mcp_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000101",
-          workspace_id: productId,
+          workspace_id: workspaceId,
           created_by: "00000000-0000-4000-8000-000000000102",
           name: "hosted-agent",
           role: "editor",
@@ -299,15 +299,15 @@ describe("HTTP transport", () => {
   it("does not trust spoofed forwarded IPs unless proxy trust is enabled", async () => {
     const userId = "00000000-0000-4000-8000-000000000102"
     const db = new FakeSupabase({
-      products: [{ id: productId, organization_id: null }],
-      product_members: [
-        { workspace_id: productId, user_id: userId, role: "member" },
+      workspaces: [{ id: workspaceId, organization_id: null }],
+      workspace_members: [
+        { workspace_id: workspaceId, user_id: userId, role: "member" },
       ],
       organization_members: [],
       mcp_tokens: [
         {
           id: "00000000-0000-4000-8000-000000000101",
-          workspace_id: productId,
+          workspace_id: workspaceId,
           created_by: userId,
           name: "hosted-agent",
           role: "editor",
@@ -450,9 +450,9 @@ describe("HTTP transport", () => {
     const resourceUrl = "https://mcp.example.com/mcp"
     const userId = "00000000-0000-4000-8000-000000000202"
     const db = new FakeSupabase({
-      products: [{ id: productId, organization_id: null }],
-      product_members: [
-        { workspace_id: productId, user_id: userId, role: "member" },
+      workspaces: [{ id: workspaceId, organization_id: null }],
+      workspace_members: [
+        { workspace_id: workspaceId, user_id: userId, role: "member" },
       ],
       organization_members: [],
       mcp_tokens: [],
@@ -461,7 +461,7 @@ describe("HTTP transport", () => {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
           user_id: userId,
-          workspace_id: productId,
+          workspace_id: workspaceId,
           scope: "mcp:read mcp:write offline_access openid profile",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
@@ -515,9 +515,9 @@ describe("HTTP transport", () => {
     const resourceUrl = "https://mcp.example.com/mcp"
     const userId = "00000000-0000-4000-8000-000000000202"
     const db = new FakeSupabase({
-      products: [{ id: productId, organization_id: null }],
-      product_members: [
-        { workspace_id: productId, user_id: userId, role: "member" },
+      workspaces: [{ id: workspaceId, organization_id: null }],
+      workspace_members: [
+        { workspace_id: workspaceId, user_id: userId, role: "member" },
       ],
       organization_members: [],
       mcp_tokens: [],
@@ -526,7 +526,7 @@ describe("HTTP transport", () => {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
           user_id: userId,
-          workspace_id: productId,
+          workspace_id: workspaceId,
           scope: "mcp:tables.read mcp:tables.write",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
@@ -591,9 +591,9 @@ describe("HTTP transport", () => {
     expect(db.tables.workflows).toHaveLength(0)
   })
 
-  it("requires explicit productId for multi-product OAuth HTTP tool calls", async () => {
+  it("requires explicit workspaceId for multi-workspace OAuth HTTP tool calls", async () => {
     const resourceUrl = "https://mcp.example.com/mcp"
-    const secondProductId = "00000000-0000-4000-8000-000000000002"
+    const secondWorkspaceId = "00000000-0000-4000-8000-000000000002"
     const userId = "00000000-0000-4000-8000-000000000202"
     const db = new FakeSupabase({
       mcp_tokens: [],
@@ -602,8 +602,8 @@ describe("HTTP transport", () => {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
           user_id: userId,
-          workspace_id: productId,
-          workspace_ids: [productId, secondProductId],
+          workspace_id: workspaceId,
+          workspace_ids: [workspaceId, secondWorkspaceId],
           scope: "mcp:read",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
@@ -618,15 +618,15 @@ describe("HTTP transport", () => {
           revoked_at: null,
         },
       ],
-      products: [
+      workspaces: [
         {
-          id: productId,
-          name: "Primary Product",
+          id: workspaceId,
+          name: "Primary Workspace",
           organization_id: "00000000-0000-4000-8000-000000000701",
         },
         {
-          id: secondProductId,
-          name: "Second Product",
+          id: secondWorkspaceId,
+          name: "Second Workspace",
           organization_id: "00000000-0000-4000-8000-000000000702",
         },
       ],
@@ -640,16 +640,16 @@ describe("HTTP transport", () => {
           name: "Second Workspace",
         },
       ],
-      product_members: [
-        { workspace_id: productId, user_id: userId, role: "member" },
-        { workspace_id: secondProductId, user_id: userId, role: "member" },
+      workspace_members: [
+        { workspace_id: workspaceId, user_id: userId, role: "member" },
+        { workspace_id: secondWorkspaceId, user_id: userId, role: "member" },
       ],
       organization_members: [],
       workflows: [
         {
           id: "00000000-0000-4000-8000-000000000301",
-          workspace_id: secondProductId,
-          name: "Second Product Workflow",
+          workspace_id: secondWorkspaceId,
+          name: "Second Workspace Workflow",
           description: null,
           is_default: false,
           is_active: true,
@@ -700,20 +700,20 @@ describe("HTTP transport", () => {
     expect(contextResponse.status).toBe(200)
     const contextBody = await readMcpJson(contextResponse)
     const contextContent = JSON.parse(contextBody.result.content[0].text)
-    expect(contextContent.data.products).toMatchObject([
+    expect(contextContent.data.workspaces).toMatchObject([
       {
-        productId,
-        name: "Primary Product",
+        workspaceId,
+        name: "Primary Workspace",
         organizationName: "Primary Workspace",
       },
       {
-        productId: secondProductId,
-        name: "Second Product",
+        workspaceId: secondWorkspaceId,
+        name: "Second Workspace",
         organizationName: "Second Workspace",
       },
     ])
 
-    const missingProduct = await fetch(url, {
+    const missingWorkspace = await fetch(url, {
       method: "POST",
       headers: {
         Accept: "application/json, text/event-stream",
@@ -723,28 +723,28 @@ describe("HTTP transport", () => {
       body: callToolBody("list_workflows"),
     })
 
-    expect(missingProduct.status).toBe(200)
-    const missingBody = await readMcpJson(missingProduct)
+    expect(missingWorkspace.status).toBe(200)
+    const missingBody = await readMcpJson(missingWorkspace)
     expect(missingBody.result.isError).toBe(true)
     expect(JSON.parse(missingBody.result.content[0].text)).toMatchObject({
       code: "BAD_REQUEST",
     })
 
-    const explicitProduct = await fetch(url, {
+    const explicitWorkspace = await fetch(url, {
       method: "POST",
       headers: {
         Accept: "application/json, text/event-stream",
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: callToolBody("list_workflows", { productId: secondProductId }),
+      body: callToolBody("list_workflows", { workspaceId: secondWorkspaceId }),
     })
 
-    expect(explicitProduct.status).toBe(200)
-    const body = await readMcpJson(explicitProduct)
+    expect(explicitWorkspace.status).toBe(200)
+    const body = await readMcpJson(explicitWorkspace)
     const content = JSON.parse(body.result.content[0].text)
     expect(content.data.workflows).toMatchObject([
-      { name: "Second Product Workflow" },
+      { name: "Second Workspace Workflow" },
     ])
   })
 
@@ -757,7 +757,7 @@ describe("HTTP transport", () => {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
           user_id: "00000000-0000-4000-8000-000000000202",
-          workspace_id: productId,
+          workspace_id: workspaceId,
           scope: "  ",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
@@ -810,7 +810,7 @@ describe("HTTP transport", () => {
           id: "00000000-0000-4000-8000-000000000201",
           client_id: "ssmcp_client_test",
           user_id: "00000000-0000-4000-8000-000000000202",
-          workspace_id: productId,
+          workspace_id: workspaceId,
           scope: "mcp:read",
           resource: "https://other.example.com/mcp",
           access_token_sha256: sha256Hex(token),
@@ -912,7 +912,7 @@ describe("HTTP transport", () => {
         SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY: "service-role",
         SIGNALSURF_MCP_TRANSPORT: "http",
         SIGNALSURF_MCP_AUTH_DISABLED: "true",
-        SIGNALSURF_MCP_PRODUCT_ID: productId,
+        SIGNALSURF_MCP_WORKSPACE_ID: workspaceId,
       })
     ).toThrow(
       "SIGNALSURF_MCP_AUTH_DISABLED is only allowed for stdio transport"

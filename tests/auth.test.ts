@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest"
 import {
   assertCanUseCapability,
   assertCanWrite,
-  authorizedProducts,
+  authorizedWorkspaces,
   listContextCapabilities,
-  resolveProductContext,
+  resolveWorkspaceContext,
   resolveStdioContext,
   resolveTokenContext,
   sha256Hex,
@@ -14,7 +14,7 @@ import { loadConfig, type AppConfig } from "../src/config.js"
 import { UserFacingError } from "../src/errors.js"
 
 describe("auth", () => {
-  it("resolves hashed bearer tokens to a product context", () => {
+  it("resolves hashed bearer tokens to a workspace context", () => {
     const context = resolveTokenContext(
       {
         authDisabled: false,
@@ -23,7 +23,7 @@ describe("auth", () => {
           {
             name: "agent",
             tokenSha256: sha256Hex("secret-token"),
-            productId: "00000000-0000-4000-8000-000000000001",
+            workspaceId: "00000000-0000-4000-8000-000000000001",
             userId: "00000000-0000-4000-8000-000000000002",
             role: "editor",
           },
@@ -33,14 +33,14 @@ describe("auth", () => {
     )
 
     expect(context).toEqual({
-      productId: "00000000-0000-4000-8000-000000000001",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       userId: "00000000-0000-4000-8000-000000000002",
       role: "editor",
       tokenName: "agent",
     })
   })
 
-  it("resolves a multi-product token, using the first id as the primary product", () => {
+  it("resolves a multi-workspace token, using the first id as the primary workspace", () => {
     const context = resolveTokenContext(
       {
         authDisabled: false,
@@ -49,7 +49,7 @@ describe("auth", () => {
           {
             name: "multi-agent",
             tokenSha256: sha256Hex("secret-token"),
-            productIds: [
+            workspaceIds: [
               "00000000-0000-4000-8000-000000000001",
               "00000000-0000-4000-8000-000000000003",
             ],
@@ -62,8 +62,8 @@ describe("auth", () => {
     )
 
     expect(context).toEqual({
-      productId: "00000000-0000-4000-8000-000000000001",
-      productIds: [
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+      workspaceIds: [
         "00000000-0000-4000-8000-000000000001",
         "00000000-0000-4000-8000-000000000003",
       ],
@@ -73,7 +73,7 @@ describe("auth", () => {
     })
   })
 
-  it("includes the legacy productId in productIds for a mixed token config", () => {
+  it("includes the legacy workspaceId in workspaceIds for a mixed token config", () => {
     const context = resolveTokenContext(
       {
         authDisabled: false,
@@ -82,8 +82,8 @@ describe("auth", () => {
           {
             name: "mixed-agent",
             tokenSha256: sha256Hex("secret-token"),
-            productId: "00000000-0000-4000-8000-000000000001",
-            productIds: ["00000000-0000-4000-8000-000000000003"],
+            workspaceId: "00000000-0000-4000-8000-000000000001",
+            workspaceIds: ["00000000-0000-4000-8000-000000000003"],
             userId: "00000000-0000-4000-8000-000000000002",
             role: "editor",
           },
@@ -93,8 +93,8 @@ describe("auth", () => {
     )
 
     expect(context).toEqual({
-      productId: "00000000-0000-4000-8000-000000000001",
-      productIds: [
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+      workspaceIds: [
         "00000000-0000-4000-8000-000000000001",
         "00000000-0000-4000-8000-000000000003",
       ],
@@ -113,7 +113,7 @@ describe("auth", () => {
           tokenEntries: [
             {
               tokenSha256: sha256Hex("secret-token"),
-              productId: "00000000-0000-4000-8000-000000000001",
+              workspaceId: "00000000-0000-4000-8000-000000000001",
               role: "viewer",
             },
           ],
@@ -126,7 +126,7 @@ describe("auth", () => {
   it("prevents viewer tokens from writing", () => {
     expect(() =>
       assertCanWrite({
-        productId: "00000000-0000-4000-8000-000000000001",
+        workspaceId: "00000000-0000-4000-8000-000000000001",
         role: "viewer",
       })
     ).toThrow("write access")
@@ -134,7 +134,7 @@ describe("auth", () => {
 
   it("prevents scoped tokens from using ungranted capabilities", () => {
     const context = {
-      productId: "00000000-0000-4000-8000-000000000001",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       role: "editor" as const,
       scopes: ["mcp:tables.read", "mcp:tables.write"],
     }
@@ -170,7 +170,7 @@ describe("auth", () => {
 
   it("keeps Deepline read, enrichment, and generic execution scopes separate", () => {
     const readContext = {
-      productId: "00000000-0000-4000-8000-000000000001",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       role: "editor" as const,
       scopes: ["mcp:deepline.read"],
     }
@@ -214,7 +214,7 @@ describe("auth", () => {
 
   it("keeps creator discovery provider-neutral and read-only", () => {
     const context = {
-      productId: "00000000-0000-4000-8000-000000000001",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       role: "viewer" as const,
       scopes: ["mcp:creator_discovery.read"],
     }
@@ -232,7 +232,7 @@ describe("auth", () => {
 
   it("keeps sender infrastructure in its own read-only scope", () => {
     const context = {
-      productId: "00000000-0000-4000-8000-000000000001",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       role: "viewer" as const,
       scopes: ["mcp:sender_infrastructure.read"],
     }
@@ -251,7 +251,7 @@ describe("auth", () => {
 
   it("accepts the legacy Deepline write alias without advertising it as the new scope hint", () => {
     const legacyContext = {
-      productId: "00000000-0000-4000-8000-000000000001",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       role: "editor" as const,
       scopes: ["mcp:deepline.write"],
     }
@@ -265,7 +265,7 @@ describe("auth", () => {
 
   it("treats explicit empty scopes as no capability grant", () => {
     const context = {
-      productId: "00000000-0000-4000-8000-000000000001",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       role: "editor" as const,
       scopes: [],
     }
@@ -279,7 +279,7 @@ describe("auth", () => {
   it("keeps unscoped editor tokens broad for manual-token compatibility", () => {
     expect(
       listContextCapabilities({
-        productId: "00000000-0000-4000-8000-000000000001",
+        workspaceId: "00000000-0000-4000-8000-000000000001",
         role: "editor",
       })
     ).toEqual([
@@ -309,48 +309,48 @@ describe("auth", () => {
   it("advertises sender infrastructure to unscoped viewer tokens", () => {
     expect(
       listContextCapabilities({
-        productId: "00000000-0000-4000-8000-000000000001",
+        workspaceId: "00000000-0000-4000-8000-000000000001",
         role: "viewer",
       })
     ).toContain("sender_infrastructure.read")
   })
 
-  it("requires explicit productId for multi-product contexts", () => {
+  it("requires explicit workspaceId for multi-workspace contexts", () => {
     const context = {
-      productId: "00000000-0000-4000-8000-000000000001",
-      productIds: [
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+      workspaceIds: [
         "00000000-0000-4000-8000-000000000001",
         "00000000-0000-4000-8000-000000000002",
       ],
       role: "editor" as const,
     }
 
-    expect(() => resolveProductContext(context)).toThrow(
-      "productId is required"
+    expect(() => resolveWorkspaceContext(context)).toThrow(
+      "workspaceId is required"
     )
     expect(
-      resolveProductContext(context, "00000000-0000-4000-8000-000000000002")
+      resolveWorkspaceContext(context, "00000000-0000-4000-8000-000000000002")
     ).toMatchObject({
-      productId: "00000000-0000-4000-8000-000000000002",
-      productIds: context.productIds,
+      workspaceId: "00000000-0000-4000-8000-000000000002",
+      workspaceIds: context.workspaceIds,
     })
     expect(() =>
-      resolveProductContext(context, "00000000-0000-4000-8000-000000000099")
+      resolveWorkspaceContext(context, "00000000-0000-4000-8000-000000000099")
     ).toThrow("not authorized")
   })
 
-  it("returns ordered authorized product metadata with id fallbacks", () => {
+  it("returns ordered authorized workspace metadata with id fallbacks", () => {
     expect(
-      authorizedProducts({
-        productId: "00000000-0000-4000-8000-000000000001",
-        productIds: [
+      authorizedWorkspaces({
+        workspaceId: "00000000-0000-4000-8000-000000000001",
+        workspaceIds: [
           "00000000-0000-4000-8000-000000000001",
           "00000000-0000-4000-8000-000000000002",
         ],
-        products: [
+        workspaces: [
           {
-            productId: "00000000-0000-4000-8000-000000000002",
-            name: "Second Product",
+            workspaceId: "00000000-0000-4000-8000-000000000002",
+            name: "Second Workspace",
             organizationName: "Demo Workspace",
           },
         ],
@@ -358,14 +358,14 @@ describe("auth", () => {
       })
     ).toEqual([
       {
-        productId: "00000000-0000-4000-8000-000000000001",
+        workspaceId: "00000000-0000-4000-8000-000000000001",
         name: "00000000-0000-4000-8000-000000000001",
         organizationId: null,
         organizationName: null,
       },
       {
-        productId: "00000000-0000-4000-8000-000000000002",
-        name: "Second Product",
+        workspaceId: "00000000-0000-4000-8000-000000000002",
+        name: "Second Workspace",
         organizationId: null,
         organizationName: "Demo Workspace",
       },
@@ -387,21 +387,21 @@ describe("auth", () => {
       authDisabled: false,
       stdioToken: "token-context",
       directContext: {
-        productId: "00000000-0000-4000-8000-000000000099",
+        workspaceId: "00000000-0000-4000-8000-000000000099",
         role: "owner",
       },
       tokenEntries: [
         {
           name: "stdio-token",
           tokenSha256: sha256Hex("token-context"),
-          productId: "00000000-0000-4000-8000-000000000001",
+          workspaceId: "00000000-0000-4000-8000-000000000001",
           role: "viewer",
         },
       ],
     }
 
     expect(resolveStdioContext(config)).toMatchObject({
-      productId: "00000000-0000-4000-8000-000000000001",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       role: "viewer",
       tokenName: "stdio-token",
     })
@@ -421,7 +421,7 @@ describe("auth", () => {
       allowedHosts: ["127.0.0.1"],
       authDisabled: false,
       directContext: {
-        productId: "00000000-0000-4000-8000-000000000001",
+        workspaceId: "00000000-0000-4000-8000-000000000001",
         role: "editor",
       },
       tokenEntries: [],
@@ -430,7 +430,7 @@ describe("auth", () => {
     expect(resolveStdioContext(config)).toEqual(config.directContext)
   })
 
-  it("rejects auth-disabled mode without direct product context", () => {
+  it("rejects auth-disabled mode without direct workspace context", () => {
     const config: AppConfig = {
       supabaseUrl: "https://example.supabase.co",
       supabaseServiceRoleKey: "service-role",
@@ -447,7 +447,7 @@ describe("auth", () => {
     }
 
     expect(() => resolveStdioContext(config)).toThrow(
-      "SIGNALSURF_MCP_AUTH_DISABLED requires SIGNALSURF_MCP_PRODUCT_ID"
+      "SIGNALSURF_MCP_AUTH_DISABLED requires SIGNALSURF_MCP_WORKSPACE_ID"
     )
   })
 
@@ -459,7 +459,7 @@ describe("auth", () => {
         SIGNALSURF_MCP_TOKENS: JSON.stringify([
           {
             tokenSha256: sha256Hex("token-context"),
-            productId: "00000000-0000-4000-8000-000000000001",
+            workspaceId: "00000000-0000-4000-8000-000000000001",
             role: "editor",
             scopes: [],
           },

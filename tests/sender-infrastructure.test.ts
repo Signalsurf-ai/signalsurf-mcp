@@ -8,10 +8,10 @@ import {
 import { searchSenderDomainsSchema } from "../src/schemas.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
-const PRODUCT_ID = "00000000-0000-4000-8000-000000000001"
-const OTHER_PRODUCT_ID = "00000000-0000-4000-8000-000000000002"
+const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001"
+const OTHER_WORKSPACE_ID = "00000000-0000-4000-8000-000000000002"
 const context = {
-  productId: PRODUCT_ID,
+  workspaceId: WORKSPACE_ID,
   userId: "user-1",
   role: "viewer" as const,
 }
@@ -21,7 +21,7 @@ function seed() {
     managed_email_domains: [
       {
         id: "10000000-0000-4000-8000-000000000001",
-        workspace_id: PRODUCT_ID,
+        workspace_id: WORKSPACE_ID,
         domain_name: "goacme.com",
         provider: "internal-domain-provider",
         desired_state: "active",
@@ -30,7 +30,7 @@ function seed() {
       },
       {
         id: "10000000-0000-4000-8000-000000000002",
-        workspace_id: OTHER_PRODUCT_ID,
+        workspace_id: OTHER_WORKSPACE_ID,
         domain_name: "other-secret.com",
         desired_state: "active",
       },
@@ -38,7 +38,7 @@ function seed() {
     managed_email_mailboxes: [
       {
         id: "20000000-0000-4000-8000-000000000001",
-        workspace_id: PRODUCT_ID,
+        workspace_id: WORKSPACE_ID,
         domain_id: "10000000-0000-4000-8000-000000000001",
         email_address: "hello@goacme.com",
         provider: "internal-mailbox-provider",
@@ -50,35 +50,35 @@ function seed() {
       },
       {
         id: "20000000-0000-4000-8000-000000000002",
-        workspace_id: OTHER_PRODUCT_ID,
+        workspace_id: OTHER_WORKSPACE_ID,
         email_address: "hidden@other-secret.com",
         desired_state: "active",
       },
     ],
     email_sender_warmup_profiles: [
       {
-        workspace_id: PRODUCT_ID,
+        workspace_id: WORKSPACE_ID,
         unipile_account_id: "account-email",
         heat_score: 82,
         placement_primary_percent: 91,
       },
     ],
-    product_unipile_accounts: [
+    workspace_unipile_accounts: [
       {
-        workspace_id: PRODUCT_ID,
+        workspace_id: WORKSPACE_ID,
         unipile_account_id: "account-email",
         provider: "GMAIL",
       },
       {
-        workspace_id: PRODUCT_ID,
+        workspace_id: WORKSPACE_ID,
         unipile_account_id: "account-linkedin",
         provider: "LINKEDIN",
       },
     ],
-    product_tools: [
+    workspace_tools: [
       {
         id: "30000000-0000-4000-8000-000000000001",
-        workspace_id: PRODUCT_ID,
+        workspace_id: WORKSPACE_ID,
         user_id: "user-1",
         tool_type: "unipile",
         updated_at: "2026-08-01T00:00:00Z",
@@ -89,7 +89,7 @@ function seed() {
         },
       },
     ],
-    products: [{ id: PRODUCT_ID, organization_id: "org-1" }],
+    workspaces: [{ id: WORKSPACE_ID, organization_id: "org-1" }],
     subscriptions: [
       {
         organization_id: "org-1",
@@ -117,7 +117,7 @@ afterEach(() => {
 
 function controlPlane(fetchImpl: typeof fetch = vi.fn()) {
   return {
-    workspaceId: PRODUCT_ID,
+    workspaceId: WORKSPACE_ID,
     authorizationServerUrl: "https://app.signalsurf.ai",
     accessToken: "ssmcp_at_test",
     fetchImpl,
@@ -142,7 +142,7 @@ describe("hosted sender infrastructure", () => {
     ).toBe(false)
   })
 
-  it("keeps inventory product-scoped and strips credentials and signature text", async () => {
+  it("keeps inventory workspace-scoped and strips credentials and signature text", async () => {
     const result = await inspectSenderInfrastructure(
       new FakeSupabase(seed()) as never,
       context
@@ -166,10 +166,10 @@ describe("hosted sender infrastructure", () => {
 
   it("merges shared sender settings deterministically while the current user wins", async () => {
     const data = seed()
-    data.product_tools = [
+    data.workspace_tools = [
       {
         id: "tool-newer-shared",
-        workspace_id: PRODUCT_ID,
+        workspace_id: WORKSPACE_ID,
         user_id: "user-3",
         tool_type: "unipile",
         updated_at: "2026-08-03T00:00:00Z",
@@ -177,7 +177,7 @@ describe("hosted sender infrastructure", () => {
       },
       {
         id: "tool-older-shared",
-        workspace_id: PRODUCT_ID,
+        workspace_id: WORKSPACE_ID,
         user_id: "user-2",
         tool_type: "unipile",
         updated_at: "2026-08-02T00:00:00Z",
@@ -185,7 +185,7 @@ describe("hosted sender infrastructure", () => {
       },
       {
         id: "tool-own",
-        workspace_id: PRODUCT_ID,
+        workspace_id: WORKSPACE_ID,
         user_id: "user-1",
         tool_type: "unipile",
         updated_at: "2026-08-01T00:00:00Z",
@@ -205,13 +205,13 @@ describe("hosted sender infrastructure", () => {
 
   it("classifies every Campaign-compatible email provider as email", async () => {
     const data = seed()
-    data.product_unipile_accounts = [
+    data.workspace_unipile_accounts = [
       "EXCHANGE",
       "ICLOUD",
       "IMAP",
       "SMTP",
     ].map((provider, index) => ({
-      workspace_id: PRODUCT_ID,
+      workspace_id: WORKSPACE_ID,
       unipile_account_id: `account-${index}`,
       provider,
     }))
@@ -249,7 +249,7 @@ describe("hosted sender infrastructure", () => {
     const data = seed()
     data.managed_sender_entitlements = [
       {
-        workspace_id: PRODUCT_ID,
+        workspace_id: WORKSPACE_ID,
         kind: "sender_seat",
         quantity: 2,
         status: "active",
@@ -257,7 +257,7 @@ describe("hosted sender infrastructure", () => {
         expires_at: "2999-01-01T00:00:00Z",
       },
       {
-        workspace_id: PRODUCT_ID,
+        workspace_id: WORKSPACE_ID,
         kind: "sender_seat",
         quantity: 50,
         status: "active",
@@ -265,7 +265,7 @@ describe("hosted sender infrastructure", () => {
         expires_at: null,
       },
       {
-        workspace_id: PRODUCT_ID,
+        workspace_id: WORKSPACE_ID,
         kind: "sender_seat",
         quantity: 100,
         status: "active",
@@ -393,7 +393,7 @@ describe("hosted sender infrastructure", () => {
           Authorization: "Bearer ssmcp_at_test",
         }),
         body: JSON.stringify({
-          workspaceId: PRODUCT_ID,
+          workspaceId: WORKSPACE_ID,
           domains: ["goacme.com"],
           count: 5,
           exclude: [],

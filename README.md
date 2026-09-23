@@ -1,12 +1,12 @@
 # SignalSurf MCP
 
 Standalone MCP server for controlled agent access to SignalSurf Workflows and
-product tables.
+workspace tables.
 
-This server is intentionally narrow. It gives external agents the core product
+This server is intentionally narrow. It gives external agents the core workspace
 operations they need without exposing arbitrary SQL or raw service-role access.
-Every product operation is bound to a SignalSurf product. OAuth tokens can grant
-one or more products, while manual fallback tokens remain single-product scoped.
+Every workspace operation is bound to a SignalSurf workspace. OAuth tokens can grant
+one or more workspaces, while manual fallback tokens remain single-workspace scoped.
 See `docs/architecture.md` for the request lifecycle and safety model, and
 `docs/capabilities.md` for the public tool/scope contract.
 
@@ -18,12 +18,12 @@ not need this repository, a Supabase key, or a local server.
 1. Add SignalSurf as a remote MCP server in your MCP client:
    `https://mcp.signalsurf.ai/mcp`.
 2. The client opens SignalSurf's OAuth authorization page.
-3. Sign in, choose the SignalSurf product or products this client may access,
+3. Sign in, choose the SignalSurf workspace or workspaces this client may access,
    review requested scopes, and approve.
 4. The MCP client receives OAuth tokens through its callback and can use
-   SignalSurf tools. If you approve multiple products, the agent should call
-   `get_context` first, choose from the returned `products[].name` list, and
-   pass that product's `productId` to product-scoped tool calls.
+   SignalSurf tools. If you approve multiple workspaces, the agent should call
+   `get_context` first, choose from the returned `workspaces[].name` list, and
+   pass that workspace's `workspaceId` to workspace-scoped tool calls.
 
 The hosted MCP connects only to existing Workspaces. It supports Workspace-scoped
 Workflow CRUD, table create/update, table schema edits, Workflow execution, signal
@@ -44,7 +44,7 @@ Example:
 }
 ```
 
-Manual tokens remain available in SignalSurf Web under **Settings -> Product**,
+Manual tokens remain available in SignalSurf Web under **Settings -> Workspace**,
 then the **MCP** section. Use them only as an advanced fallback for clients that
 do not yet support remote MCP OAuth.
 
@@ -145,7 +145,7 @@ You only need these SignalSurf values:
 
 - Supabase URL
 - Supabase service-role key
-- SignalSurf `productId`
+- SignalSurf `workspaceId`
 
 1. Install and create `.env`:
 
@@ -165,7 +165,7 @@ SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 SIGNALSURF_MCP_TRANSPORT=stdio
 SIGNALSURF_MCP_AUTH_MODE=env
 SIGNALSURF_MCP_TOKEN=local-dev-token
-SIGNALSURF_MCP_TOKENS='[{"name":"local-agent","token":"local-dev-token","productId":"signal-surf-product-uuid","role":"editor"}]'
+SIGNALSURF_MCP_TOKENS='[{"name":"local-agent","token":"local-dev-token","workspaceId":"signal-surf-workspace-uuid","role":"editor"}]'
 ```
 
 For shared or hosted use, replace `"token"` with `"tokenSha256"` later. The
@@ -195,7 +195,7 @@ corepack pnpm@10.0.0 build
 ```
 
 The server automatically loads `.env` from the repo root. After the client
-connects, call `get_context` first and confirm the returned `productId`.
+connects, call `get_context` first and confirm the returned `workspaceId`.
 
 For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 `SIGNALSURF_MCP_TOKEN` from the server env, set
@@ -211,16 +211,16 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - `list_table_fields`, `add_table_field`, `update_table_field`, `remove_table_field`, `create_relation_field`
 - `list_signals`, `create_signal`, `update_signal`, `delete_signal`
 - `enable_enrich`, `disable_enrich`, `list_enrich`, `run_enrich`
-- `list_product_tools`, `list_workflow_tools` (attach/detach tools via `update_workflow` `toolConfigPatch.auto_tool_ids`)
+- `list_workspace_tools`, `list_workflow_tools` (attach/detach tools via `update_workflow` `toolConfigPatch.auto_tool_ids`)
 - `search_instagram_content`
 - `deepline_search_people`, `deepline_search_companies`, `deepline_enrich_contact`, `deepline_search_catalog`, `deepline_execute_tool`
-- Resources for context; single-product tokens also expose Workflow, database,
+- Resources for context; single-workspace tokens also expose Workflow, database,
   surf job, and database-row resources
 
-All product-scoped tools execute against one `productId`. A single-product token
-can omit `productId`; a multi-product OAuth token must pass `productId` to every
-product-scoped tool call. The server uses Supabase service-role credentials
-internally, so every operation explicitly validates product ownership before
+All workspace-scoped tools execute against one `workspaceId`. A single-workspace token
+can omit `workspaceId`; a multi-workspace OAuth token must pass `workspaceId` to every
+workspace-scoped tool call. The server uses Supabase service-role credentials
+internally, so every operation explicitly validates workspace ownership before
 touching rows. Workflow deletion is a soft delete (`deleted_at`), matching the
 web app behavior.
 
@@ -261,7 +261,7 @@ a resource requirement, and it grants no tool capability by itself.
 
 ## Surfer Session Mode
 
-Besides the product-operation tool mode documented below, a grant approved in
+Besides the workspace-operation tool mode documented below, a grant approved in
 Direct Message mode (`mcp:dm`, or a manual token with `mode = surfer_session`)
 gives the client the capability set the member's own Surfer Direct Message has,
 acting as that member in each granted workspace. SignalSurf publishes that
@@ -274,10 +274,10 @@ unchanged by this surface.
 ```text
 MCP client
   -> stdio or Streamable HTTP transport
-  -> token auth resolves { productId, productIds, products, userId, role, scopes }
+  -> token auth resolves { workspaceId, workspaceIds, workspaces, userId, role, scopes }
   -> MCP tool/resource handlers
   -> SignalSurf repository
-  -> Supabase service-role client with explicit product-scope checks
+  -> Supabase service-role client with explicit workspace-scope checks
 ```
 
 Key files:
@@ -288,38 +288,38 @@ Key files:
 - `src/auth.ts`: token hashing, bearer parsing, and role checks
 - `src/capabilities.ts`: public scope, capability, and tool contract
 - `docs/public-tool-contract.json`: shared schema fingerprints and semantic fixtures
-- `src/repository.ts`: SignalSurf product-scope and mutation logic
+- `src/repository.ts`: SignalSurf workspace-scope and mutation logic
 - `src/server.ts`: MCP tools and resources
 - `src/schemas.ts`: Zod input schemas exposed to MCP clients
 
 The HTTP transport is stateless. Each POST resolves auth, creates a fresh MCP
 server instance, handles one JSON-RPC request, and closes. This avoids shared
-in-memory session state and makes bearer-token product scoping straightforward.
+in-memory session state and makes bearer-token workspace scoping straightforward.
 
 ## Tool Semantics
 
 Context:
 
-- `get_context`: returns authorized products with human-readable names,
+- `get_context`: returns authorized workspaces with human-readable names,
   optional workspace names, ids, optional user, role, token name, and
   scope/capability context for the current connection. Agents should call this
-  before writes. If `productIds` contains more than one id, choose the intended
-  product from `products[]` and pass its `productId` to every product-scoped
+  before writes. If `workspaceIds` contains more than one id, choose the intended
+  workspace from `workspaces[]` and pass its `workspaceId` to every workspace-scoped
   tool call.
-- `get_brand_context`: returns the active product's brand and positioning
-  context from product goals (brand name, brand description, product
+- `get_brand_context`: returns the active workspace's brand and positioning
+  context from workspace memory (brand name, brand description, product
   description, product categories, selling points, target audience, competitors,
-  and official website). Fields are empty until the product completes brand
-  setup. Pass `productId` when this connection can access multiple products.
+  and official website). Fields are empty until the workspace completes brand
+  setup. Pass `workspaceId` when this connection can access multiple workspaces.
 
 Workflows:
 
 - `list_workflows`: returns non-deleted Workflows. Use
   `includeInactive=false` to hide paused Workflows.
-- `get_workflow`: reads one Workflow after product-scope validation.
+- `get_workflow`: reads one Workflow after workspace-scope validation.
 - `create_workflow`: creates a Workflow. Pass `projectId` to place it in an
-  existing Project. If the product has exactly one user-facing database, that
-  database is used by default. If the product has multiple databases, pass
+  existing Project. If the workspace has exactly one user-facing database, that
+  database is used by default. If the workspace has multiple databases, pass
   `databaseIds`. Pass `databaseIds: []` only for an intentional action-only
   Workflow.
 - `update_workflow`: updates metadata, Project placement, prompt fields, target
@@ -330,7 +330,7 @@ Workflows:
   SignalSurf Web's Surf Now worker contract. Existing pending/processing jobs
   are deduplicated by source by default. Pass `idempotencyKey` when an agent may
   retry the same intended run.
-- `get_surf_job` / `list_surf_jobs`: reads async execution status after product
+- `get_surf_job` / `list_surf_jobs`: reads async execution status after workspace
   scope validation.
 - `wait_for_surf_job`: polls one surf job until it leaves an active status
   (`pending`, `queued`, `running`, `processing`, or `in_progress`) or until the
@@ -341,9 +341,9 @@ Workflows:
 
 Tables:
 
-- `list_tables`: lists tables for the selected product. System tables
+- `list_tables`: lists tables for the selected workspace. System tables
   are hidden unless `includeSystem=true`.
-- `create_table`: creates a product table with optional custom schema, saved
+- `create_table`: creates a workspace table with optional custom schema, saved
   view config, item type, display order, and existing table folder placement.
   Pass `template="outbound_accounts"` or `template="contacts"` to start from
   the canonical outbound account or contact baseline. Extra schema fields are
@@ -357,7 +357,7 @@ Tables:
   item type, display order, or folder placement. Applying the Accounts template
   to an existing table preserves additive legacy/custom fields; known legacy
   fields remain hidden, and legacy Tier is made non-automatable.
-- `delete_table`: hard-deletes one or more user-facing tables after product
+- `delete_table`: hard-deletes one or more user-facing tables after workspace
   scope validation, then removes those table ids from active Workflows'
   `databaseIds`. System tables cannot be deleted through MCP.
 - `read_table`: reads rows with pagination and optional JSON containment filter.
@@ -369,7 +369,7 @@ Tables:
 - `list_table_views` / `read_table_view`: lists saved views from table
   `viewConfigs` and reads rows using compatible saved-view filters/sorts.
 - `get_table_row`: reads one row after verifying its database belongs to the
-  token product.
+  token workspace.
 - `create_table_row`: inserts a row. If `workflowId` is supplied, that Workflow
   must target the row's database. The server stamps `origin="mcp"` and
   `origin_ref` from the token name; callers cannot forge provenance, triggered
@@ -377,8 +377,8 @@ Tables:
 - `update_table_rows`: updates one or more rows through changelog-preserving
   RPCs; pass an `edits` array even for a single row. `item_ref` fields are
   validated against the database schema and must point to rows in the same
-  product.
-- `delete_table_rows`: hard-deletes table rows after every row is product-scoped.
+  workspace.
+- `delete_table_rows`: hard-deletes table rows after every row is workspace-scoped.
 
 Schema:
 
@@ -386,11 +386,11 @@ Schema:
   table.
 - `create_table` / `update_table`: accept a complete `schema` object or
   `schemaPatch`; `item_ref` fields and relation targets must point at tables
-  in the same authorized product.
+  in the same authorized workspace.
 - `add_table_field` / `update_table_field` / `remove_table_field`:
   mutate table schema only. They do not backfill or delete row data.
 - `create_relation_field`: adds an `item_ref` field after verifying the target
-  table belongs to the same authorized product.
+  table belongs to the same authorized workspace.
 
 Sources and Workflow tools:
 
@@ -406,13 +406,13 @@ Sources and Workflow tools:
   `producthunt`, `item-created`, `item-updated`, `manual-trigger`, and
   `on-schedule`. Creating a `webhook` signal also returns top-level
   `webhookUrl`, matching the URL shown in SignalSurf Web. Platform signals also
-  write `keywords` and `trackedAccounts` into the product search-config tables.
+  write `keywords` and `trackedAccounts` into the workspace search-config tables.
 - `update_signal`: updates signal name, active state, typed signal
   config, `pull_config`, `metadata`, or `data_schema`. Set the active state here
   to enable or pause a signal after verifying its Workflow belongs to the
-  authorized product. Secret-bearing config such as headers, bodies, and auth
+  authorized workspace. Secret-bearing config such as headers, bodies, and auth
   may be written but is not returned by list responses.
-- `delete_signal`: deletes one or more signals after product-scope
+- `delete_signal`: deletes one or more signals after workspace-scope
   validation and removes non-terminal jobs for those source ids.
 - Internal trigger `sourceType` values (`item-created`, `item-updated`,
   `manual-trigger`, `on-schedule`) are exclusive. A Workflow can have one
@@ -434,8 +434,8 @@ Sources and Workflow tools:
   poll the returned jobs with `list_surf_jobs` / `wait_for_surf_job`. Credits
   are charged by the brain as each job runs. Enable needs `mcp:sources.write`,
   list needs `mcp:sources.read`, and run needs `mcp:workflows.execute`.
-- `list_product_tools`: returns safe product tool metadata from
-  `product_tools`; config secrets are not exposed.
+- `list_workspace_tools`: returns safe workspace tool metadata from
+  `workspace_tools`; config secrets are not exposed.
 - `list_workflow_tools`: lists the tool ids in `tool_config.auto_tool_ids`
   for a Workflow. To attach or detach a tool, set
   `toolConfigPatch.auto_tool_ids` via `update_workflow` (shallow-merged).
@@ -454,19 +454,19 @@ tokens without `scopes` keep the legacy role-only behavior.
 Resources:
 
 - `signalsurf://context`
-- `signalsurf://workflows` for single-product tokens
-- `signalsurf://workflows/{workflowId}` for single-product tokens
-- `signalsurf://workflows/{workflowId}/sources` for single-product tokens
-- `signalsurf://workflows/{workflowId}/tools` for single-product tokens
-- `signalsurf://product-tools` for single-product tokens
-- `signalsurf://surf-jobs` for single-product tokens
-- `signalsurf://surf-jobs/{jobId}` for single-product tokens
-- `signalsurf://databases` for single-product tokens
-- `signalsurf://databases/{databaseId}/rows` for single-product tokens
+- `signalsurf://workflows` for single-workspace tokens
+- `signalsurf://workflows/{workflowId}` for single-workspace tokens
+- `signalsurf://workflows/{workflowId}/sources` for single-workspace tokens
+- `signalsurf://workflows/{workflowId}/tools` for single-workspace tokens
+- `signalsurf://workspace-tools` for single-workspace tokens
+- `signalsurf://surf-jobs` for single-workspace tokens
+- `signalsurf://surf-jobs/{jobId}` for single-workspace tokens
+- `signalsurf://databases` for single-workspace tokens
+- `signalsurf://databases/{databaseId}/rows` for single-workspace tokens
 
-For multi-product OAuth tokens, only `signalsurf://context` is listed. Read its
-`products[]` list to see product names and workspace names, then use tools with
-an explicit `productId` to read or modify product data.
+For multi-workspace OAuth tokens, only `signalsurf://context` is listed. Read its
+`workspaces[]` list to see workspace names and organization names, then use tools with
+an explicit `workspaceId` to read or modify workspace data.
 
 Schema limits:
 
@@ -497,7 +497,7 @@ Required env:
   `X-Forwarded-For`
 
 Do not expose this service directly to the public internet without a trusted
-network boundary. MCP tokens limit product scope, but the process still holds a
+network boundary. MCP tokens limit workspace scope, but the process still holds a
 Supabase service-role key.
 
 ## Static Token Config
@@ -518,7 +518,7 @@ Then configure:
   {
     "name": "claude-code",
     "tokenSha256": "sha256-hex",
-    "productId": "product-uuid",
+    "workspaceId": "workspace-uuid",
     "userId": "user-uuid",
     "role": "editor",
     "scopes": ["mcp:tables.read", "mcp:tables.write"]
@@ -529,9 +529,9 @@ Then configure:
 Plaintext `token` entries are supported for local development, but
 `tokenSha256` is preferred for shared environments.
 
-Each static token binds one MCP caller to one `productId`. OAuth tokens from
-SignalSurf Web may grant multiple `productIds`; static env tokens intentionally
-remain single-product for local and internal fallback use. `userId` is optional,
+Each static token binds one MCP caller to one `workspaceId`. OAuth tokens from
+SignalSurf Web may grant multiple `workspaceIds`; static env tokens intentionally
+remain single-workspace for local and internal fallback use. `userId` is optional,
 but include it when you want Workflow deletion to repair that user's
 `current_workflow_id`. `tokenName` appears in `get_context` and is used as the
 row-update source reference.
@@ -570,7 +570,7 @@ Claude Code example:
         "SIGNALSURF_MCP_AUTH_MODE": "env",
         "SIGNALSURF_SUPABASE_URL": "https://your-project-ref.supabase.co",
         "SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY": "service-role-key",
-        "SIGNALSURF_MCP_TOKENS": "[{\"tokenSha256\":\"sha256-hex\",\"productId\":\"product-uuid\",\"userId\":\"user-uuid\",\"role\":\"editor\"}]",
+        "SIGNALSURF_MCP_TOKENS": "[{\"tokenSha256\":\"sha256-hex\",\"workspaceId\":\"workspace-uuid\",\"userId\":\"user-uuid\",\"role\":\"editor\"}]",
         "SIGNALSURF_MCP_TOKEN": "ssmcp_live_xxx"
       }
     }
@@ -583,7 +583,7 @@ context:
 
 ```bash
 SIGNALSURF_MCP_AUTH_DISABLED=true \
-SIGNALSURF_MCP_PRODUCT_ID=00000000-0000-0000-0000-000000000000 \
+SIGNALSURF_MCP_WORKSPACE_ID=00000000-0000-0000-0000-000000000000 \
 SIGNALSURF_MCP_USER_ID=00000000-0000-0000-0000-000000000000 \
 SIGNALSURF_MCP_ROLE=editor \
 pnpm start
@@ -591,7 +591,7 @@ pnpm start
 
 `SIGNALSURF_MCP_AUTH_DISABLED=true` is rejected in HTTP mode. It bypasses token
 auth for the process and is only for trusted local stdio sessions with an
-explicit `SIGNALSURF_MCP_PRODUCT_ID`.
+explicit `SIGNALSURF_MCP_WORKSPACE_ID`.
 
 ## Streamable HTTP
 
@@ -639,11 +639,11 @@ git diff --check
 ## Safety Notes
 
 - The server does not expose arbitrary SQL write tools.
-- Row writes require the target database to belong to the token's product.
+- Row writes require the target database to belong to the token's workspace.
 - Rows with no `database_id` are not accessible through MCP.
 - Workflow reads and mutations filter `deleted_at IS NULL`.
 - Workflows attached to row writes must target that row's database.
-- Row `item_ref` values must reference entries in product-owned databases.
+- Row `item_ref` values must reference entries in workspace-owned databases.
 - Row data updates call SignalSurf's `update_entry_with_source` RPC, preserving entry changelog behavior.
 - HTTP auth-disabled mode is rejected; direct context is stdio-only.
 - HTTP Host headers are allowlisted through `SIGNALSURF_MCP_ALLOWED_HOSTS`.

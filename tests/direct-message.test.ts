@@ -14,8 +14,8 @@ import { FakeSupabase } from "./fake-supabase.js"
  * assert the transport and the mode boundary, not a list restated here.
  */
 
-const productId = "00000000-0000-4000-8000-000000000001"
-const otherProductId = "00000000-0000-4000-8000-000000000002"
+const workspaceId = "00000000-0000-4000-8000-000000000001"
+const otherWorkspaceId = "00000000-0000-4000-8000-000000000002"
 const memberId = "00000000-0000-4000-8000-000000000102"
 const resource = "http://127.0.0.1:3333/mcp"
 const manualDm = "ssmcp_session_token"
@@ -65,7 +65,7 @@ function signalSurfStub() {
     if (body.action === "workspaces") {
       return jsonResponse(200, {
         ok: true,
-        workspaces: [{ workspaceId: productId, available: true }],
+        workspaces: [{ workspaceId: workspaceId, available: true }],
       })
     }
     return jsonResponse(200, { ok: true, data: { echoed: body } })
@@ -95,8 +95,8 @@ function oauthRow(id: string, value: string, scope: string) {
     id,
     client_id: "ssmcp_client_claude",
     user_id: memberId,
-    workspace_id: productId,
-    workspace_ids: [productId],
+    workspace_id: workspaceId,
+    workspace_ids: [workspaceId],
     scope,
     resource,
     access_token_sha256: sha256Hex(value),
@@ -110,15 +110,15 @@ function oauthRow(id: string, value: string, scope: string) {
 
 async function start(stub = signalSurfStub()) {
   const db = new FakeSupabase({
-    products: [{ id: productId, organization_id: null, name: "Workspace" }],
-    product_members: [
-      { workspace_id: productId, user_id: memberId, role: "member" },
+    workspaces: [{ id: workspaceId, organization_id: null, name: "Workspace" }],
+    workspace_members: [
+      { workspace_id: workspaceId, user_id: memberId, role: "member" },
     ],
     organization_members: [],
     mcp_tokens: [
       {
         id: "00000000-0000-4000-8000-000000000101",
-        workspace_id: productId,
+        workspace_id: workspaceId,
         created_by: memberId,
         name: "claude-dm",
         role: "editor",
@@ -130,7 +130,7 @@ async function start(stub = signalSurfStub()) {
       },
       {
         id: "00000000-0000-4000-8000-000000000111",
-        workspace_id: productId,
+        workspace_id: workspaceId,
         created_by: memberId,
         name: "tools",
         role: "editor",
@@ -239,7 +239,7 @@ describe("Direct Message mode over HTTP", () => {
     const text = await response.text()
     expect(text).toContain("list_workspaces")
     for (const tool of CATALOG) expect(text).toContain(tool.name)
-    // Tool mode's product operations are a different, separately approved mode.
+    // Tool mode's workspace operations are a different, separately approved mode.
     expect(text).not.toContain("get_context")
     expect(text).not.toContain("create_database")
   })
@@ -252,8 +252,8 @@ describe("Direct Message mode over HTTP", () => {
         return jsonResponse(200, {
           ok: true,
           workspaces: [
-            { workspaceId: productId, available: true },
-            { workspaceId: otherProductId, available: true },
+            { workspaceId: workspaceId, available: true },
+            { workspaceId: otherWorkspaceId, available: true },
             { workspaceId: unavailableWorkspaceId, available: false },
           ],
         })
@@ -262,7 +262,7 @@ describe("Direct Message mode over HTTP", () => {
         return jsonResponse(200, {
           ok: true,
           tools:
-            body.workspaceId === otherProductId
+            body.workspaceId === otherWorkspaceId
               ? [
                   CATALOG[0],
                   {
@@ -291,7 +291,7 @@ describe("Direct Message mode over HTTP", () => {
         .filter((body) => body.action === "catalog")
         .map((body) => body.workspaceId)
         .sort()
-    ).toEqual([otherProductId, productId].sort())
+    ).toEqual([otherWorkspaceId, workspaceId].sort())
   })
 
   it("fails discovery when an available workspace catalogue cannot load", async () => {
@@ -300,7 +300,7 @@ describe("Direct Message mode over HTTP", () => {
       if (body.action === "workspaces") {
         return jsonResponse(200, {
           ok: true,
-          workspaces: [{ workspaceId: productId, available: true }],
+          workspaces: [{ workspaceId: workspaceId, available: true }],
         })
       }
       return jsonResponse(503, {
@@ -326,7 +326,7 @@ describe("Direct Message mode over HTTP", () => {
       method: "tools/call",
       params: {
         name: "start_thread",
-        arguments: { workspaceId: productId, projectId: "p1" },
+        arguments: { workspaceId: workspaceId, projectId: "p1" },
       },
     })
     expect(response.status).toBe(200)
@@ -335,7 +335,7 @@ describe("Direct Message mode over HTTP", () => {
     expect(body).toMatchObject({
       action: "call",
       tool: "start_thread",
-      workspaceId: productId,
+      workspaceId: workspaceId,
       arguments: { projectId: "p1" },
     })
     expect(

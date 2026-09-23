@@ -1,16 +1,16 @@
 export type AccessRole = "viewer" | "editor" | "owner"
 
-export type SignalSurfProductContext = {
-  productId: string
+export type SignalSurfWorkspaceContext = {
+  workspaceId: string
   name: string
   organizationId?: string | null
   organizationName?: string | null
 }
 
 export type SignalSurfContext = {
-  productId: string
-  productIds?: string[]
-  products?: SignalSurfProductContext[]
+  workspaceId: string
+  workspaceIds?: string[]
+  workspaces?: SignalSurfWorkspaceContext[]
   userId?: string
   role: AccessRole
   tokenName?: string
@@ -21,7 +21,7 @@ export type SignalSurfContext = {
   oauthTokenId?: string
   oauthGrantId?: string
   oauthClientId?: string
-  workspaceCapabilitiesByProduct?: Record<string, readonly string[]>
+  workspaceCapabilitiesByWorkspaceId?: Record<string, readonly string[]>
 }
 
 export type JsonRecord = Record<string, unknown>

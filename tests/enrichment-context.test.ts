@@ -5,7 +5,7 @@ function makeRepo() {
   const repo = Object.create(
     SignalSurfRepository.prototype
   ) as SignalSurfRepository
-  ;(repo as any).getDatabaseAndValidateProduct = vi.fn(async () => ({
+  ;(repo as any).getDatabaseAndValidateWorkspace = vi.fn(async () => ({
     id: "db-1",
     schema: {
       fields: [
@@ -38,7 +38,7 @@ function makeRepo() {
   return repo
 }
 
-const ctx = { productId: "p1", role: "viewer" } as any
+const ctx = { workspaceId: "p1", role: "viewer" } as any
 
 describe("getEnrichmentContext", () => {
   it("bundles brand, schema, relations, conventions, and popular values", async () => {

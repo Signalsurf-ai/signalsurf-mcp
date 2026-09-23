@@ -2,7 +2,7 @@ import type { SignalSurfContext, SupabaseLike } from "./types.js"
 import { UserFacingError } from "./errors.js"
 
 export type InfrastructureInput = {
-  productId?: string
+  workspaceId?: string
   excludedDomainIds?: string[]
   excludedAccountIds?: string[]
 }
@@ -18,7 +18,7 @@ export type CapacityInput = InfrastructureInput & {
 }
 
 export type DomainSearchInput = {
-  productId?: string
+  workspaceId?: string
   domains?: string[]
   seed?: string
   count?: number
@@ -111,10 +111,10 @@ export async function inspectSenderInfrastructure(
   context: SignalSurfContext,
   input: InfrastructureInput = {}
 ) {
-  const productId = context.productId
+  const workspaceId = context.workspaceId
   const excludedDomainIds = new Set(input.excludedDomainIds ?? [])
   const excludedAccountIds = new Set(input.excludedAccountIds ?? [])
-  const [domains, mailboxes, warmup, bindings, tools, productRows, grants] =
+  const [domains, mailboxes, warmup, bindings, tools, workspaceRows, grants] =
     await Promise.all([
       rows(
         db
@@ -122,7 +122,7 @@ export async function inspectSenderInfrastructure(
           .select(
             "id, domain_name, provider, infrastructure_class, desired_state, provider_status, lifecycle_status, dns_status, dns_reason_codes, dns_observed_at, autorenew_enabled, provider_expires_at, renewal_state, custody_state, updated_at"
           )
-          .eq("workspace_id", productId),
+          .eq("workspace_id", workspaceId),
         "Managed Domain inventory"
       ),
       rows(
@@ -131,7 +131,7 @@ export async function inspectSenderInfrastructure(
           .select(
             "id, domain_id, email_address, provider, infrastructure_class, desired_state, provider_status, lifecycle_status, infrastructure_status, transport_status, real_send_status, synthetic_warmup_status, health_status, campaign_eligibility_status, readiness_reason_codes, readiness_source_observed_at, forwarding_status, credential_handoff_status, warmup_connection_status, unipile_account_id, updated_at"
           )
-          .eq("workspace_id", productId),
+          .eq("workspace_id", workspaceId),
         "Managed mailbox inventory"
       ),
       rows(
@@ -140,31 +140,31 @@ export async function inspectSenderInfrastructure(
           .select(
             "id, unipile_account_id, managed_mailbox_id, email_address, provider_connection_status, warmup_mode, warmup_daily_limit, maintenance_enabled, automated_sending_enabled, automated_daily_limit, warmup_started_at, verified_warmup_days, heat_score, heat_score_observed_at, placement_primary_percent, placement_promotions_percent, placement_spam_percent, placement_missing_percent, placement_observed_at, placement_test_status, placement_test_due_at, updated_at"
           )
-          .eq("workspace_id", productId),
+          .eq("workspace_id", workspaceId),
         "Warm-up and Placement evidence"
       ),
       rows(
         db
-          .from("product_unipile_accounts")
+          .from("workspace_unipile_accounts")
           .select("unipile_account_id, provider, connected_at")
-          .eq("workspace_id", productId),
+          .eq("workspace_id", workspaceId),
         "Sender bindings"
       ),
       rows(
         db
-          .from("product_tools")
+          .from("workspace_tools")
           .select("id, user_id, config, updated_at")
-          .eq("workspace_id", productId)
+          .eq("workspace_id", workspaceId)
           .eq("tool_type", "unipile"),
         "Sender settings"
       ),
       rows(
         db
-          .from("products")
+          .from("workspaces")
           .select("id, organization_id")
-          .eq("id", productId)
+          .eq("id", workspaceId)
           .limit(1),
-        "Product billing scope"
+        "Workspace billing scope"
       ),
       rows(
         db
@@ -172,7 +172,7 @@ export async function inspectSenderInfrastructure(
           .select(
             "kind, quantity, capacity_floor, status, starts_at, expires_at"
           )
-          .eq("workspace_id", productId)
+          .eq("workspace_id", workspaceId)
           .eq("status", "active"),
         "Sender entitlement"
       ),
@@ -198,11 +198,11 @@ export async function inspectSenderInfrastructure(
       !excludedAccountIds.has(String(binding.unipile_account_id ?? ""))
   )
 
-  const organizationId = String(productRows[0]?.organization_id ?? "")
+  const organizationId = String(workspaceRows[0]?.organization_id ?? "")
   const subscriptions = organizationId
     ? await rows(
         db
-          .from("subscriptions")
+          .from("workspace_subscriptions")
           .select("plan_name, status, current_period_end, created_at")
           .eq("organization_id", organizationId)
           .in("status", ["active", "trialing"])
@@ -496,7 +496,7 @@ export async function planSenderCapacity(
       sendingDays:
         "Sending days available, not elapsed calendar days. Extending the timeline reduces the required capacity.",
       dailyLimitPerMailbox:
-        "Editable steady-state planning limit, not a provider or product limit. New mailboxes follow the canonical 15-day ramp starting at 2 messages per day.",
+        "Editable steady-state planning limit, not a provider or workspace limit. New mailboxes follow the canonical 15-day ramp starting at 2 messages per day.",
       utilizationPercent:
         "Editable safety factor for operational headroom, applied after the new-mailbox ramp.",
       mailboxesPerDomain:

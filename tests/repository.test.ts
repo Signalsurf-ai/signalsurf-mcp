@@ -6,34 +6,34 @@ import type { SignalSurfContext } from "../src/types.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 const context: SignalSurfContext = {
-  productId: "00000000-0000-4000-8000-000000000001",
+  workspaceId: "00000000-0000-4000-8000-000000000001",
   userId: "00000000-0000-4000-8000-000000000010",
   role: "editor",
   tokenName: "test-agent",
 }
 
-const secondProductId = "00000000-0000-4000-8000-000000000002"
+const secondWorkspaceId = "00000000-0000-4000-8000-000000000002"
 const org1 = "00000000-0000-4000-8000-000000000701"
 const org2 = "00000000-0000-4000-8000-000000000702"
 const db1 = "00000000-0000-4000-8000-000000000201"
 const db2 = "00000000-0000-4000-8000-000000000202"
-const otherProductDb = "00000000-0000-4000-8000-000000000299"
+const otherWorkspaceDb = "00000000-0000-4000-8000-000000000299"
 const workflow1 = "00000000-0000-4000-8000-000000000101"
 const workflow2 = "00000000-0000-4000-8000-000000000104"
-const otherProductWorkflow = "00000000-0000-4000-8000-000000000103"
+const otherWorkspaceWorkflow = "00000000-0000-4000-8000-000000000103"
 const project1 = "00000000-0000-4000-8000-000000000501"
 const row1 = "00000000-0000-4000-8000-000000000301"
 const row2 = "00000000-0000-4000-8000-000000000302"
-const otherProductRow = "00000000-0000-4000-8000-000000000399"
+const otherWorkspaceRow = "00000000-0000-4000-8000-000000000399"
 const source1 = "00000000-0000-4000-8000-000000000801"
-const otherProductSource = "00000000-0000-4000-8000-000000000802"
+const otherWorkspaceSource = "00000000-0000-4000-8000-000000000802"
 const tool1 = "00000000-0000-4000-8000-000000000901"
 const tool2 = "00000000-0000-4000-8000-000000000902"
 const accountListProfile1 = "00000000-0000-4000-8000-000000000a01"
 const archivedAccountListProfile = "00000000-0000-4000-8000-000000000a02"
-const otherProductAccountListProfile = "00000000-0000-4000-8000-000000000a99"
+const otherWorkspaceAccountListProfile = "00000000-0000-4000-8000-000000000a99"
 const pendingJob = "00000000-0000-4000-8000-000000000401"
-const otherProductJob = "00000000-0000-4000-8000-000000000402"
+const otherWorkspaceJob = "00000000-0000-4000-8000-000000000402"
 const completedJob = "00000000-0000-4000-8000-000000000403"
 
 function makeDb() {
@@ -41,7 +41,7 @@ function makeDb() {
     workflows: [
       {
         id: workflow1,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         name: "Active",
         description: null,
         is_default: false,
@@ -65,7 +65,7 @@ function makeDb() {
       },
       {
         id: workflow2,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         name: "Second",
         description: null,
         is_default: false,
@@ -89,7 +89,7 @@ function makeDb() {
       },
       {
         id: "00000000-0000-4000-8000-000000000102",
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         name: "Deleted",
         is_default: false,
         is_active: true,
@@ -99,9 +99,9 @@ function makeDb() {
         deleted_at: "2026-06-01T01:00:00Z",
       },
       {
-        id: otherProductWorkflow,
+        id: otherWorkspaceWorkflow,
         workspace_id: "00000000-0000-4000-8000-000000000099",
-        name: "Other Product",
+        name: "Other Workspace",
         is_default: false,
         is_active: true,
         show_ai_dashboard: true,
@@ -113,14 +113,14 @@ function makeDb() {
     agents: [
       {
         id: project1,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         name: "GTM",
       },
     ],
     databases: [
       {
         id: db1,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         name: "Companies",
         description: null,
         icon: null,
@@ -142,7 +142,7 @@ function makeDb() {
       },
       {
         id: db2,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         name: "People",
         description: null,
         icon: null,
@@ -156,7 +156,7 @@ function makeDb() {
         updated_at: "2026-06-01T00:00:00Z",
       },
       {
-        id: otherProductDb,
+        id: otherWorkspaceDb,
         workspace_id: "00000000-0000-4000-8000-000000000099",
         name: "Other",
         description: null,
@@ -213,8 +213,8 @@ function makeDb() {
         updated_at: "2026-06-01T00:00:00Z",
       },
       {
-        id: otherProductRow,
-        database_id: otherProductDb,
+        id: otherWorkspaceRow,
+        database_id: otherWorkspaceDb,
         workflow_id: null,
         data: { name: "Other" },
         note: null,
@@ -227,16 +227,16 @@ function makeDb() {
         updated_at: "2026-06-01T00:00:00Z",
       },
     ],
-    products: [
+    workspaces: [
       {
-        id: context.productId,
-        name: "Primary Product",
+        id: context.workspaceId,
+        name: "Primary Workspace",
         organization_id: org1,
         owner_id: context.userId,
       },
       {
-        id: secondProductId,
-        name: "Second Product",
+        id: secondWorkspaceId,
+        name: "Second Workspace",
         organization_id: org2,
         owner_id: "00000000-0000-4000-8000-000000000011",
       },
@@ -263,16 +263,16 @@ function makeDb() {
         role: "viewer",
       },
     ],
-    product_members: [
+    workspace_members: [
       {
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         user_id: context.userId,
         role: "owner",
       },
     ],
     workspace_brand_profiles: [
       {
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         brand_name: "Acme",
         brand_description: "Acme makes widgets.",
         product_description: "A widget platform.",
@@ -284,7 +284,7 @@ function makeDb() {
     surf_jobs: [
       {
         id: pendingJob,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         user_id: context.userId,
         workflow_id: workflow1,
         source_id: source1,
@@ -321,9 +321,9 @@ function makeDb() {
         credentials: { token: "secret" },
       },
       {
-        id: otherProductSource,
+        id: otherWorkspaceSource,
         user_id: "00000000-0000-4000-8000-000000000099",
-        workflow_id: otherProductWorkflow,
+        workflow_id: otherWorkspaceWorkflow,
         name: "Other source",
         type: "pull",
         pull_config: {},
@@ -333,10 +333,10 @@ function makeDb() {
         updated_at: "2026-06-01T00:00:00Z",
       },
     ],
-    product_tools: [
+    workspace_tools: [
       {
         id: tool1,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         user_id: context.userId,
         tool_type: "slack",
         config: { nickname: "Slack alerts", token: "secret" },
@@ -346,7 +346,7 @@ function makeDb() {
       },
       {
         id: tool2,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         user_id: context.userId,
         tool_type: "webhook",
         config: { nickname: "Webhook" },
@@ -368,7 +368,7 @@ function makeDb() {
     account_list_profiles: [
       {
         id: accountListProfile1,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         name: "Seed SaaS GTM",
         description: "Founder-led GTM buyers",
         status: "active",
@@ -397,7 +397,7 @@ function makeDb() {
       },
       {
         id: archivedAccountListProfile,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         name: "Archived ICP",
         description: null,
         status: "archived",
@@ -415,9 +415,9 @@ function makeDb() {
         updated_at: "2026-06-02T00:00:00Z",
       },
       {
-        id: otherProductAccountListProfile,
+        id: otherWorkspaceAccountListProfile,
         workspace_id: "00000000-0000-4000-8000-000000000099",
-        name: "Other Product ICP",
+        name: "Other Workspace ICP",
         description: null,
         status: "active",
         source: "manual",
@@ -438,7 +438,7 @@ function makeDb() {
 }
 
 describe("SignalSurfRepository", () => {
-  it("lists only active Workflows in the current product", async () => {
+  it("lists only active Workflows in the current workspace", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
@@ -449,7 +449,7 @@ describe("SignalSurfRepository", () => {
     ).toEqual(["Active", "Second"])
   })
 
-  it("reads one product-scoped Workflow", async () => {
+  it("reads one workspace-scoped Workflow", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
@@ -461,7 +461,7 @@ describe("SignalSurfRepository", () => {
     })
 
     await expect(
-      repo.getWorkflow(context, otherProductWorkflow)
+      repo.getWorkflow(context, otherWorkspaceWorkflow)
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
@@ -472,7 +472,7 @@ describe("SignalSurfRepository", () => {
     const { brandContext } = await repo.getBrandContext(context)
 
     expect(brandContext).toEqual({
-      productId: context.productId,
+      workspaceId: context.workspaceId,
       brandName: "Acme",
       brandDescription: "Acme makes widgets.",
       productDescription: "A widget platform.",
@@ -487,17 +487,17 @@ describe("SignalSurfRepository", () => {
     })
   })
 
-  it("returns empty brand context when the product has no goals row", async () => {
+  it("returns empty brand context when the workspace has no goals row", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
     const { brandContext } = await repo.getBrandContext({
       ...context,
-      productId: secondProductId,
+      workspaceId: secondWorkspaceId,
     })
 
     expect(brandContext).toEqual({
-      productId: secondProductId,
+      workspaceId: secondWorkspaceId,
       brandName: null,
       brandDescription: null,
       productDescription: null,
@@ -548,7 +548,7 @@ describe("SignalSurfRepository", () => {
     })
     expect(db.tables.surf_jobs).toHaveLength(1)
     expect(db.tables.surf_jobs[0]).toMatchObject({
-      workspace_id: context.productId,
+      workspace_id: context.workspaceId,
       user_id: context.userId,
       workflow_id: workflow1,
       source_id: source1,
@@ -638,14 +638,14 @@ describe("SignalSurfRepository", () => {
     expect(db.tables.surf_jobs).toHaveLength(1)
   })
 
-  it("reads, lists, and cancels product-scoped surf jobs", async () => {
+  it("reads, lists, and cancels workspace-scoped surf jobs", async () => {
     const db = makeDb()
     db.tables.surf_jobs.push({
-      id: otherProductJob,
+      id: otherWorkspaceJob,
       workspace_id: "00000000-0000-4000-8000-000000000099",
       user_id: "00000000-0000-4000-8000-000000000099",
       workflow_id: "00000000-0000-4000-8000-000000000103",
-      source_id: otherProductSource,
+      source_id: otherWorkspaceSource,
       job_type: "extract",
       status: "pending",
       created_at: "2026-06-02T00:00:00Z",
@@ -666,7 +666,7 @@ describe("SignalSurfRepository", () => {
     ])
 
     await expect(
-      repo.getSurfJob(context, otherProductJob)
+      repo.getSurfJob(context, otherWorkspaceJob)
     ).rejects.toMatchObject({
       code: "NOT_FOUND",
     })
@@ -691,7 +691,7 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     db.tables.surf_jobs.push({
       id: completedJob,
-      workspace_id: context.productId,
+      workspace_id: context.workspaceId,
       user_id: context.userId,
       workflow_id: workflow1,
       source_id: source1,
@@ -775,7 +775,7 @@ describe("SignalSurfRepository", () => {
 
     await expect(
       repo.setWorkflowSourceActive(context, {
-        sourceId: otherProductSource,
+        sourceId: otherWorkspaceSource,
         isActive: false,
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
@@ -1209,7 +1209,7 @@ describe("SignalSurfRepository", () => {
     ).toHaveLength(1)
     expect(db.tables.platform_search_config).toMatchObject([
       {
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         workflow_id: workflow1,
         platform: "threads-keyword-search",
         keywords: ["x402", "MCP"],
@@ -1217,7 +1217,7 @@ describe("SignalSurfRepository", () => {
     ])
     expect(db.tables.tracked_accounts).toMatchObject([
       {
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         workflow_id: workflow1,
         platform: "threads-keyword-search",
         username: "blockrun",
@@ -1229,7 +1229,7 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     db.tables.platform_search_config = [
       {
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         workflow_id: workflow1,
         platform: "threads-keyword-search",
         is_enabled: true,
@@ -1238,7 +1238,7 @@ describe("SignalSurfRepository", () => {
     ]
     db.tables.tracked_accounts = [
       {
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         workflow_id: workflow1,
         platform: "threads-keyword-search",
         username: "old-account",
@@ -1290,7 +1290,7 @@ describe("SignalSurfRepository", () => {
     const db = makeDb()
     db.tables.surf_jobs.push({
       id: completedJob,
-      workspace_id: context.productId,
+      workspace_id: context.workspaceId,
       user_id: context.userId,
       workflow_id: workflow1,
       source_id: source1,
@@ -1344,7 +1344,7 @@ describe("SignalSurfRepository", () => {
       }),
     ])
     expect(
-      db.tables.sources.find((source) => source.id === otherProductSource)
+      db.tables.sources.find((source) => source.id === otherWorkspaceSource)
     ).toBeTruthy()
     expect(
       db.tables.sources.find((source) => source.id === created.source.sourceId)
@@ -1361,11 +1361,11 @@ describe("SignalSurfRepository", () => {
     })
   })
 
-  it("deletes Workflow sources after product-scope validation", async () => {
+  it("deletes Workflow sources after workspace-scope validation", async () => {
     const db = makeDb()
     db.tables.platform_search_config = [
       {
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         workflow_id: workflow1,
         platform: "threads-keyword-search",
         is_enabled: true,
@@ -1374,7 +1374,7 @@ describe("SignalSurfRepository", () => {
     ]
     db.tables.tracked_accounts = [
       {
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         workflow_id: workflow1,
         platform: "threads-keyword-search",
         username: "old-account",
@@ -1383,7 +1383,7 @@ describe("SignalSurfRepository", () => {
     ]
     db.tables.surf_jobs.push({
       id: completedJob,
-      workspace_id: context.productId,
+      workspace_id: context.workspaceId,
       user_id: context.userId,
       workflow_id: workflow1,
       source_id: source1,
@@ -1395,7 +1395,7 @@ describe("SignalSurfRepository", () => {
 
     await expect(
       repo.deleteWorkflowSource(context, {
-        sourceId: otherProductSource,
+        sourceId: otherWorkspaceSource,
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
 
@@ -1427,11 +1427,11 @@ describe("SignalSurfRepository", () => {
     })
   })
 
-  it("lists safe product tool metadata without leaking config secrets", async () => {
+  it("lists safe workspace tool metadata without leaking config secrets", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
-    const result = await repo.listProductTools(context)
+    const result = await repo.listWorkspaceTools(context)
 
     expect(result).toMatchObject({
       totalCount: 2,
@@ -1514,7 +1514,7 @@ describe("SignalSurfRepository", () => {
 
     await expect(
       repo.attachWorkflowTool(context, {
-        workflowId: otherProductWorkflow,
+        workflowId: otherWorkspaceWorkflow,
         toolId: tool1,
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
@@ -1548,7 +1548,7 @@ describe("SignalSurfRepository", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
-  it("lists product-scoped account list profiles", async () => {
+  it("lists workspace-scoped account list profiles", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
@@ -1559,7 +1559,7 @@ describe("SignalSurfRepository", () => {
       profiles: [
         {
           profileId: accountListProfile1,
-          productId: context.productId,
+          workspaceId: context.workspaceId,
           name: "Seed SaaS GTM",
           status: "active",
           source: "manual",
@@ -1618,7 +1618,7 @@ describe("SignalSurfRepository", () => {
       created: true,
       profile: {
         profileId: expect.any(String),
-        productId: context.productId,
+        workspaceId: context.workspaceId,
         name: "Enterprise RevOps",
         profileVersion: 1,
         accountList: {
@@ -1635,7 +1635,7 @@ describe("SignalSurfRepository", () => {
     })
     expect(db.tables.account_list_profiles.at(-1)).toMatchObject({
       id: result.profileId,
-      workspace_id: context.productId,
+      workspace_id: context.workspaceId,
       name: "Enterprise RevOps",
       status: "active",
       source: "manual",
@@ -1649,7 +1649,7 @@ describe("SignalSurfRepository", () => {
     })
   })
 
-  it("updates and archives account list profiles without crossing product scope", async () => {
+  it("updates and archives account list profiles without crossing workspace scope", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
@@ -1709,14 +1709,14 @@ describe("SignalSurfRepository", () => {
 
     await expect(
       repo.saveAccountListProfile(context, {
-        id: otherProductAccountListProfile,
+        id: otherWorkspaceAccountListProfile,
         name: "Denied",
         accountList: {},
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
 
     await expect(
-      repo.archiveAccountListProfile(context, otherProductAccountListProfile)
+      repo.archiveAccountListProfile(context, otherWorkspaceAccountListProfile)
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
@@ -1725,7 +1725,7 @@ describe("SignalSurfRepository", () => {
     db.tables.mcp_tokens = [
       {
         id: "00000000-0000-4000-8000-000000000501",
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         created_by: context.userId,
         name: "hosted-agent",
         role: "editor",
@@ -1738,11 +1738,11 @@ describe("SignalSurfRepository", () => {
     const hostedContext = await repo.resolveMcpToken("hosted-token")
 
     expect(hostedContext).toMatchObject({
-      productId: context.productId,
-      products: [
+      workspaceId: context.workspaceId,
+      workspaces: [
         {
-          productId: context.productId,
-          name: "Primary Product",
+          workspaceId: context.workspaceId,
+          name: "Primary Workspace",
           organizationId: org1,
           organizationName: "Primary Workspace",
         },
@@ -1757,10 +1757,10 @@ describe("SignalSurfRepository", () => {
     expect(db.tables.user_preferences[0].current_workflow_id).toBe(workflow2)
   })
 
-  it("resolves OAuth tokens with every authorized product id", async () => {
+  it("resolves OAuth tokens with every authorized workspace id", async () => {
     const db = makeDb()
-    db.tables.product_members.push({
-      workspace_id: secondProductId,
+    db.tables.workspace_members.push({
+      workspace_id: secondWorkspaceId,
       user_id: context.userId,
       role: "member",
     })
@@ -1777,8 +1777,8 @@ describe("SignalSurfRepository", () => {
         id: "00000000-0000-4000-8000-000000000601",
         client_id: "ssmcp_client_multi",
         user_id: context.userId,
-        workspace_id: context.productId,
-        workspace_ids: [context.productId, secondProductId],
+        workspace_id: context.workspaceId,
+        workspace_ids: [context.workspaceId, secondWorkspaceId],
         scope: "mcp:workflows.read mcp:tables.read offline_access",
         resource: "https://mcp.signalsurf.ai/mcp",
         access_token_sha256: sha256Hex("oauth-token"),
@@ -1793,17 +1793,17 @@ describe("SignalSurfRepository", () => {
     })
 
     expect(oauthContext).toMatchObject({
-      productId: context.productId,
-      productIds: [context.productId, secondProductId],
-      products: [
+      workspaceId: context.workspaceId,
+      workspaceIds: [context.workspaceId, secondWorkspaceId],
+      workspaces: [
         {
-          productId: context.productId,
-          name: "Primary Product",
+          workspaceId: context.workspaceId,
+          name: "Primary Workspace",
           organizationName: "Primary Workspace",
         },
         {
-          productId: secondProductId,
-          name: "Second Product",
+          workspaceId: secondWorkspaceId,
+          name: "Second Workspace",
           organizationName: "Second Workspace",
         },
       ],
@@ -1904,13 +1904,13 @@ describe("SignalSurfRepository", () => {
     ).rejects.toThrow("Pass either variables or variablesPatch")
   })
 
-  it("rejects table reads outside the token product", async () => {
+  it("rejects table reads outside the token workspace", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
     await expect(
       repo.readTable(context, {
-        databaseId: otherProductDb,
+        databaseId: otherWorkspaceDb,
       })
     ).rejects.toThrow("Database not found or access denied")
   })
@@ -2361,7 +2361,7 @@ describe("SignalSurfRepository", () => {
     ).rejects.toThrow(/already classified as outbound\.account_list/i)
   })
 
-  it("rejects table schemas that reference another product", async () => {
+  it("rejects table schemas that reference another workspace", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
@@ -2373,7 +2373,7 @@ describe("SignalSurfRepository", () => {
             {
               key: "external",
               type: "item_ref",
-              target_database_id: otherProductDb,
+              target_database_id: otherWorkspaceDb,
             },
           ],
         },
@@ -2381,7 +2381,7 @@ describe("SignalSurfRepository", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
-  it("deletes product tables and unlinks them from active Workflows", async () => {
+  it("deletes workspace tables and unlinks them from active Workflows", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
     const secondWorkflow = db.tables.workflows.find(
@@ -2409,7 +2409,7 @@ describe("SignalSurfRepository", () => {
       true
     )
     expect(
-      db.tables.databases.some((database) => database.id === otherProductDb)
+      db.tables.databases.some((database) => database.id === otherWorkspaceDb)
     ).toBe(true)
     expect(
       db.tables.workflows.find((row) => row.id === workflow1)?.database_ids
@@ -2424,14 +2424,14 @@ describe("SignalSurfRepository", () => {
     const repo = new SignalSurfRepository(db as any)
 
     await expect(
-      repo.deleteTables(context, [db1, otherProductDb])
+      repo.deleteTables(context, [db1, otherWorkspaceDb])
     ).rejects.toThrow("Database not found or access denied")
 
     expect(db.tables.databases.some((database) => database.id === db1)).toBe(
       true
     )
     expect(
-      db.tables.databases.some((database) => database.id === otherProductDb)
+      db.tables.databases.some((database) => database.id === otherWorkspaceDb)
     ).toBe(true)
   })
 
@@ -2441,7 +2441,7 @@ describe("SignalSurfRepository", () => {
     const systemDb = "00000000-0000-4000-8000-000000000298"
     db.tables.databases.push({
       id: systemDb,
-      workspace_id: context.productId,
+      workspace_id: context.workspaceId,
       name: "System Table",
       description: null,
       icon: null,
@@ -2464,7 +2464,7 @@ describe("SignalSurfRepository", () => {
     ).toBe(true)
   })
 
-  it("creates relation fields only to product-owned databases", async () => {
+  it("creates relation fields only to workspace-owned databases", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
@@ -2492,7 +2492,7 @@ describe("SignalSurfRepository", () => {
       repo.createRelationField(context, {
         databaseId: db1,
         key: "bad_relation",
-        targetDatabaseId: otherProductDb,
+        targetDatabaseId: otherWorkspaceDb,
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
@@ -2528,8 +2528,8 @@ describe("SignalSurfRepository", () => {
         data: {
           name: "Bad ref",
           parent: {
-            database_id: otherProductDb,
-            entry_id: otherProductRow,
+            database_id: otherWorkspaceDb,
+            entry_id: otherWorkspaceRow,
           },
         },
       })
@@ -2542,8 +2542,8 @@ describe("SignalSurfRepository", () => {
             rowId: row1,
             dataPatch: {
               parent: {
-                database_id: otherProductDb,
-                entry_id: otherProductRow,
+                database_id: otherWorkspaceDb,
+                entry_id: otherWorkspaceRow,
               },
             },
           },
@@ -2675,7 +2675,7 @@ describe("SignalSurfRepository", () => {
       repo.updateTableRows(context, {
         edits: [
           { rowId: row1, dataPatch: { stage: "contacted" } },
-          { rowId: otherProductRow, dataPatch: { stage: "contacted" } },
+          { rowId: otherWorkspaceRow, dataPatch: { stage: "contacted" } },
         ],
       })
     ).rejects.toThrow("Row not found or access denied")
@@ -2737,8 +2737,8 @@ describe("SignalSurfRepository", () => {
             rowId: row1,
             dataPatch: {
               parent: {
-                database_id: otherProductDb,
-                entry_id: otherProductRow,
+                database_id: otherWorkspaceDb,
+                entry_id: otherWorkspaceRow,
               },
             },
           },
@@ -2754,12 +2754,12 @@ describe("SignalSurfRepository", () => {
     const repo = new SignalSurfRepository(db as any)
 
     await expect(
-      repo.deleteTableRows(context, [row1, otherProductRow, row1])
+      repo.deleteTableRows(context, [row1, otherWorkspaceRow, row1])
     ).rejects.toThrow("Row not found or access denied")
 
     expect(db.tables.entries.some((entry) => entry.id === row1)).toBe(true)
     expect(
-      db.tables.entries.some((entry) => entry.id === otherProductRow)
+      db.tables.entries.some((entry) => entry.id === otherWorkspaceRow)
     ).toBe(true)
   })
 })

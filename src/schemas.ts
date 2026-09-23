@@ -5,8 +5,8 @@ import { PUBLIC_TABLE_TEMPLATES } from "./table-templates.js"
 
 export const uuidSchema = z.string().uuid()
 export const jsonObjectSchema = z.record(z.string(), z.unknown())
-const productTargetSchema = {
-  productId: uuidSchema.optional(),
+const workspaceTargetSchema = {
+  workspaceId: uuidSchema.optional(),
 }
 
 const senderInfrastructureExclusionsSchema = {
@@ -19,12 +19,12 @@ const senderInfrastructureExclusionsSchema = {
 }
 
 export const inspectSenderInfrastructureSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   ...senderInfrastructureExclusionsSchema,
 }
 
 export const planSenderCapacitySchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   ...senderInfrastructureExclusionsSchema,
   recipients: z.number().int().min(1).max(100_000_000),
   touchesPerRecipient: z.number().int().min(1).max(100).default(3).optional(),
@@ -56,7 +56,7 @@ const publicDomainSchema = z
   )
 
 export const searchSenderDomainsSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   domains: z.array(publicDomainSchema).max(50).default([]).optional(),
   seed: z.string().trim().min(1).max(253).optional(),
   count: z.number().int().min(1).max(10).default(5).optional(),
@@ -71,21 +71,21 @@ export const searchSenderDomainsSchema = {
 // provider-neutral nested fields and the established Apollo-shaped names;
 // Apollo remains an explicit deployment-level BYOC override.
 export const deeplineSearchPeopleSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   filters: jsonObjectSchema.optional(),
   limit: z.number().int().min(1).max(25).default(10).optional(),
   approvalRequestId: uuidSchema.optional(),
 }
 
 export const deeplineSearchCompaniesSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   filters: jsonObjectSchema.optional(),
   limit: z.number().int().min(1).max(25).default(10).optional(),
   approvalRequestId: uuidSchema.optional(),
 }
 
 export const deeplineEnrichContactSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   firstName: z.string().trim().min(1).max(120),
   lastName: z.string().trim().min(1).max(120),
   domain: z.string().trim().max(255).optional(),
@@ -94,20 +94,20 @@ export const deeplineEnrichContactSchema = {
 }
 
 export const deeplineSearchCatalogSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   query: z.string().trim().max(200).default("").optional(),
   limit: z.number().int().min(1).max(50).default(25).optional(),
 }
 
 export const deeplineExecuteToolSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   toolId: z.string().trim().min(1).max(200),
   approvalRequestId: uuidSchema.optional(),
   payload: jsonObjectSchema.default({}).optional(),
 }
 
 export const instagramContentSearchSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   query: z.string().trim().min(1).max(500),
   pages: z.number().int().min(1).max(10).default(1).optional(),
   approvalRequestId: uuidSchema.optional(),
@@ -135,22 +135,22 @@ export const toolOutputSchema = {
 }
 
 export const getBrandContextSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
 }
 
 export const listWorkflowsSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   includeInactive: z.boolean().default(true).optional(),
   limit: z.number().int().min(1).max(200).default(100).optional(),
 }
 
 export const getWorkflowSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   workflowId: uuidSchema,
 }
 
 export const createWorkflowSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().max(500).optional(),
   color: z.string().trim().max(20).default("#5599FF").optional(),
@@ -170,7 +170,7 @@ export const createWorkflowSchema = {
 }
 
 export const updateWorkflowSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   workflowId: uuidSchema,
   name: z.string().trim().min(1).max(100).optional(),
   description: z.string().trim().max(500).nullable().optional(),
@@ -194,7 +194,7 @@ export const updateWorkflowSchema = {
 }
 
 export const runWorkflowSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   workflowId: uuidSchema,
   idempotencyKey: z.string().trim().min(1).max(200).optional(),
   allowInactive: z.boolean().default(false).optional(),
@@ -202,19 +202,19 @@ export const runWorkflowSchema = {
 }
 
 export const getSurfJobSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   jobId: uuidSchema,
 }
 
 export const waitForSurfJobSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   jobId: uuidSchema,
   timeoutMs: z.number().int().min(0).max(120000).default(30000).optional(),
   pollIntervalMs: z.number().int().min(100).max(10000).default(1000).optional(),
 }
 
 export const listSurfJobsSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   workflowId: uuidSchema.optional(),
   status: z.string().trim().min(1).max(50).optional(),
   limit: z.number().int().min(1).max(200).default(50).optional(),
@@ -222,7 +222,7 @@ export const listSurfJobsSchema = {
 }
 
 export const cancelSurfJobSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   jobId: uuidSchema,
 }
 
@@ -230,7 +230,7 @@ export const cancelSurfJobSchema = {
 // A hidden Workflow bound to one database column (target_field). enable/disable
 // manage the binding; run queues per-row brain enrichment jobs.
 const enrichColumnTarget = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
   fieldKey: z.string().trim().min(1).max(100),
 }
@@ -266,7 +266,7 @@ export const disableEnrichSchema = {
 }
 
 export const listEnrichSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
 }
 
@@ -279,18 +279,18 @@ export const runEnrichSchema = {
 }
 
 export const deleteWorkflowSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   workflowIds: z.array(uuidSchema).min(1).max(50),
 }
 
 export const listDatabasesSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   includeSystem: z.boolean().default(false).optional(),
   limit: z.number().int().min(1).max(200).default(100).optional(),
 }
 
 export const createTableSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   name: z.string().trim().min(1).max(100),
   template: z.enum(PUBLIC_TABLE_TEMPLATES).optional(),
   description: z.string().trim().max(1000).nullish(),
@@ -305,7 +305,7 @@ export const createTableSchema = {
 }
 
 export const updateTableSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
   template: z.enum(PUBLIC_TABLE_TEMPLATES).optional(),
   name: z.string().trim().min(1).max(100).optional(),
@@ -322,7 +322,7 @@ export const updateTableSchema = {
 }
 
 export const deleteTableSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseIds: z.array(uuidSchema).min(1).max(50),
 }
 
@@ -355,7 +355,7 @@ const tableSortSchema = z.object({
 })
 
 export const readTableSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
   limit: z.number().int().min(1).max(200).default(50).optional(),
   offset: z.number().int().min(0).default(0).optional(),
@@ -372,12 +372,12 @@ export const readTableSchema = {
 }
 
 export const listDatabaseViewsSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
 }
 
 export const readTableViewSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
   viewId: z.string().trim().min(1).max(100),
   limit: z.number().int().min(1).max(200).default(50).optional(),
@@ -389,12 +389,12 @@ export const readTableViewSchema = {
 }
 
 export const getTableRowSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   rowId: uuidSchema,
 }
 
 export const createTableRowSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
   data: jsonObjectSchema,
   workflowId: uuidSchema.nullish(),
@@ -402,7 +402,7 @@ export const createTableRowSchema = {
 }
 
 export const deleteTableRowsSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   rowIds: z.array(uuidSchema).min(1).max(100),
 }
 
@@ -418,7 +418,7 @@ const updateTableRowEditSchema = z.object({
 })
 
 export const updateTableRowsSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   edits: z.array(updateTableRowEditSchema).min(1).max(100),
 }
 
@@ -437,12 +437,12 @@ const databaseFieldSchema = z
   .catchall(z.unknown())
 
 export const listDatabaseFieldsSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
 }
 
 export const getEnrichmentContextSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
   fieldKey: z.string().min(1).max(100).optional(),
 }
@@ -491,19 +491,19 @@ const flowEditOpInputSchema = z.object({
 })
 
 export const editWorkflowFlowsSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   workflowId: uuidSchema,
   edits: z.array(flowEditOpInputSchema).min(1),
 }
 
 export const getNodeUpstreamContextSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   workflowId: uuidSchema,
   nodeId: z.string().min(1),
 }
 
 export const createCampaignSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   name: z.string().trim().min(1).max(120),
   goal: z.string().trim().min(1).max(4000),
   description: z.string().trim().max(500).optional(),
@@ -531,33 +531,33 @@ export const createCampaignSchema = {
 }
 
 export const testWorkflowNodeSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   workflowId: uuidSchema,
   nodeId: z.string().min(1),
   sampleText: z.string().optional(),
 }
 
 export const addDatabaseFieldSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
   field: databaseFieldSchema,
 }
 
 export const updateDatabaseFieldSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
   fieldKey: z.string().trim().min(1).max(100),
   patch: jsonObjectSchema,
 }
 
 export const removeDatabaseFieldSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
   fieldKey: z.string().trim().min(1).max(100),
 }
 
 export const createRelationFieldSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
   key: z
     .string()
@@ -573,12 +573,12 @@ export const createRelationFieldSchema = {
 }
 
 export const listWorkflowSourcesSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   workflowId: uuidSchema,
 }
 
 export const createWorkflowSourceSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   workflowId: uuidSchema,
   sourceType: sourceTypeSchema,
   name: z.string().trim().min(1).max(200).optional(),
@@ -589,7 +589,7 @@ export const createWorkflowSourceSchema = {
 }
 
 export const updateWorkflowSourceSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   sourceId: uuidSchema,
   sourceType: sourceTypeSchema.optional(),
   name: z.string().trim().min(1).max(200).nullable().optional(),
@@ -604,19 +604,19 @@ export const updateWorkflowSourceSchema = {
 }
 
 export const deleteWorkflowSourceSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   sourceId: uuidSchema.optional(),
   sourceIds: z.array(uuidSchema).min(1).max(50).optional(),
 }
 
-export const listProductToolsSchema = {
-  ...productTargetSchema,
+export const listWorkspaceToolsSchema = {
+  ...workspaceTargetSchema,
   includeDisabled: z.boolean().default(false).optional(),
   limit: z.number().int().min(1).max(200).default(100).optional(),
 }
 
 export const listWorkflowToolsSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   workflowId: uuidSchema,
 }
 
@@ -710,13 +710,13 @@ export const accountListSchema = z
   .passthrough()
 
 export const listAccountListProfilesSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   includeArchived: z.boolean().default(false).optional(),
   limit: z.number().int().min(1).max(100).default(50).optional(),
 }
 
 export const saveAccountListProfileSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   id: uuidSchema.optional(),
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(600).optional().nullable(),
@@ -729,7 +729,7 @@ export const saveAccountListProfileSchema = {
 }
 
 export const archiveAccountListProfileSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   profileId: uuidSchema,
 }
 
@@ -782,7 +782,7 @@ export const PUBLIC_MCP_TOOL_SCHEMAS = {
   disable_enrich: disableEnrichSchema,
   list_enrich: listEnrichSchema,
   run_enrich: runEnrichSchema,
-  list_product_tools: listProductToolsSchema,
+  list_workspace_tools: listWorkspaceToolsSchema,
   list_workflow_tools: listWorkflowToolsSchema,
   search_instagram_content: instagramContentSearchSchema,
   deepline_search_people: deeplineSearchPeopleSchema,

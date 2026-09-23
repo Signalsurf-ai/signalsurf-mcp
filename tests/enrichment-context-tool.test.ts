@@ -8,7 +8,7 @@ import type { SignalSurfContext } from "../src/types.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 const context: SignalSurfContext = {
-  productId: "00000000-0000-4000-8000-000000000001",
+  workspaceId: "00000000-0000-4000-8000-000000000001",
   role: "viewer",
 }
 const databaseId = "00000000-0000-4000-8000-000000000201"
@@ -25,7 +25,7 @@ function seed() {
     databases: [
       {
         id: databaseId,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         name: "Companies",
         description: null,
         icon: null,
@@ -61,7 +61,7 @@ function seed() {
     ],
     workspace_brand_profiles: [
       {
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         brand_name: "Acme",
         brand_description: "Acme makes widgets.",
         product_description: "A widget platform.",
