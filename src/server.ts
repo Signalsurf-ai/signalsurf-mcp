@@ -12,6 +12,7 @@ import {
   resolveWorkspaceContext,
 } from "./auth.js"
 import {
+  MCP_DM_SCOPE,
   PUBLIC_MCP_TOOLS,
   PUBLIC_MCP_TOOL_NAMES,
   requiredCapabilitiesForTool,
@@ -60,11 +61,11 @@ import {
   listDatabaseViewsSchema,
   listDatabasesSchema,
   listEnrichSchema,
-  listWorkspaceToolsSchema,
   listSurfJobsSchema,
   listWorkflowSourcesSchema,
   listWorkflowToolsSchema,
   listWorkflowsSchema,
+  listWorkspaceToolsSchema,
   planSenderCapacitySchema,
   readTableSchema,
   readTableViewSchema,
@@ -94,7 +95,7 @@ import {
 export type CreateServerOptions = {
   context: SignalSurfContext
   repository: SignalSurfRepository
-  /** Member/Project capability target for unified hosted connections. */
+  /** Member/Project capability target for connections granted `mcp:dm`. */
   surferSession?: DirectMessageClientOptions
 }
 
@@ -121,28 +122,38 @@ When multiple workspaces are authorized, pass workspaces[].workspaceId (from get
 export function workspaceProjectedServerInstructions(
   context: SignalSurfContext
 ): string {
-  const sections = [
-    "SignalSurf MCP — operating manual.",
-    "Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter; never pass a null or guessed id.",
-    "Not sure which available capability fits → call find_capabilities(query).",
-  ]
-  if (isToolVisibleAcrossWorkspaces(context, "list_tables")) {
+  const sections = ["SignalSurf MCP — operating manual."]
+  const canUseTool = (name: PublicMcpToolName) =>
+    requiredCapabilitiesForTool(name).every((capability) =>
+      canUseCapability(context, capability)
+    )
+  if (canUseTool("get_context")) {
+    sections.push(
+      "Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter; never pass a null or guessed id.",
+      "Not sure which available capability fits → call find_capabilities(query)."
+    )
+  } else if (context.scopes?.includes(MCP_DM_SCOPE)) {
+    sections.push(
+      "Use list_workspaces to resolve workspaceId before a Project collaboration call; never pass a null or guessed id. Product tools remain discoverable, but calls require their corresponding product scopes."
+    )
+  }
+  if (canUseTool("list_tables")) {
     sections.push(
       "For available Table work, resolve databaseId with list_tables before reading or changing rows, fields, views, or Enrich configuration.",
       "Use the enrich_table prompt for guided whole-column enrichment and get_enrichment_context before choosing column instructions."
     )
   }
-  if (isToolVisibleAcrossWorkspaces(context, "create_workflow")) {
+  if (canUseTool("create_workflow")) {
     sections.push(
       "For available Workflow work, resolve workflowId with list_workflows; use set_up_workflow for guided setup and poll jobs after execution."
     )
   }
-  if (isToolVisibleAcrossWorkspaces(context, "create_campaign")) {
+  if (canUseTool("create_campaign")) {
     sections.push(
       "For available Campaign work, use create_campaign instead of hand-wiring a sending flow."
     )
   }
-  if (authorizedWorkspaceIds(context).length > 1) {
+  if (authorizedWorkspaceIds(context).length > 1 && canUseTool("get_context")) {
     sections.push(
       "When multiple workspaces are authorized, pass workspaces[].workspaceId from get_context on every workspace-scoped call."
     )
@@ -154,12 +165,11 @@ export async function createSignalSurfMcpServer(
   options: CreateServerOptions
 ): Promise<McpServer> {
   const { context, repository } = options
-  const directMessageSurface =
-    context.mode === "unified"
-      ? await loadDirectMessageSurface(
-          new DirectMessageClient(options.surferSession ?? {})
-        )
-      : null
+  const directMessageSurface = context.scopes?.includes(MCP_DM_SCOPE)
+    ? await loadDirectMessageSurface(
+        new DirectMessageClient(options.surferSession ?? {})
+      )
+    : null
   // OAuth/database tokens resolve workspace names during token resolution; static
   // env tokens do not. Resolve them once here so every response (get_context and
   // the signalsurf://context resource) reports real names instead of raw UUIDs.
@@ -217,7 +227,10 @@ async function loadRepositoryCapabilities(
     return repository.loadWorkspaceCapabilities(workspaceIds)
   }
   return Object.fromEntries(
-    workspaceIds.map((workspaceId) => [workspaceId, [...WORKSPACE_CAPABILITIES]])
+    workspaceIds.map((workspaceId) => [
+      workspaceId,
+      [...WORKSPACE_CAPABILITIES],
+    ])
   )
 }
 
@@ -916,10 +929,11 @@ function registerResources(
     if (typeof repository.revalidateContext === "function") {
       await repository.revalidateContext(context)
     }
-    context.workspaceCapabilitiesByWorkspaceId = await loadRepositoryCapabilities(
-      repository,
-      authorizedWorkspaceIds(context)
-    )
+    context.workspaceCapabilitiesByWorkspaceId =
+      await loadRepositoryCapabilities(
+        repository,
+        authorizedWorkspaceIds(context)
+      )
   }
 
   server.registerResource(

@@ -1729,7 +1729,6 @@ describe("SignalSurfRepository", () => {
         created_by: context.userId,
         name: "hosted-agent",
         role: "editor",
-        mode: "unified",
         token_sha256: sha256Hex("hosted-token"),
         revoked_at: null,
       },
@@ -1823,44 +1822,46 @@ describe("SignalSurfRepository", () => {
     "mcp:contact_plans.write",
     "mcp:engagement_automation.read",
     "mcp:engagement_automation.write",
-  ])("accepts a unified OAuth grant containing only %s", async (scope) => {
-    const db = makeDb()
-    db.tables.mcp_tokens = []
-    db.tables.mcp_oauth_clients = [
-      {
-        client_id: "ssmcp_client_new_scope",
-        client_name: "Scoped client",
-        revoked_at: null,
-      },
-    ]
-    db.tables.mcp_oauth_tokens = [
-      {
-        id: "00000000-0000-4000-8000-000000000603",
-        client_id: "ssmcp_client_new_scope",
-        user_id: context.userId,
-        workspace_id: context.workspaceId,
-        workspace_ids: [context.workspaceId],
-        scope: `mcp:dm ${scope} offline_access`,
+  ])(
+    "accepts an OAuth grant containing collaboration plus %s",
+    async (scope) => {
+      const db = makeDb()
+      db.tables.mcp_tokens = []
+      db.tables.mcp_oauth_clients = [
+        {
+          client_id: "ssmcp_client_new_scope",
+          client_name: "Scoped client",
+          revoked_at: null,
+        },
+      ]
+      db.tables.mcp_oauth_tokens = [
+        {
+          id: "00000000-0000-4000-8000-000000000603",
+          client_id: "ssmcp_client_new_scope",
+          user_id: context.userId,
+          workspace_id: context.workspaceId,
+          workspace_ids: [context.workspaceId],
+          scope: `mcp:dm ${scope} offline_access`,
+          resource: "https://mcp.signalsurf.ai/mcp",
+          access_token_sha256: sha256Hex("new-scope-token"),
+          access_token_expires_at: "2999-01-01T00:00:00Z",
+          revoked_at: null,
+        },
+      ]
+      const repo = new SignalSurfRepository(db as any)
+
+      const oauthContext = await repo.resolveMcpToken("new-scope-token", {
         resource: "https://mcp.signalsurf.ai/mcp",
-        access_token_sha256: sha256Hex("new-scope-token"),
-        access_token_expires_at: "2999-01-01T00:00:00Z",
-        revoked_at: null,
-      },
-    ]
-    const repo = new SignalSurfRepository(db as any)
+      })
 
-    const oauthContext = await repo.resolveMcpToken("new-scope-token", {
-      resource: "https://mcp.signalsurf.ai/mcp",
-    })
+      expect(oauthContext).toMatchObject({
+        workspaceId: context.workspaceId,
+        scopes: ["mcp:dm", scope, "offline_access"],
+      })
+    }
+  )
 
-    expect(oauthContext).toMatchObject({
-      workspaceId: context.workspaceId,
-      scopes: [scope, "offline_access"],
-      mode: "unified",
-    })
-  })
-
-  it("resolves unified manual tokens with every authorized workspace id", async () => {
+  it("resolves manual tokens with every authorized workspace id", async () => {
     const db = makeDb()
     db.tables.workspace_members.push({
       workspace_id: secondWorkspaceId,
@@ -1873,15 +1874,14 @@ describe("SignalSurfRepository", () => {
         workspace_id: context.workspaceId,
         workspace_ids: [context.workspaceId, secondWorkspaceId],
         created_by: context.userId,
-        name: "Unified token",
-        mode: "unified",
-        token_sha256: sha256Hex("manual-unified-token"),
+        name: "Manual token",
+        token_sha256: sha256Hex("manual-token"),
         revoked_at: null,
       },
     ]
     const repo = new SignalSurfRepository(db as any)
 
-    const manualContext = await repo.resolveMcpToken("manual-unified-token")
+    const manualContext = await repo.resolveMcpToken("manual-token")
 
     expect(manualContext).toMatchObject({
       workspaceId: context.workspaceId,
@@ -1899,8 +1899,8 @@ describe("SignalSurfRepository", () => {
         },
       ],
       role: "editor",
-      tokenName: "Unified token",
-      mode: "unified",
+      tokenName: "Manual token",
+      scopes: ["mcp:dm", "mcp:read", "mcp:write"],
     })
   })
 

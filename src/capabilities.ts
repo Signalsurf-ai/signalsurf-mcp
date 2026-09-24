@@ -61,9 +61,9 @@ export const MCP_RESOURCE_SCOPES = [
   ...MCP_GRANULAR_SCOPES,
 ] as const
 
-// The unified connection requires this member/Project scope alongside one or
-// more granular product-operation scopes. It is advertised first so every new
-// grant receives the complete conversational + tool surface.
+// This scope grants the member/Project collaboration surface. It is advertised
+// first in the default request; granular scopes independently grant product
+// operations on the same connection.
 export const MCP_DM_SCOPE = "mcp:dm"
 
 export const MCP_DEFAULT_RESOURCE_SCOPES = MCP_GRANULAR_SCOPES.filter(

@@ -5,6 +5,8 @@ import { sha256Hex } from "./auth.js"
 import { canonicalJson, canonicalSha256 } from "./canonical-json.js"
 import {
   MCP_DM_SCOPE,
+  MCP_LEGACY_READ_SCOPE,
+  MCP_LEGACY_WRITE_SCOPE,
   grantedCapabilitiesForScopes,
   isSupportedMcpScope,
   parseStoredScopes,
@@ -552,7 +554,6 @@ type McpTokenRow = {
   created_by: string | null
   name: string | null
   revoked_at: string | null
-  mode?: string | null
 }
 
 type McpOAuthTokenRow = {
@@ -1475,9 +1476,7 @@ export class SignalSurfRepository {
       .from("mcp_tokens")
       // The column is `workspace_id` since the SIG-2318 rename; alias it onto
       // the row shape this repository still uses.
-      .select(
-        "id, workspace_id, workspace_ids, created_by, name, revoked_at, mode"
-      )
+      .select("id, workspace_id, workspace_ids, created_by, name, revoked_at")
       .eq("token_sha256", sha256Hex(token))
       .is("revoked_at", null)
       .maybeSingle()
@@ -1488,7 +1487,7 @@ export class SignalSurfRepository {
     }
 
     const row = data as McpTokenRow
-    if (!row.created_by || row.mode !== "unified") return null
+    if (!row.created_by) return null
     const workspaceIds = await this.currentWorkspaceIdsForUser(
       row.created_by,
       row.workspace_ids?.length ? row.workspace_ids : [row.workspace_id]
@@ -1521,7 +1520,7 @@ export class SignalSurfRepository {
       role: "editor",
       tokenName: row.name ?? undefined,
       authKind: "manual",
-      mode: "unified",
+      scopes: [MCP_DM_SCOPE, MCP_LEGACY_READ_SCOPE, MCP_LEGACY_WRITE_SCOPE],
     }
   }
 
@@ -1583,26 +1582,28 @@ export class SignalSurfRepository {
       ? `OAuth: ${client.client_name}`
       : "OAuth MCP client"
     const storedScopes = parseStoredScopes(row.scope)
-    const scopes = storedScopes.filter(isSupportedMcpScope)
-    if (storedScopes.includes(MCP_DM_SCOPE)) {
-      if (grantedCapabilitiesForScopes(scopes).length === 0) return null
-      return {
-        workspaceId: workspaceIds[0]!,
-        workspaceIds,
-        userId: row.user_id,
-        workspaces: await this.resolveWorkspaceContexts(workspaceIds),
-        role: scopesImplyWriteAccess(scopes) ? "editor" : "viewer",
-        tokenName,
-        scopes,
-        authKind: "oauth",
-        mode: "unified",
-        oauthTokenId: row.id,
-        oauthGrantId: row.refresh_token_family_id ?? row.id,
-        oauthClientId: row.client_id,
-      }
+    const scopes = storedScopes.filter(
+      (scope) => scope === MCP_DM_SCOPE || isSupportedMcpScope(scope)
+    )
+    if (
+      !scopes.includes(MCP_DM_SCOPE) &&
+      grantedCapabilitiesForScopes(scopes).length === 0
+    ) {
+      return null
     }
-
-    return null
+    return {
+      workspaceId: workspaceIds[0]!,
+      workspaceIds,
+      userId: row.user_id,
+      workspaces: await this.resolveWorkspaceContexts(workspaceIds),
+      role: scopesImplyWriteAccess(scopes) ? "editor" : "viewer",
+      tokenName,
+      scopes,
+      authKind: "oauth",
+      oauthTokenId: row.id,
+      oauthGrantId: row.refresh_token_family_id ?? row.id,
+      oauthClientId: row.client_id,
+    }
   }
 
   async resolveWorkspaceContexts(
