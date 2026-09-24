@@ -1,14 +1,20 @@
-# Direct Message mode
+# Unified SignalSurf MCP
 
-The hosted MCP serves two modes on one endpoint, chosen by the member on
-SignalSurf's OAuth consent page.
+The hosted MCP exposes one connection and one tool catalogue. An OAuth grant
+contains `mcp:dm` plus at least one granular product scope; a manual token has
+`mode = unified`. Grants from the removed pre-launch modes are rejected.
 
-| Mode | Grant | What the client gets | Who acts |
-| --- | --- | --- | --- |
-| Tools mode | workspace scopes, or a manual token with `mode = tools` | The public workspace-operation catalogue (`PUBLIC_MCP_TOOLS`) | The client drives SignalSurf directly |
-| Direct Message mode | `mcp:dm`, or a manual token with `mode = surfer_session` | The capability set the member's own Surfer Direct Message has | The client acts as the member |
+The merged catalogue contains:
 
-## What Direct Message mode is (SIG-2681)
+- the public workspace-operation tools allowed by the grant's granular scopes;
+- bounded member and Project collaboration capabilities in each granted
+  workspace.
+
+Every operation acts as the authorizing member and remains bounded by that
+member's workspace role, current membership, tool scope, confirmation rules,
+and product availability.
+
+## Member and Project capabilities (SIG-2681, SIG-2815)
 
 The member's conversation lives in their own client. SignalSurf keeps no
 second conversation, no server-side assistant of its own, and no transcript of
@@ -30,8 +36,9 @@ states no tool list of its own:
     the member, after SignalSurf re-validates membership in that workspace.
 
 The server registers `list_workspaces` plus every published capability, adding
-`workspaceId` to each schema. Nothing in this mode can change workspace data
-directly; that is Tools mode, approved separately.
+`workspaceId` to each schema. It then registers the scoped public product tools
+on the same MCP server. A name collision fails discovery rather than silently
+overriding either definition.
 
 ## Connecting
 
@@ -39,17 +46,14 @@ directly; that is Tools mode, approved separately.
 claude mcp add --transport http signalsurf https://mcp.signalsurf.ai/mcp
 ```
 
-The consent page offers Direct Message and Tools; Direct Message is the
-default when the client requests `mcp:dm`, which the 401 challenge advertises
-first. Switching modes means authorizing again.
-
+The consent page presents one SignalSurf connection. The protected-resource
+challenge advertises `mcp:dm` together with the default granular product scopes,
+so a new authorization receives the unified catalogue without a mode choice.
 
 ## Manual token (fallback)
 
-For clients without OAuth, a workspace member can create a Direct Message MCP
-token in SignalSurf Settings. The stored database mode remains
-`surfer_session` for compatibility, but the token does not create a Surfer
-session or transcript. It is bound to the member and the workspaces selected
+For clients without OAuth, an administrator can create a unified MCP token in
+SignalSurf Settings. It is bound to its creator and the workspaces selected
 when issued. Revocation ends access immediately, and SignalSurf re-validates
 membership in the target workspace on every call.
 
@@ -70,20 +74,28 @@ availability again in the selected workspace when called.
 
 ## Execution and records
 
-The external client is the assistant in this mode. Calls read or write the
+The external client is the assistant for the conversation. Calls read or write the
 same Project resources the member can use in SignalSurf; there is no hidden
 Surfer conversation behind the MCP connection. Project Threads are the durable
 record of messages, decisions, delegated work, and results. Project Surfer work
 keeps its normal confirmation boundary.
+
+A routine lookup or atomic File/CRM mutation keeps its normal record-level
+history and does not create Thread chatter. If the external conversation reaches
+a durable Project-relevant conclusion, call `publish_project_conclusion` before
+the final answer. Append the distilled decision, evidence, and next steps to the
+relevant Thread when known; otherwise create a conclusion Thread. SignalSurf
+shows it as Project Surfer with the external client and requesting member as
+provenance, without copying the private transcript or waking Surfer.
 
 `tools/list` is intentionally unavailable when an available workspace
 catalogue cannot be loaded. Returning a partial list would let MCP clients
 cache a false capability surface. Callers should retry the connection after a
 transient `DIRECT_MESSAGE_UNAVAILABLE` response.
 
-## Relay contract
+## Member-capability relay contract
 
-Every Direct Message request posts `{ action, ...fields }` to
+Every member-capability request posts `{ action, ...fields }` to
 `POST {SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL}/api/mcp/direct-message` with
 the caller's bearer token. Success bodies are `{ ok: true, ... }`; failures are
 `{ ok: false, error, code }` and preserve the HTTP status and product error

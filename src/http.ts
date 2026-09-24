@@ -138,8 +138,6 @@ function findInsufficientScopeRequest(
   context: SignalSurfContext,
   body: unknown
 ): { toolName: PublicMcpToolName; requiredScopes: readonly string[] } | null {
-  // Session mode has no scoped tools; the relay owns member authority.
-  if (context.mode === "surfer_session") return null
   const messages = Array.isArray(body) ? body : [body]
   for (const message of messages) {
     const toolName = getKnownToolName(message)

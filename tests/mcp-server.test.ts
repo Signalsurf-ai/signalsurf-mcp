@@ -403,6 +403,45 @@ describe("MCP server", () => {
     expect(db.tables.workflows).toHaveLength(0)
   })
 
+  it("reports campaign-only grants as write-capable", async () => {
+    const db = new FakeSupabase({
+      workflows: [],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const server = await createSignalSurfMcpServer({
+      context: {
+        workspaceId: context.workspaceId,
+        role: "editor",
+        scopes: ["mcp:dm", "mcp:campaigns.write"],
+      },
+      repository: new SignalSurfRepository(db as any),
+    })
+    const client = new Client({ name: "test-client", version: "0.0.0" })
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
+    cleanup.push(async () => client.close())
+    cleanup.push(async () => server.close())
+
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    const result = await client.callTool({
+      name: "get_context",
+      arguments: {},
+    })
+    const text =
+      result.content?.[0]?.type === "text" ? result.content[0].text : ""
+    const capabilities = JSON.parse(text).data.capabilities
+    expect(capabilities.write).toBe(true)
+    expect(capabilities.tools.create_campaign).toBe(true)
+  })
+
   it("requires workspaceId for workspace-scoped tools when context has multiple workspaces", async () => {
     const db = new FakeSupabase({
       workflows: [

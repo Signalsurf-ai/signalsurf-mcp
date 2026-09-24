@@ -1729,6 +1729,7 @@ describe("SignalSurfRepository", () => {
         created_by: context.userId,
         name: "hosted-agent",
         role: "editor",
+        mode: "unified",
         token_sha256: sha256Hex("hosted-token"),
         revoked_at: null,
       },
@@ -1779,7 +1780,7 @@ describe("SignalSurfRepository", () => {
         user_id: context.userId,
         workspace_id: context.workspaceId,
         workspace_ids: [context.workspaceId, secondWorkspaceId],
-        scope: "mcp:workflows.read mcp:tables.read offline_access",
+        scope: "mcp:dm mcp:workflows.read mcp:tables.read offline_access",
         resource: "https://mcp.signalsurf.ai/mcp",
         access_token_sha256: sha256Hex("oauth-token"),
         access_token_expires_at: "2999-01-01T00:00:00Z",
@@ -1809,6 +1810,97 @@ describe("SignalSurfRepository", () => {
       ],
       role: "viewer",
       tokenName: "OAuth: Typeless",
+    })
+  })
+
+  it.each([
+    "mcp:campaigns.read",
+    "mcp:campaigns.write",
+    "mcp:campaigns.start",
+    "mcp:conversations.read",
+    "mcp:conversations.control",
+    "mcp:contact_plans.read",
+    "mcp:contact_plans.write",
+    "mcp:engagement_automation.read",
+    "mcp:engagement_automation.write",
+  ])("accepts a unified OAuth grant containing only %s", async (scope) => {
+    const db = makeDb()
+    db.tables.mcp_tokens = []
+    db.tables.mcp_oauth_clients = [
+      {
+        client_id: "ssmcp_client_new_scope",
+        client_name: "Scoped client",
+        revoked_at: null,
+      },
+    ]
+    db.tables.mcp_oauth_tokens = [
+      {
+        id: "00000000-0000-4000-8000-000000000603",
+        client_id: "ssmcp_client_new_scope",
+        user_id: context.userId,
+        workspace_id: context.workspaceId,
+        workspace_ids: [context.workspaceId],
+        scope: `mcp:dm ${scope} offline_access`,
+        resource: "https://mcp.signalsurf.ai/mcp",
+        access_token_sha256: sha256Hex("new-scope-token"),
+        access_token_expires_at: "2999-01-01T00:00:00Z",
+        revoked_at: null,
+      },
+    ]
+    const repo = new SignalSurfRepository(db as any)
+
+    const oauthContext = await repo.resolveMcpToken("new-scope-token", {
+      resource: "https://mcp.signalsurf.ai/mcp",
+    })
+
+    expect(oauthContext).toMatchObject({
+      workspaceId: context.workspaceId,
+      scopes: [scope, "offline_access"],
+      mode: "unified",
+    })
+  })
+
+  it("resolves unified manual tokens with every authorized workspace id", async () => {
+    const db = makeDb()
+    db.tables.workspace_members.push({
+      workspace_id: secondWorkspaceId,
+      user_id: context.userId,
+      role: "admin",
+    })
+    db.tables.mcp_tokens = [
+      {
+        id: "00000000-0000-4000-8000-000000000602",
+        workspace_id: context.workspaceId,
+        workspace_ids: [context.workspaceId, secondWorkspaceId],
+        created_by: context.userId,
+        name: "Unified token",
+        mode: "unified",
+        token_sha256: sha256Hex("manual-unified-token"),
+        revoked_at: null,
+      },
+    ]
+    const repo = new SignalSurfRepository(db as any)
+
+    const manualContext = await repo.resolveMcpToken("manual-unified-token")
+
+    expect(manualContext).toMatchObject({
+      workspaceId: context.workspaceId,
+      workspaceIds: [context.workspaceId, secondWorkspaceId],
+      workspaces: [
+        {
+          workspaceId: context.workspaceId,
+          name: "Primary Workspace",
+          organizationName: "Primary Workspace",
+        },
+        {
+          workspaceId: secondWorkspaceId,
+          name: "Second Workspace",
+          organizationName: "Second Workspace",
+        },
+      ],
+      role: "editor",
+      tokenName: "Unified token",
+      mode: "unified",
     })
   })
 

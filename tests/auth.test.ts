@@ -5,11 +5,12 @@ import {
   assertCanWrite,
   authorizedWorkspaces,
   listContextCapabilities,
-  resolveWorkspaceContext,
   resolveStdioContext,
   resolveTokenContext,
+  resolveWorkspaceContext,
   sha256Hex,
 } from "../src/auth.js"
+import { requiredScopesForCapability } from "../src/capabilities.js"
 import { loadConfig, type AppConfig } from "../src/config.js"
 import { UserFacingError } from "../src/errors.js"
 
@@ -260,6 +261,12 @@ describe("auth", () => {
       "deepline.read",
       "deepline.enrich",
       "deepline.execute",
+    ])
+  })
+
+  it("advertises only the canonical campaign scope for remediation", () => {
+    expect(requiredScopesForCapability("campaigns.write")).toEqual([
+      "mcp:campaigns.write",
     ])
   })
 

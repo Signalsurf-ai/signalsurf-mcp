@@ -26,6 +26,7 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     port: 3333,
     path: "/mcp",
     resourceUrl: "http://127.0.0.1:3333/mcp",
+    authorizationServerUrl: "https://app.signalsurf.test",
     allowedHosts: ["127.0.0.1", "localhost", "::1"],
     authDisabled: false,
     tokenEntries: [
@@ -62,6 +63,11 @@ async function listen(
 }> {
   const app = createHttpApp(config, {
     createRepository,
+    directMessageFetch: (async () =>
+      new Response(JSON.stringify({ ok: true, workspaces: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch,
   })
   const server = await new Promise<Server>((resolve) => {
     const listener = app.listen(0, "127.0.0.1", () => resolve(listener))
@@ -223,6 +229,7 @@ describe("HTTP transport", () => {
           created_by: userId,
           name: "hosted-agent",
           role: "editor",
+          mode: "unified",
           token_sha256: sha256Hex(token),
           revoked_at: null,
           last_used_at: null,
@@ -266,6 +273,7 @@ describe("HTTP transport", () => {
           created_by: "00000000-0000-4000-8000-000000000102",
           name: "hosted-agent",
           role: "editor",
+          mode: "unified",
           token_sha256: sha256Hex(token),
           revoked_at: "2026-06-01T00:00:00Z",
         },
@@ -311,6 +319,7 @@ describe("HTTP transport", () => {
           created_by: userId,
           name: "hosted-agent",
           role: "editor",
+          mode: "unified",
           token_sha256: sha256Hex(token),
           revoked_at: null,
           last_used_ip: null,
@@ -462,7 +471,7 @@ describe("HTTP transport", () => {
           client_id: "ssmcp_client_test",
           user_id: userId,
           workspace_id: workspaceId,
-          scope: "mcp:read mcp:write offline_access openid profile",
+          scope: "mcp:dm mcp:read mcp:write offline_access openid profile",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
           access_token_expires_at: "2999-01-01T00:00:00.000Z",
@@ -527,7 +536,7 @@ describe("HTTP transport", () => {
           client_id: "ssmcp_client_test",
           user_id: userId,
           workspace_id: workspaceId,
-          scope: "mcp:tables.read mcp:tables.write",
+          scope: "mcp:dm mcp:tables.read mcp:tables.write",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
           access_token_expires_at: "2999-01-01T00:00:00.000Z",
@@ -604,7 +613,7 @@ describe("HTTP transport", () => {
           user_id: userId,
           workspace_id: workspaceId,
           workspace_ids: [workspaceId, secondWorkspaceId],
-          scope: "mcp:read",
+          scope: "mcp:dm mcp:read",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
           access_token_expires_at: "2999-01-01T00:00:00.000Z",

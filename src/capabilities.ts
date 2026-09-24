@@ -14,6 +14,15 @@ export const MCP_GRANULAR_SCOPES = [
   "mcp:schemas.write",
   "mcp:sources.read",
   "mcp:sources.write",
+  "mcp:campaigns.read",
+  "mcp:campaigns.write",
+  "mcp:campaigns.start",
+  "mcp:conversations.read",
+  "mcp:conversations.control",
+  "mcp:contact_plans.read",
+  "mcp:contact_plans.write",
+  "mcp:engagement_automation.read",
+  "mcp:engagement_automation.write",
   "mcp:creator_discovery.read",
   "mcp:deepline.read",
   "mcp:deepline.enrich",
@@ -52,14 +61,16 @@ export const MCP_RESOURCE_SCOPES = [
   ...MCP_GRANULAR_SCOPES,
 ] as const
 
-// SIG-2673: a grant approved in Direct Message mode carries only this scope
-// (plus offline_access). It exposes no workspace tools; the server relays to the
-// member's Surfer instead. Advertised first so clients request both modes and
-// the member picks one on the consent page.
+// The unified connection requires this member/Project scope alongside one or
+// more granular product-operation scopes. It is advertised first so every new
+// grant receives the complete conversational + tool surface.
 export const MCP_DM_SCOPE = "mcp:dm"
 
 export const MCP_DEFAULT_RESOURCE_SCOPES = MCP_GRANULAR_SCOPES.filter(
-  (scope) => scope !== "mcp:deepline.enrich" && scope !== "mcp:deepline.execute"
+  (scope) =>
+    scope !== "mcp:campaigns.start" &&
+    scope !== "mcp:deepline.enrich" &&
+    scope !== "mcp:deepline.execute"
 )
 
 export type McpScope = (typeof MCP_SUPPORTED_SCOPES)[number]
@@ -753,6 +764,15 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   "mcp:schemas.write": ["context.read", "schemas.read", "schemas.write"],
   "mcp:sources.read": ["context.read", "sources.read"],
   "mcp:sources.write": ["context.read", "sources.read", "sources.write"],
+  "mcp:campaigns.read": ["context.read"],
+  "mcp:campaigns.write": ["context.read", "campaigns.write"],
+  "mcp:campaigns.start": ["context.read"],
+  "mcp:conversations.read": ["context.read"],
+  "mcp:conversations.control": ["context.read"],
+  "mcp:contact_plans.read": ["context.read"],
+  "mcp:contact_plans.write": ["context.read"],
+  "mcp:engagement_automation.read": ["context.read"],
+  "mcp:engagement_automation.write": ["context.read"],
   "mcp:account_lists.read": ["context.read", "account_lists.read"],
   "mcp:account_lists.write": [
     "context.read",
@@ -781,7 +801,9 @@ const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "workflows.write": ["mcp:workflows.write"],
   "workflows.execute": ["mcp:workflows.execute"],
   "workflows.delete": ["mcp:workflows.delete"],
-  "campaigns.write": ["mcp:workflows.write"],
+  // Legacy workflow grants remain accepted in SCOPE_GRANTS, but remediation
+  // advertises only the least-privilege canonical campaign scope.
+  "campaigns.write": ["mcp:campaigns.write"],
   "tables.read": ["mcp:tables.read"],
   "tables.write": ["mcp:tables.write"],
   "tables.delete": ["mcp:tables.delete"],
@@ -834,6 +856,14 @@ export function requiredScopesForCapability(
 
 export function scopeImpliesWriteAccess(scope: string): boolean {
   if (!isSupportedMcpScope(scope)) return false
+  if (
+    scope === "mcp:campaigns.start" ||
+    scope === "mcp:conversations.control" ||
+    scope === "mcp:contact_plans.write" ||
+    scope === "mcp:engagement_automation.write"
+  ) {
+    return true
+  }
   return SCOPE_GRANTS[scope].some((capability) => !capability.endsWith(".read"))
 }
 

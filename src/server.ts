@@ -94,7 +94,7 @@ import {
 export type CreateServerOptions = {
   context: SignalSurfContext
   repository: SignalSurfRepository
-  /** Relay target for Surfer session mode (`context.mode === "surfer_session"`). */
+  /** Member/Project capability target for unified hosted connections. */
   surferSession?: DirectMessageClientOptions
 }
 
@@ -154,9 +154,12 @@ export async function createSignalSurfMcpServer(
   options: CreateServerOptions
 ): Promise<McpServer> {
   const { context, repository } = options
-  if (context.mode === "surfer_session") {
-    return createDirectMessageServer(options.surferSession ?? {})
-  }
+  const directMessageSurface =
+    context.mode === "unified"
+      ? await loadDirectMessageSurface(
+          new DirectMessageClient(options.surferSession ?? {})
+        )
+      : null
   // OAuth/database tokens resolve workspace names during token resolution; static
   // env tokens do not. Resolve them once here so every response (get_context and
   // the signalsurf://context resource) reports real names instead of raw UUIDs.
@@ -185,42 +188,24 @@ export async function createSignalSurfMcpServer(
         tools: {},
         prompts: {},
       },
-      instructions: workspaceProjectedServerInstructions(context),
+      instructions: directMessageSurface
+        ? `${directMessageSurface.instructions}\n\n${workspaceProjectedServerInstructions(context)}`
+        : workspaceProjectedServerInstructions(context),
     }
   )
 
   registerResources(server, repository, context)
-  registerTools(server, repository, context)
+  registerTools(
+    server,
+    repository,
+    context,
+    directMessageSurface?.capabilities ?? []
+  )
+  directMessageSurface?.register(server, PUBLIC_MCP_TOOL_NAMES)
   registerPrompts(server, {
     tables: isToolVisibleAcrossWorkspaces(context, "list_tables"),
     workflows: isToolVisibleAcrossWorkspaces(context, "create_workflow"),
   })
-  return server
-}
-
-/**
- * Session mode registers only the Surfer relay tools: no tool-mode tools,
- * resources, or prompts, and no workspace-context resolution.
- */
-async function createDirectMessageServer(
-  relay: DirectMessageClientOptions
-): Promise<McpServer> {
-  // SIG-2681: SignalSurf publishes this member's capabilities and the role
-  // they act in, so a failure to load them must not silently publish nothing.
-  const surface = await loadDirectMessageSurface(new DirectMessageClient(relay))
-  const server = new McpServer(
-    {
-      name: "signalsurf-mcp",
-      version: "0.1.0",
-    },
-    {
-      capabilities: {
-        tools: {},
-      },
-      instructions: surface.instructions,
-    }
-  )
-  surface.register(server.server)
   return server
 }
 
@@ -239,7 +224,12 @@ async function loadRepositoryCapabilities(
 function registerTools(
   server: McpServer,
   repository: SignalSurfRepository,
-  context: SignalSurfContext
+  context: SignalSurfContext,
+  additionalCapabilities: Array<{
+    name: string
+    title: string
+    description: string
+  }> = []
 ) {
   const registeredTools = new Set<PublicMcpToolName>()
   const visibleToolNames = PUBLIC_MCP_TOOL_NAMES.filter((name) =>
@@ -364,6 +354,7 @@ function registerTools(
             canUseCapability(context, "workflows.execute") ||
             canUseCapability(context, "workflows.write") ||
             canUseCapability(context, "workflows.delete") ||
+            canUseCapability(context, "campaigns.write") ||
             canUseCapability(context, "tables.write") ||
             canUseCapability(context, "tables.delete") ||
             canUseCapability(context, "schemas.write") ||
@@ -405,20 +396,23 @@ function registerTools(
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("find_capabilities")
-        const tools = visibleToolNames
-          .filter(
-            (name) =>
-              name !== "find_capabilities" &&
-              canUseCapability(
-                context,
-                PUBLIC_MCP_TOOLS[name].requiredCapability
-              )
-          )
-          .map((name) => ({
-            name,
-            title: PUBLIC_MCP_TOOLS[name].title,
-            description: PUBLIC_MCP_TOOLS[name].description,
-          }))
+        const tools = [
+          ...visibleToolNames
+            .filter(
+              (name) =>
+                name !== "find_capabilities" &&
+                canUseCapability(
+                  context,
+                  PUBLIC_MCP_TOOLS[name].requiredCapability
+                )
+            )
+            .map((name) => ({
+              name,
+              title: PUBLIC_MCP_TOOLS[name].title,
+              description: PUBLIC_MCP_TOOLS[name].description,
+            })),
+          ...additionalCapabilities,
+        ]
         return searchCapabilities(
           typeof args?.query === "string" ? args.query : "",
           { tools, prompts: visiblePromptCatalog }

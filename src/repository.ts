@@ -548,6 +548,7 @@ type WorkflowToolInput = {
 type McpTokenRow = {
   id: string
   workspace_id: string
+  workspace_ids?: string[] | null
   created_by: string | null
   name: string | null
   revoked_at: string | null
@@ -1474,7 +1475,9 @@ export class SignalSurfRepository {
       .from("mcp_tokens")
       // The column is `workspace_id` since the SIG-2318 rename; alias it onto
       // the row shape this repository still uses.
-      .select("id, workspace_id, created_by, name, revoked_at, mode")
+      .select(
+        "id, workspace_id, workspace_ids, created_by, name, revoked_at, mode"
+      )
       .eq("token_sha256", sha256Hex(token))
       .is("revoked_at", null)
       .maybeSingle()
@@ -1485,16 +1488,12 @@ export class SignalSurfRepository {
     }
 
     const row = data as McpTokenRow
-    if (
-      !row.created_by ||
-      !(
-        await this.currentWorkspaceIdsForUser(row.created_by, [
-          row.workspace_id,
-        ])
-      ).includes(row.workspace_id)
-    ) {
-      return null
-    }
+    if (!row.created_by || row.mode !== "unified") return null
+    const workspaceIds = await this.currentWorkspaceIdsForUser(
+      row.created_by,
+      row.workspace_ids?.length ? row.workspace_ids : [row.workspace_id]
+    )
+    if (workspaceIds.length === 0) return null
 
     const update: Record<string, unknown> = {
       last_used_at: new Date().toISOString(),
@@ -1513,13 +1512,16 @@ export class SignalSurfRepository {
     }
 
     return {
-      workspaceId: row.workspace_id,
-      workspaces: await this.resolveWorkspaceContexts([row.workspace_id]),
+      workspaceId: workspaceIds.includes(row.workspace_id)
+        ? row.workspace_id
+        : workspaceIds[0]!,
+      workspaceIds,
+      workspaces: await this.resolveWorkspaceContexts(workspaceIds),
       userId: row.created_by,
-      role: row.mode === "surfer_session" ? "viewer" : "editor",
+      role: "editor",
       tokenName: row.name ?? undefined,
       authKind: "manual",
-      mode: row.mode === "surfer_session" ? "surfer_session" : "tools",
+      mode: "unified",
     }
   }
 
@@ -1580,42 +1582,27 @@ export class SignalSurfRepository {
     const tokenName = client.client_name
       ? `OAuth: ${client.client_name}`
       : "OAuth MCP client"
-    // SIG-2673: a grant approved in Direct Message mode only relays to the
-    // web Surfer session endpoint, which re-authorizes it per workspace.
-    if (parseStoredScopes(row.scope).includes(MCP_DM_SCOPE)) {
+    const storedScopes = parseStoredScopes(row.scope)
+    const scopes = storedScopes.filter(isSupportedMcpScope)
+    if (storedScopes.includes(MCP_DM_SCOPE)) {
+      if (grantedCapabilitiesForScopes(scopes).length === 0) return null
       return {
         workspaceId: workspaceIds[0]!,
         workspaceIds,
         userId: row.user_id,
-        role: "viewer",
+        workspaces: await this.resolveWorkspaceContexts(workspaceIds),
+        role: scopesImplyWriteAccess(scopes) ? "editor" : "viewer",
         tokenName,
+        scopes,
         authKind: "oauth",
-        mode: "surfer_session",
+        mode: "unified",
         oauthTokenId: row.id,
         oauthGrantId: row.refresh_token_family_id ?? row.id,
         oauthClientId: row.client_id,
       }
     }
 
-    const scopes = parseStoredScopes(row.scope).filter(isSupportedMcpScope)
-    if (grantedCapabilitiesForScopes(scopes).length === 0) {
-      return null
-    }
-
-    return {
-      workspaceId: workspaceIds[0]!,
-      workspaceIds,
-      workspaces: await this.resolveWorkspaceContexts(workspaceIds),
-      userId: row.user_id,
-      role: scopesImplyWriteAccess(scopes) ? "editor" : "viewer",
-      tokenName,
-      scopes,
-      authKind: "oauth",
-      mode: "tools",
-      oauthTokenId: row.id,
-      oauthGrantId: row.refresh_token_family_id ?? row.id,
-      oauthClientId: row.client_id,
-    }
+    return null
   }
 
   async resolveWorkspaceContexts(
@@ -1663,7 +1650,9 @@ export class SignalSurfRepository {
     if (!context.userId) return
     const workspaceIds = await this.currentWorkspaceIdsForUser(
       context.userId,
-      context.workspaceIds?.length ? context.workspaceIds : [context.workspaceId]
+      context.workspaceIds?.length
+        ? context.workspaceIds
+        : [context.workspaceId]
     )
     if (workspaceIds.length === 0) {
       throw new UserFacingError(
@@ -1786,7 +1775,9 @@ export class SignalSurfRepository {
       .eq("id", context.workspaceId)
       .maybeSingle()
     requireNoDbError(error, "Failed to resolve workspace owner")
-    return ((data as WorkspaceOwnerRow | null)?.owner_id as string | null) ?? null
+    return (
+      ((data as WorkspaceOwnerRow | null)?.owner_id as string | null) ?? null
+    )
   }
 
   async getBrandContext(context: SignalSurfContext) {
@@ -2749,7 +2740,10 @@ export class SignalSurfRepository {
     // SIG-2298 renamed `workflows.project_id` to `agent_id`; a Project is an Agent.
     if (input.projectId !== undefined) insertData.agent_id = input.projectId
     if (input.projectId) {
-      await this.assertDatabaseFolderBelongsToWorkspace(context, input.projectId)
+      await this.assertDatabaseFolderBelongsToWorkspace(
+        context,
+        input.projectId
+      )
     }
     if (input.scoringRubric !== undefined)
       insertData.scoring_rubric = input.scoringRubric
@@ -2784,7 +2778,10 @@ export class SignalSurfRepository {
   async updateWorkflow(context: SignalSurfContext, input: UpdateWorkflowInput) {
     await this.assertWorkflowBelongsToWorkspace(context, input.workflowId)
     if (input.projectId) {
-      await this.assertDatabaseFolderBelongsToWorkspace(context, input.projectId)
+      await this.assertDatabaseFolderBelongsToWorkspace(
+        context,
+        input.projectId
+      )
     }
     if (input.variables !== undefined && input.variablesPatch !== undefined) {
       throw new UserFacingError(
@@ -3759,7 +3756,11 @@ export class SignalSurfRepository {
   }
 
   async listEnrich(context: SignalSurfContext, input: ListEnrichInput) {
-    await this.assertDatabaseBelongsToWorkspace(context, input.databaseId, false)
+    await this.assertDatabaseBelongsToWorkspace(
+      context,
+      input.databaseId,
+      false
+    )
     const { data, error } = await this.db
       .from("sources")
       .select("id, metadata, workflow_id")
@@ -3870,7 +3871,8 @@ export class SignalSurfRepository {
       )
     }
 
-    const userId = context.userId ?? (await this.resolveWorkspaceOwnerId(context))
+    const userId =
+      context.userId ?? (await this.resolveWorkspaceOwnerId(context))
     if (!userId) {
       throw new UserFacingError(
         "Cannot queue Enrich because no job user could be resolved.",
@@ -4089,7 +4091,10 @@ export class SignalSurfRepository {
 
     while (true) {
       polls += 1
-      const job = await this.getSurfJobAndValidateWorkspace(context, input.jobId)
+      const job = await this.getSurfJobAndValidateWorkspace(
+        context,
+        input.jobId
+      )
       const formattedJob = formatSurfJob(job)
       const terminal = isTerminalSurfJobStatus(job.status)
       if (terminal) {
@@ -4543,7 +4548,11 @@ export class SignalSurfRepository {
   }
 
   async readTable(context: SignalSurfContext, input: ReadTableInput) {
-    await this.assertDatabaseBelongsToWorkspace(context, input.databaseId, false)
+    await this.assertDatabaseBelongsToWorkspace(
+      context,
+      input.databaseId,
+      false
+    )
 
     const limit = input.limit ?? 50
     const offset = input.offset ?? 0
@@ -5487,7 +5496,9 @@ export class SignalSurfRepository {
     }
 
     const userId =
-      context.userId ?? (await this.resolveWorkspaceOwnerId(context)) ?? undefined
+      context.userId ??
+      (await this.resolveWorkspaceOwnerId(context)) ??
+      undefined
     if (!userId) {
       throw new UserFacingError(
         "Cannot create source because no source owner could be resolved.",
