@@ -10,8 +10,8 @@ import { SignalSurfRepository } from "../src/repository.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 /**
- * SIG-2681/SIG-2815: the unified MCP connection gives a client the member's
- * own Surfer capabilities and scoped product tools. SignalSurf publishes the
+ * The SignalSurf MCP connection gives a client the member's own Project
+ * capabilities and scoped product tools. SignalSurf publishes the
  * member catalogue, so these assert the transport boundary, not a duplicate.
  */
 
@@ -19,9 +19,8 @@ const workspaceId = "00000000-0000-4000-8000-000000000001"
 const otherWorkspaceId = "00000000-0000-4000-8000-000000000002"
 const memberId = "00000000-0000-4000-8000-000000000102"
 const resource = "http://127.0.0.1:3333/mcp"
-const manualUnified = "ssmcp_live_unified"
-const legacyManual = "ssmcp_session_token"
-const unifiedOAuth = "ssmcp_at_unified_grant"
+const manualToken = "ssmcp_live_manual"
+const combinedOAuth = "ssmcp_at_combined_grant"
 const dmOnlyOAuth = "ssmcp_at_dm_only_grant"
 const toolOnlyOAuth = "ssmcp_at_tool_only_grant"
 
@@ -156,20 +155,7 @@ async function start(stub = signalSurfStub()) {
         created_by: memberId,
         name: "claude",
         role: "editor",
-        mode: "unified",
-        token_sha256: sha256Hex(manualUnified),
-        revoked_at: null,
-        last_used_at: null,
-        last_used_ip: null,
-      },
-      {
-        id: "00000000-0000-4000-8000-000000000111",
-        workspace_id: workspaceId,
-        created_by: memberId,
-        name: "legacy",
-        role: "editor",
-        mode: "surfer_session",
-        token_sha256: sha256Hex(legacyManual),
+        token_sha256: sha256Hex(manualToken),
         revoked_at: null,
         last_used_at: null,
         last_used_ip: null,
@@ -178,7 +164,7 @@ async function start(stub = signalSurfStub()) {
     mcp_oauth_tokens: [
       oauthRow(
         "00000000-0000-4000-8000-000000000211",
-        unifiedOAuth,
+        combinedOAuth,
         "mcp:dm mcp:read mcp:write offline_access"
       ),
       oauthRow(
@@ -270,10 +256,10 @@ describe("member capability transport", () => {
   })
 })
 
-describe("unified SignalSurf MCP over HTTP", () => {
+describe("SignalSurf MCP capability composition over HTTP", () => {
   it("publishes one union of member and product-operation capabilities", async () => {
     const { base } = await start()
-    const response = await listTools(base, manualUnified)
+    const response = await listTools(base, manualToken)
     expect(response.status).toBe(200)
     const payload = await readMcpJson(response)
     const tools = payload.result.tools as Array<{
@@ -304,9 +290,9 @@ describe("unified SignalSurf MCP over HTTP", () => {
     })
   })
 
-  it("discovers Project tools through the unified capability search", async () => {
+  it("discovers Project tools through capability search", async () => {
     const { base } = await start()
-    const response = await rpc(base, unifiedOAuth, {
+    const response = await rpc(base, combinedOAuth, {
       jsonrpc: "2.0",
       id: 2,
       method: "tools/call",
@@ -359,7 +345,7 @@ describe("unified SignalSurf MCP over HTTP", () => {
     })
     const { base } = await start(stub)
 
-    const response = await listTools(base, unifiedOAuth)
+    const response = await listTools(base, combinedOAuth)
     expect(response.status).toBe(200)
     const text = await response.text()
     expect(text).toContain("start_thread")
@@ -391,7 +377,7 @@ describe("unified SignalSurf MCP over HTTP", () => {
     })
     const { base } = await start(stub)
 
-    const response = await listTools(base, unifiedOAuth)
+    const response = await listTools(base, combinedOAuth)
     expect(response.status).toBe(503)
     await expect(response.json()).resolves.toMatchObject({
       code: "DIRECT_MESSAGE_UNAVAILABLE",
@@ -400,7 +386,7 @@ describe("unified SignalSurf MCP over HTTP", () => {
 
   it("runs a capability as the member in one named workspace", async () => {
     const { base, stub } = await start()
-    const response = await rpc(base, manualUnified, {
+    const response = await rpc(base, manualToken, {
       jsonrpc: "2.0",
       id: 2,
       method: "tools/call",
@@ -421,7 +407,7 @@ describe("unified SignalSurf MCP over HTTP", () => {
     expect(
       ((call?.[1] as RequestInit).headers as Record<string, string>)
         .Authorization
-    ).toBe(`Bearer ${manualUnified}`)
+    ).toBe(`Bearer ${manualToken}`)
   })
 
   it("preserves workspace selection on composed published schemas", async () => {
@@ -486,7 +472,7 @@ describe("unified SignalSurf MCP over HTTP", () => {
     })
     const { base } = await start(stub)
 
-    const listed = await readMcpJson(await listTools(base, unifiedOAuth))
+    const listed = await readMcpJson(await listTools(base, combinedOAuth))
     const schemas = Object.fromEntries(
       listed.result.tools
         .filter((tool: { name: string }) =>
@@ -505,7 +491,7 @@ describe("unified SignalSurf MCP over HTTP", () => {
       ["any_of_tool", { workspaceId, kind: "alpha" }],
     ] as const) {
       const result = await readMcpJson(
-        await rpc(base, unifiedOAuth, {
+        await rpc(base, combinedOAuth, {
           jsonrpc: "2.0",
           id: name,
           method: "tools/call",
@@ -534,11 +520,28 @@ describe("unified SignalSurf MCP over HTTP", () => {
     )
   })
 
-  it("rejects pre-unification grants instead of preserving separate modes", async () => {
+  it("composes collaboration and product tools directly from scopes", async () => {
     const { base } = await start()
-    expect((await listTools(base, dmOnlyOAuth)).status).toBe(401)
-    expect((await listTools(base, toolOnlyOAuth)).status).toBe(401)
-    expect((await listTools(base, legacyManual)).status).toBe(401)
+    const collaboration = await readMcpJson(await listTools(base, dmOnlyOAuth))
+    const collaborationNames = collaboration.result.tools.map(
+      (tool: { name: string }) => tool.name
+    )
+    expect(collaborationNames).toContain("start_thread")
+    expect(collaborationNames).toContain("list_workflows")
+    const deniedProductCall = await rpc(base, dmOnlyOAuth, {
+      jsonrpc: "2.0",
+      id: "denied-product-call",
+      method: "tools/call",
+      params: { name: "list_workflows", arguments: {} },
+    })
+    expect(deniedProductCall.status).toBe(403)
+
+    const product = await readMcpJson(await listTools(base, toolOnlyOAuth))
+    const productNames = product.result.tools.map(
+      (tool: { name: string }) => tool.name
+    )
+    expect(productNames).toContain("list_workflows")
+    expect(productNames).not.toContain("start_thread")
   })
 
   it("fails closed when a published member tool collides with a product tool", async () => {
@@ -561,7 +564,7 @@ describe("unified SignalSurf MCP over HTTP", () => {
       return jsonResponse(200, { ok: true, data: {} })
     })
     const { base } = await start(stub)
-    const response = await listTools(base, unifiedOAuth)
+    const response = await listTools(base, combinedOAuth)
     expect(response.status).toBe(503)
     await expect(response.json()).resolves.toMatchObject({
       code: "DIRECT_MESSAGE_UNAVAILABLE",
@@ -570,7 +573,7 @@ describe("unified SignalSurf MCP over HTTP", () => {
 
   it("states the role the client acts in", async () => {
     const { base } = await start()
-    const response = await rpc(base, manualUnified, {
+    const response = await rpc(base, manualToken, {
       jsonrpc: "2.0",
       id: 9,
       method: "initialize",

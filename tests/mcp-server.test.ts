@@ -416,7 +416,7 @@ describe("MCP server", () => {
       context: {
         workspaceId: context.workspaceId,
         role: "editor",
-        scopes: ["mcp:dm", "mcp:campaigns.write"],
+        scopes: ["mcp:campaigns.write"],
       },
       repository: new SignalSurfRepository(db as any),
     })

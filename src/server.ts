@@ -12,6 +12,7 @@ import {
   resolveWorkspaceContext,
 } from "./auth.js"
 import {
+  MCP_DM_SCOPE,
   PUBLIC_MCP_TOOLS,
   PUBLIC_MCP_TOOL_NAMES,
   requiredCapabilitiesForTool,
@@ -60,11 +61,11 @@ import {
   listDatabaseViewsSchema,
   listDatabasesSchema,
   listEnrichSchema,
-  listWorkspaceToolsSchema,
   listSurfJobsSchema,
   listWorkflowSourcesSchema,
   listWorkflowToolsSchema,
   listWorkflowsSchema,
+  listWorkspaceToolsSchema,
   planSenderCapacitySchema,
   readTableSchema,
   readTableViewSchema,
@@ -94,7 +95,7 @@ import {
 export type CreateServerOptions = {
   context: SignalSurfContext
   repository: SignalSurfRepository
-  /** Member/Project capability target for unified hosted connections. */
+  /** Member/Project capability target for connections granted `mcp:dm`. */
   surferSession?: DirectMessageClientOptions
 }
 
@@ -154,12 +155,11 @@ export async function createSignalSurfMcpServer(
   options: CreateServerOptions
 ): Promise<McpServer> {
   const { context, repository } = options
-  const directMessageSurface =
-    context.mode === "unified"
-      ? await loadDirectMessageSurface(
-          new DirectMessageClient(options.surferSession ?? {})
-        )
-      : null
+  const directMessageSurface = context.scopes?.includes(MCP_DM_SCOPE)
+    ? await loadDirectMessageSurface(
+        new DirectMessageClient(options.surferSession ?? {})
+      )
+    : null
   // OAuth/database tokens resolve workspace names during token resolution; static
   // env tokens do not. Resolve them once here so every response (get_context and
   // the signalsurf://context resource) reports real names instead of raw UUIDs.
@@ -217,7 +217,10 @@ async function loadRepositoryCapabilities(
     return repository.loadWorkspaceCapabilities(workspaceIds)
   }
   return Object.fromEntries(
-    workspaceIds.map((workspaceId) => [workspaceId, [...WORKSPACE_CAPABILITIES]])
+    workspaceIds.map((workspaceId) => [
+      workspaceId,
+      [...WORKSPACE_CAPABILITIES],
+    ])
   )
 }
 
@@ -916,10 +919,11 @@ function registerResources(
     if (typeof repository.revalidateContext === "function") {
       await repository.revalidateContext(context)
     }
-    context.workspaceCapabilitiesByWorkspaceId = await loadRepositoryCapabilities(
-      repository,
-      authorizedWorkspaceIds(context)
-    )
+    context.workspaceCapabilitiesByWorkspaceId =
+      await loadRepositoryCapabilities(
+        repository,
+        authorizedWorkspaceIds(context)
+      )
   }
 
   server.registerResource(

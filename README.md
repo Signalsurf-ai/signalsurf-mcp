@@ -259,14 +259,13 @@ OAuth tokens may also carry
 `offline_access` for refresh-token support. The MCP resource server accepts that scope but does not advertise it as
 a resource requirement, and it grants no tool capability by itself.
 
-## Unified hosted connection
+## Hosted connection
 
-A hosted grant combines `mcp:dm` with at least one granular product scope. The
-client receives one tool catalogue containing both the member's Project
-collaboration capabilities and the scoped public workspace-operation tools.
-SignalSurf publishes the member-specific portion of that catalogue and the MCP
-server merges it with `PUBLIC_MCP_TOOLS`. See
-[docs/direct-message-mode.md](docs/direct-message-mode.md).
+A hosted grant's scopes are its complete capability contract. `mcp:dm` grants
+the member's Project collaboration capabilities, while granular scopes grant
+public workspace operations. The default request includes both, but restricted
+clients may receive either independently on the same SignalSurf MCP connection.
+See [docs/mcp-connection.md](docs/mcp-connection.md).
 
 ## Architecture
 

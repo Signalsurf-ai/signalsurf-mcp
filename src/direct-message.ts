@@ -7,12 +7,13 @@ import { jsonErrorResult, jsonResult } from "./mcp-results.js"
 /**
  * SIG-2681/SIG-2815: The member's conversation lives in their own
  * client; SignalSurf keeps no second conversation and no relayed transcript.
- * The unified connection includes bounded member and Project capabilities
- * published by SignalSurf itself, plus scoped product tools. Every call stays
+ * The `mcp:dm` scope includes bounded member and Project capabilities
+ * published by SignalSurf itself. Product scopes independently grant product
+ * tools. Every call stays
  * within the approving member's authority in one granted workspace.
  */
 
-export const DIRECT_MESSAGE_INSTRUCTIONS = `SignalSurf MCP — unified connection.
+export const DIRECT_MESSAGE_INSTRUCTIONS = `SignalSurf MCP connection.
 
 You act with the authority of the SignalSurf member who authorized this connection, and nothing more. SignalSurf keeps no copy of this external conversation and runs no second assistant for it.
 
@@ -121,7 +122,9 @@ export class DirectMessageClient {
           ? record.error
           : `SignalSurf rejected this request (${response.status}).`
       const code =
-        typeof record.code === "string" ? record.code : DIRECT_MESSAGE_UNAVAILABLE
+        typeof record.code === "string"
+          ? record.code
+          : DIRECT_MESSAGE_UNAVAILABLE
       throw new UserFacingError(message, {
         code,
         status: response.status,
@@ -226,10 +229,7 @@ function withWorkspaceId(
 export type DirectMessageSurface = {
   instructions: string
   capabilities: Array<{ name: string; title: string; description: string }>
-  register: (
-    server: McpServer,
-    reservedToolNames?: readonly string[]
-  ) => void
+  register: (server: McpServer, reservedToolNames?: readonly string[]) => void
 }
 
 function described(schema: ZodTypeAny, json: JsonRecord): ZodTypeAny {
@@ -423,9 +423,7 @@ function publishedSchemaToZod(input: unknown): ZodTypeAny {
       publishedSchemaToZod({ ...schema, type })
     )
     return described(
-      z.union(
-        variants as unknown as [ZodTypeAny, ZodTypeAny, ...ZodTypeAny[]]
-      ),
+      z.union(variants as unknown as [ZodTypeAny, ZodTypeAny, ...ZodTypeAny[]]),
       schema
     )
   }
@@ -435,7 +433,9 @@ function publishedSchemaToZod(input: unknown): ZodTypeAny {
     case "object": {
       const required = new Set(
         Array.isArray(schema.required)
-          ? schema.required.filter((key): key is string => typeof key === "string")
+          ? schema.required.filter(
+              (key): key is string => typeof key === "string"
+            )
           : []
       )
       const properties =
@@ -451,21 +451,28 @@ function publishedSchemaToZod(input: unknown): ZodTypeAny {
         })
       )
       const object = z.object(shape)
-      result = schema.additionalProperties === false ? object.strict() : object.passthrough()
+      result =
+        schema.additionalProperties === false
+          ? object.strict()
+          : object.passthrough()
       break
     }
     case "array": {
       let array = z.array(publishedSchemaToZod(schema.items))
-      if (typeof schema.minItems === "number") array = array.min(schema.minItems)
-      if (typeof schema.maxItems === "number") array = array.max(schema.maxItems)
+      if (typeof schema.minItems === "number")
+        array = array.min(schema.minItems)
+      if (typeof schema.maxItems === "number")
+        array = array.max(schema.maxItems)
       result = array
       break
     }
     case "string": {
       let string = z.string()
       if (schema.format === "uuid") string = string.uuid()
-      if (typeof schema.minLength === "number") string = string.min(schema.minLength)
-      if (typeof schema.maxLength === "number") string = string.max(schema.maxLength)
+      if (typeof schema.minLength === "number")
+        string = string.min(schema.minLength)
+      if (typeof schema.maxLength === "number")
+        string = string.max(schema.maxLength)
       result = string
       break
     }
@@ -473,8 +480,10 @@ function publishedSchemaToZod(input: unknown): ZodTypeAny {
     case "number": {
       let number = z.number()
       if (types[0] === "integer") number = number.int()
-      if (typeof schema.minimum === "number") number = number.min(schema.minimum)
-      if (typeof schema.maximum === "number") number = number.max(schema.maximum)
+      if (typeof schema.minimum === "number")
+        number = number.min(schema.minimum)
+      if (typeof schema.maximum === "number")
+        number = number.max(schema.maximum)
       result = number
       break
     }
@@ -529,7 +538,9 @@ export async function loadDirectMessageSurface(
     .filter((workspace) => workspace.available !== false)
     .map((workspace) => workspace.workspaceId)
   const { tools: published, roles } = mergePublishedTools(
-    await Promise.all(workspaceIds.map((workspaceId) => client.catalog(workspaceId)))
+    await Promise.all(
+      workspaceIds.map((workspaceId) => client.catalog(workspaceId))
+    )
   )
   const tools = [
     LIST_WORKSPACES,
