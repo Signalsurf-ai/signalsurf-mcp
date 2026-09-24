@@ -30,9 +30,11 @@ SignalSurf publishes this catalogue per member and workspace:
     after SignalSurf re-validates membership in that workspace.
 
 When `mcp:dm` is granted, the server registers `list_workspaces` plus every
-published collaboration capability and adds `workspaceId` to each schema. It
-independently registers product tools allowed by the granular scopes. A name
-collision fails discovery rather than silently overriding either definition.
+published collaboration capability and adds `workspaceId` to each schema. The
+stable public product-tool catalogue remains discoverable on the connection;
+each call enforces its granular scope, and `find_capabilities` returns only
+tools the token may use. A name collision fails discovery rather than silently
+overriding either definition.
 
 ## Connecting
 

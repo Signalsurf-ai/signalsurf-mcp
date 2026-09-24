@@ -528,6 +528,22 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
     )
     expect(collaborationNames).toContain("start_thread")
     expect(collaborationNames).toContain("list_workflows")
+    const initialized = await readMcpJson(
+      await rpc(base, dmOnlyOAuth, {
+        jsonrpc: "2.0",
+        id: "dm-only-instructions",
+        method: "initialize",
+        params: {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: "test", version: "1" },
+        },
+      })
+    )
+    expect(initialized.result.instructions).toContain("Use list_workspaces")
+    expect(initialized.result.instructions).not.toContain(
+      "call get_context FIRST"
+    )
     const deniedProductCall = await rpc(base, dmOnlyOAuth, {
       jsonrpc: "2.0",
       id: "denied-product-call",

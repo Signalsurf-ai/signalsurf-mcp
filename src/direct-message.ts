@@ -20,7 +20,7 @@ You act with the authority of the SignalSurf member who authorized this connecti
 - Call list_workspaces first when the member reaches more than one workspace, and pass workspaceId on every later call.
 - Read Activity to see what is new and what waits on the member; read a Thread before claiming anything happened there.
 - Work happens in Projects. Start a Thread or reply in one, and that Project's Surfer does the work under its own confirmations. Read the Thread afterwards to see what it actually did.
-- Use the product-operation tools on this same connection for direct Table, Workflow, Signal, enrichment, and other supported work. Routine atomic edits do not need a Thread just for logging.
+- When product scopes are granted, use the product-operation tools on this same connection for direct Table, Workflow, Signal, enrichment, and other supported work. Routine atomic edits do not need a Thread just for logging.
 - Before your final answer, publish a durable Project-relevant conclusion when the conversation produced a decision, direction, research summary, assumption, or next step. Append it to the relevant Thread when known; otherwise create a conclusion Thread. Store only the distilled result, never the private transcript or routine tool chatter.`
 
 export const DIRECT_MESSAGE_UNAVAILABLE = "DIRECT_MESSAGE_UNAVAILABLE"
