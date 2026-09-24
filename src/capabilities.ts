@@ -801,7 +801,9 @@ const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "workflows.write": ["mcp:workflows.write"],
   "workflows.execute": ["mcp:workflows.execute"],
   "workflows.delete": ["mcp:workflows.delete"],
-  "campaigns.write": ["mcp:campaigns.write", "mcp:workflows.write"],
+  // Legacy workflow grants remain accepted in SCOPE_GRANTS, but remediation
+  // advertises only the least-privilege canonical campaign scope.
+  "campaigns.write": ["mcp:campaigns.write"],
   "tables.read": ["mcp:tables.read"],
   "tables.write": ["mcp:tables.write"],
   "tables.delete": ["mcp:tables.delete"],
