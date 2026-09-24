@@ -354,6 +354,7 @@ function registerTools(
             canUseCapability(context, "workflows.execute") ||
             canUseCapability(context, "workflows.write") ||
             canUseCapability(context, "workflows.delete") ||
+            canUseCapability(context, "campaigns.write") ||
             canUseCapability(context, "tables.write") ||
             canUseCapability(context, "tables.delete") ||
             canUseCapability(context, "schemas.write") ||

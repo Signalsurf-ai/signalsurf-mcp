@@ -178,17 +178,49 @@ const LIST_WORKSPACES: DirectMessageTool = {
   inputSchema: { type: "object", properties: {}, additionalProperties: false },
 }
 
-/** Each capability acts in exactly one granted workspace. */
-function withWorkspaceId(schema: JsonRecord): JsonRecord {
+const WORKSPACE_ID_SCHEMA = {
+  type: ["string", "null"],
+  description:
+    "Which granted workspace to act in (see list_workspaces). Omit only when the connection reaches one workspace.",
+} as const
+
+/**
+ * Add the selector to composed object branches as well as their outer schema.
+ * A strict allOf/anyOf/oneOf branch would otherwise reject workspaceId before
+ * the outer constraint can validate it.
+ */
+function withWorkspaceId(
+  schema: JsonRecord,
+  inheritedProperties: JsonRecord = {}
+): JsonRecord {
   const properties = {
-    workspaceId: {
-      type: ["string", "null"],
-      description:
-        "Which granted workspace to act in (see list_workspaces). Omit only when the connection reaches one workspace.",
-    },
+    workspaceId: WORKSPACE_ID_SCHEMA,
+    ...inheritedProperties,
     ...((schema.properties as JsonRecord | undefined) ?? {}),
   }
-  return { ...schema, type: "object", properties, additionalProperties: false }
+  const composed = Object.fromEntries(
+    (["allOf", "anyOf", "oneOf"] as const).flatMap((key) => {
+      const branches = schema[key]
+      if (!Array.isArray(branches)) return []
+      return [
+        [
+          key,
+          branches.map((branch) =>
+            branch && typeof branch === "object" && !Array.isArray(branch)
+              ? withWorkspaceId(branch as JsonRecord, properties)
+              : branch
+          ),
+        ],
+      ]
+    })
+  )
+  return {
+    ...schema,
+    ...composed,
+    type: "object",
+    properties,
+    additionalProperties: false,
+  }
 }
 
 export type DirectMessageSurface = {
@@ -206,6 +238,123 @@ function described(schema: ZodTypeAny, json: JsonRecord): ZodTypeAny {
     : schema
 }
 
+function compositionSiblings(schema: JsonRecord): JsonRecord | null {
+  const { allOf: _allOf, anyOf: _anyOf, oneOf: _oneOf, ...siblings } = schema
+  // Composed object branches already carry the complete allowed property set.
+  // Keep the outer object/property/required constraints without making this
+  // second validator reject properties that belong to a branch.
+  if (siblings.type === "object" && siblings.additionalProperties === false) {
+    delete siblings.additionalProperties
+  }
+  const constraintKeys = Object.keys(siblings).filter(
+    (key) =>
+      ![
+        "$schema",
+        "$id",
+        "$defs",
+        "definitions",
+        "title",
+        "description",
+      ].includes(key)
+  )
+  return constraintKeys.length > 0 ? siblings : null
+}
+
+function intersectWithCompositionSiblings(
+  composed: ZodTypeAny,
+  schema: JsonRecord
+): ZodTypeAny {
+  const siblings = compositionSiblings(schema)
+  return siblings
+    ? z.intersection(composed, publishedSchemaToZod(siblings))
+    : composed
+}
+
+type ComposedObjectProperties = {
+  definitions: Map<string, unknown[]>
+  required: Set<string>
+}
+
+function collectComposedObjectProperties(
+  schema: JsonRecord
+): ComposedObjectProperties {
+  const definitions = new Map<string, unknown[]>()
+  const properties =
+    schema.properties &&
+    typeof schema.properties === "object" &&
+    !Array.isArray(schema.properties)
+      ? (schema.properties as JsonRecord)
+      : {}
+  for (const [key, definition] of Object.entries(properties)) {
+    definitions.set(key, [definition])
+  }
+  const required = new Set(
+    Array.isArray(schema.required)
+      ? schema.required.filter((key): key is string => typeof key === "string")
+      : []
+  )
+
+  const allOf = Array.isArray(schema.allOf) ? schema.allOf : []
+  for (const branch of allOf) {
+    if (!branch || typeof branch !== "object" || Array.isArray(branch)) continue
+    const collected = collectComposedObjectProperties(branch as JsonRecord)
+    for (const [key, values] of collected.definitions) {
+      definitions.set(key, [...(definitions.get(key) ?? []), ...values])
+    }
+    for (const key of collected.required) required.add(key)
+  }
+
+  const alternatives = Array.isArray(schema.anyOf)
+    ? schema.anyOf
+    : Array.isArray(schema.oneOf)
+      ? schema.oneOf
+      : []
+  const alternativeRequirements: Set<string>[] = []
+  for (const branch of alternatives) {
+    if (!branch || typeof branch !== "object" || Array.isArray(branch)) continue
+    const collected = collectComposedObjectProperties(branch as JsonRecord)
+    for (const [key, values] of collected.definitions) {
+      definitions.set(key, [...(definitions.get(key) ?? []), ...values])
+    }
+    alternativeRequirements.push(collected.required)
+  }
+  if (alternativeRequirements.length > 0) {
+    for (const key of alternativeRequirements[0]!) {
+      if (alternativeRequirements.every((keys) => keys.has(key)))
+        required.add(key)
+    }
+  }
+
+  return { definitions, required }
+}
+
+function composedObjectToZod(schema: JsonRecord): ZodTypeAny {
+  const { definitions, required } = collectComposedObjectProperties(schema)
+  const shape = Object.fromEntries(
+    [...definitions].map(([key, rawDefinitions]) => {
+      const uniqueDefinitions = [
+        ...new Map(
+          rawDefinitions.map((definition) => [
+            JSON.stringify(definition),
+            definition,
+          ])
+        ).values(),
+      ]
+      const validators = uniqueDefinitions.map(publishedSchemaToZod)
+      const property =
+        validators.length === 1
+          ? validators[0]!
+          : z.union(
+              validators as unknown as [ZodTypeAny, ZodTypeAny, ...ZodTypeAny[]]
+            )
+      return [key, required.has(key) ? property : property.optional()]
+    })
+  )
+  return schema.additionalProperties === false
+    ? z.object(shape).strict()
+    : z.object(shape).passthrough()
+}
+
 /**
  * SignalSurf Web owns these input contracts and validates them again before
  * execution. Convert the JSON Schema subset emitted by Zod into an MCP SDK
@@ -220,11 +369,15 @@ function publishedSchemaToZod(input: unknown): ZodTypeAny {
 
   if (Array.isArray(schema.allOf) && schema.allOf.length > 0) {
     const [first, ...rest] = schema.allOf
+    const composed = rest.reduce(
+      (combined, part) => z.intersection(combined, publishedSchemaToZod(part)),
+      publishedSchemaToZod(first)
+    )
+    const authoritative = intersectWithCompositionSiblings(composed, schema)
     return described(
-      rest.reduce(
-        (combined, part) => z.intersection(combined, publishedSchemaToZod(part)),
-        publishedSchemaToZod(first)
-      ),
+      schema.type === "object" || schema.properties
+        ? composedObjectToZod(schema)
+        : authoritative,
       schema
     )
   }
@@ -235,12 +388,17 @@ function publishedSchemaToZod(input: unknown): ZodTypeAny {
       : null
   if (alternatives?.length) {
     const variants = alternatives.map(publishedSchemaToZod)
-    return described(
+    const composed =
       variants.length === 1
         ? variants[0]!
         : z.union(
             variants as unknown as [ZodTypeAny, ZodTypeAny, ...ZodTypeAny[]]
-          ),
+          )
+    const authoritative = intersectWithCompositionSiblings(composed, schema)
+    return described(
+      schema.type === "object" || schema.properties
+        ? composedObjectToZod(schema)
+        : authoritative,
       schema
     )
   }

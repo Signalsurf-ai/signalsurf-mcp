@@ -289,14 +289,15 @@ describe("unified SignalSurf MCP over HTTP", () => {
       ])
     )
     expect(names).toEqual(expect.arrayContaining(PUBLIC_MCP_TOOL_NAMES))
-    expect(tools.find((tool) => tool.name === "start_thread")?.inputSchema)
-      .toMatchObject({
-        type: "object",
-        properties: {
-          workspaceId: expect.any(Object),
-          projectId: { type: "string" },
-        },
-      })
+    expect(
+      tools.find((tool) => tool.name === "start_thread")?.inputSchema
+    ).toMatchObject({
+      type: "object",
+      properties: {
+        workspaceId: expect.any(Object),
+        projectId: { type: "string" },
+      },
+    })
     expect(tools.find((tool) => tool.name === "read_thread")).toMatchObject({
       title: "Read Thread",
       annotations: { readOnlyHint: true, destructiveHint: false },
@@ -421,6 +422,116 @@ describe("unified SignalSurf MCP over HTTP", () => {
       ((call?.[1] as RequestInit).headers as Record<string, string>)
         .Authorization
     ).toBe(`Bearer ${manualUnified}`)
+  })
+
+  it("preserves workspace selection on composed published schemas", async () => {
+    const composedTools = [
+      {
+        name: "all_of_tool",
+        description: "Use an allOf input.",
+        inputSchema: {
+          allOf: [
+            {
+              type: "object",
+              required: ["projectId"],
+              properties: { projectId: { type: "string" } },
+              additionalProperties: false,
+            },
+            {
+              type: "object",
+              required: ["projectId"],
+              properties: { projectId: { type: "string", minLength: 1 } },
+              additionalProperties: false,
+            },
+          ],
+        },
+      },
+      {
+        name: "any_of_tool",
+        description: "Use an anyOf input.",
+        inputSchema: {
+          anyOf: [
+            {
+              type: "object",
+              required: ["kind"],
+              properties: { kind: { const: "alpha" } },
+              additionalProperties: false,
+            },
+            {
+              type: "object",
+              required: ["kind"],
+              properties: { kind: { const: "beta" } },
+              additionalProperties: false,
+            },
+          ],
+        },
+      },
+    ]
+    const stub = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}"))
+      if (body.action === "workspaces") {
+        return jsonResponse(200, {
+          ok: true,
+          workspaces: [{ workspaceId, available: true }],
+        })
+      }
+      if (body.action === "catalog") {
+        return jsonResponse(200, {
+          ok: true,
+          tools: composedTools,
+          role: "member",
+        })
+      }
+      return jsonResponse(200, { ok: true, data: { echoed: body } })
+    })
+    const { base } = await start(stub)
+
+    const listed = await readMcpJson(await listTools(base, unifiedOAuth))
+    const schemas = Object.fromEntries(
+      listed.result.tools
+        .filter((tool: { name: string }) =>
+          composedTools.some((published) => published.name === tool.name)
+        )
+        .map((tool: { name: string; inputSchema: Record<string, unknown> }) => [
+          tool.name,
+          tool.inputSchema,
+        ])
+    )
+    expect(JSON.stringify(schemas.all_of_tool)).toContain("workspaceId")
+    expect(JSON.stringify(schemas.any_of_tool)).toContain("workspaceId")
+
+    for (const [name, arguments_] of [
+      ["all_of_tool", { workspaceId, projectId: "project-1" }],
+      ["any_of_tool", { workspaceId, kind: "alpha" }],
+    ] as const) {
+      const result = await readMcpJson(
+        await rpc(base, unifiedOAuth, {
+          jsonrpc: "2.0",
+          id: name,
+          method: "tools/call",
+          params: { name, arguments: arguments_ },
+        })
+      )
+      expect(result.result.isError).toBeFalsy()
+    }
+
+    const calls = stub.mock.calls
+      .map((call) => JSON.parse(String((call[1] as RequestInit).body)))
+      .filter((body) => body.action === "call")
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tool: "all_of_tool",
+          workspaceId,
+          arguments: { projectId: "project-1" },
+        }),
+        expect.objectContaining({
+          tool: "any_of_tool",
+          workspaceId,
+          arguments: { kind: "alpha" },
+        }),
+      ])
+    )
   })
 
   it("rejects pre-unification grants instead of preserving separate modes", async () => {
