@@ -15,8 +15,8 @@ const tokenEntrySchema = z
       .string()
       .regex(/^[a-f0-9]{64}$/i)
       .optional(),
-    productId: z.string().uuid().optional(),
-    productIds: z.array(z.string().uuid()).min(1).optional(),
+    workspaceId: z.string().uuid().optional(),
+    workspaceIds: z.array(z.string().uuid()).min(1).optional(),
     userId: z.string().uuid().optional(),
     role: roleSchema,
     scopes: z.array(mcpScopeSchema).min(1).optional(),
@@ -24,8 +24,8 @@ const tokenEntrySchema = z
   .refine((entry) => !!entry.token || !!entry.tokenSha256, {
     message: "Each token entry needs token or tokenSha256",
   })
-  .refine((entry) => !!entry.productId || (entry.productIds?.length ?? 0) > 0, {
-    message: "Each token entry needs productId or productIds",
+  .refine((entry) => !!entry.workspaceId || (entry.workspaceIds?.length ?? 0) > 0, {
+    message: "Each token entry needs workspaceId or workspaceIds",
   })
 
 export type TokenEntry = z.infer<typeof tokenEntrySchema>
@@ -149,18 +149,18 @@ function requireHttpUrl(value: string, envName: string): string {
 function buildDirectContext(
   env: NodeJS.ProcessEnv
 ): SignalSurfContext | undefined {
-  const productId = env.SIGNALSURF_MCP_PRODUCT_ID
-  if (!productId) return undefined
+  const workspaceId = env.SIGNALSURF_MCP_WORKSPACE_ID
+  if (!workspaceId) return undefined
 
   const parsed = z
     .object({
-      productId: z.string().uuid(),
+      workspaceId: z.string().uuid(),
       userId: z.string().uuid().optional(),
       role: roleSchema.default("editor"),
       tokenName: z.string().optional(),
     })
     .safeParse({
-      productId,
+      workspaceId,
       userId: env.SIGNALSURF_MCP_USER_ID || undefined,
       role: env.SIGNALSURF_MCP_ROLE || "editor",
       tokenName: "direct-env",

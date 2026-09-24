@@ -10,7 +10,7 @@ import type { SignalSurfContext } from "../src/types.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 const context: SignalSurfContext = {
-  productId: "00000000-0000-4000-8000-000000000001",
+  workspaceId: "00000000-0000-4000-8000-000000000001",
   userId: "00000000-0000-4000-8000-000000000010",
   role: "editor",
   tokenName: "test-agent",
@@ -28,7 +28,7 @@ function dbWithKey(apiKey = "dl_test") {
   return new FakeSupabase({
     integration_accounts: [
       {
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         integration_type: "deepline",
         credentials: { api_key: apiKey },
       },
@@ -46,7 +46,7 @@ function approvalRow(
     oauth_grant_id: oauthContext.oauthGrantId,
     user_id: oauthContext.userId,
     client_id: oauthContext.oauthClientId,
-    workspace_id: oauthContext.productId,
+    workspace_id: oauthContext.workspaceId,
     tool_name: "deepline_execute_tool",
     provider_tool_id: "hubspot_create_contact",
     payload_sha256: mcpActionPayloadSha256(payload),
@@ -415,7 +415,7 @@ describe("Deepline capabilities", () => {
       oauth_grant_id: oauthContext.oauthGrantId,
       user_id: oauthContext.userId,
       client_id: oauthContext.oauthClientId,
-      workspace_id: oauthContext.productId,
+      workspace_id: oauthContext.workspaceId,
       tool_name: "deepline_execute_tool",
       provider_tool_id: "hubspot_create_contact",
       payload_sha256: mcpActionPayloadSha256({
@@ -800,7 +800,7 @@ describe("Deepline capabilities", () => {
     expect(db.tables.mcp_action_approvals[0].status).toBe("executed")
   })
 
-  it("fails clearly when Deepline is not connected for the product", async () => {
+  it("fails clearly when Deepline is not connected for the workspace", async () => {
     vi.stubEnv("DEEPLINE_DISABLED", "")
     vi.stubEnv("DEEPLINE_API_KEY", "")
     const repo = new SignalSurfRepository(

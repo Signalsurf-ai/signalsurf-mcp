@@ -14,7 +14,7 @@ hosted writer remains available during the migrate-before-MCP rollout.
 The hosted MCP reads or writes these Web-owned columns:
 
 - `id uuid`
-- `product_id uuid`
+- `workspace_id uuid`
 - `oauth_token_id uuid` referencing `mcp_oauth_tokens.id`
 - `oauth_grant_id uuid` set to the token family's stable
   `refresh_token_family_id` (or the token id when no family exists)
@@ -32,7 +32,7 @@ The hosted MCP reads or writes these Web-owned columns:
 Web may additionally retain `user_id`, `client_id`, `preview`, `resolved_by`,
 `resolved_at`, and `created_at` for membership checks, human review, and audit.
 Service-role access must be able to perform the conditional updates below;
-authenticated users should only read approvals authorized by product membership.
+authenticated users should only read approvals authorized by workspace membership.
 
 Hosted MCP creates or reuses requests as `pending`; it stores only a conservative
 preview containing the tool ids, payload keys/count, serialized byte count, and
@@ -41,7 +41,7 @@ URL. Credential-like fields are redacted, unknown values are hidden, and URL
 query values are redacted.
 Identical unexpired pending requests are reused. Web resolves them with
 compare-and-set to `approved` or `rejected`. A partial unique index over the
-OAuth-grant/user/client/product/tool/provider/digest binding for
+OAuth-grant/user/client/workspace/tool/provider/digest binding for
 `status = 'pending'`
 is required so simultaneous retries deduplicate at the database boundary.
 
@@ -68,7 +68,7 @@ Before calling Deepline with an approved request, hosted MCP performs one atomic
 approved -> executing
 where id = approvalRequestId
   and oauth_grant_id = active OAuth grant id
-  and product_id = active product id
+  and workspace_id = active workspace id
   and tool_name = deepline_execute_tool
   and provider_tool_id = toolId
   and payload_sha256 = canonical payload digest

@@ -5,7 +5,7 @@ SignalSurf's OAuth consent page.
 
 | Mode | Grant | What the client gets | Who acts |
 | --- | --- | --- | --- |
-| Tools mode | product scopes, or a manual token with `mode = tools` | The public product-operation catalogue (`PUBLIC_MCP_TOOLS`) | The client drives SignalSurf directly |
+| Tools mode | workspace scopes, or a manual token with `mode = tools` | The public workspace-operation catalogue (`PUBLIC_MCP_TOOLS`) | The client drives SignalSurf directly |
 | Direct Message mode | `mcp:dm`, or a manual token with `mode = surfer_session` | The capability set the member's own Surfer Direct Message has | The client acts as the member |
 
 ## What Direct Message mode is (SIG-2681)
@@ -13,7 +13,7 @@ SignalSurf's OAuth consent page.
 The member's conversation lives in their own client. SignalSurf keeps no
 second conversation, no server-side assistant of its own, and no transcript of
 what the member said to their client. The client acts as the member with the
-same capabilities the member's in-product Surfer Direct Message has: start or
+same capabilities the member's in-workspace Surfer Direct Message has: start or
 continue Project Threads, review and manage delegated work, create and update
 Projects, manage Project members and triggers, drive Thread Tasks. Real work
 and its record live in the Projects those capabilities touch.

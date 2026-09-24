@@ -81,7 +81,7 @@ import type {
   EntryRow,
   JsonRecord,
   SignalSurfContext,
-  SignalSurfProductContext,
+  SignalSurfWorkspaceContext,
   SupabaseLike,
   WorkflowRow,
 } from "./types.js"
@@ -136,13 +136,13 @@ const PLAN_CREDIT_LIMITS: Record<string, number> = {
 }
 
 type DeeplineSearchInput = {
-  productId?: string
+  workspaceId?: string
   filters?: Record<string, unknown>
   limit?: number
   approvalRequestId?: string
 }
 type DeeplineEnrichInput = {
-  productId?: string
+  workspaceId?: string
   firstName: string
   lastName: string
   domain?: string
@@ -150,12 +150,12 @@ type DeeplineEnrichInput = {
   approvalRequestId?: string
 }
 type DeeplineCatalogSearchInput = {
-  productId?: string
+  workspaceId?: string
   query?: string
   limit?: number
 }
 type DeeplineExecuteToolInput = {
-  productId?: string
+  workspaceId?: string
   toolId: string
   approvalRequestId?: string
   payload?: JsonRecord
@@ -165,7 +165,7 @@ type DeeplineExecuteToolInput = {
     | "deepline_enrich_contact"
 }
 type InstagramContentSearchInput = {
-  productId?: string
+  workspaceId?: string
   query: string
   pages?: number
   approvalRequestId?: string
@@ -313,7 +313,7 @@ function buildEnrichMetadata(
   return metadata
 }
 
-type ListProductToolsInput = {
+type ListWorkspaceToolsInput = {
   includeDisabled?: boolean
   limit?: number
 }
@@ -574,13 +574,13 @@ type McpOAuthClientRow = {
   revoked_at: string | null
 }
 
-type ProductContextRow = {
+type WorkspaceContextRow = {
   id: string
   name: string | null
   organization_id?: string | null
 }
 
-type ProductRow = {
+type WorkspaceRow = {
   id: string
   name: string
   organization_id: string
@@ -589,7 +589,7 @@ type ProductRow = {
   updated_at?: string | null
 }
 
-type ProductOwnerRow = {
+type WorkspaceOwnerRow = {
   owner_id?: string | null
 }
 
@@ -658,7 +658,7 @@ type RawSignalRow = {
   dedup_key?: string | null
 }
 
-type ProductToolRow = {
+type WorkspaceToolRow = {
   id: string
   workspace_id: string
   workflow_id?: string | null
@@ -778,7 +778,7 @@ const SOURCE_COLUMNS = [
   "updated_at",
 ].join(", ")
 
-const PRODUCT_TOOL_COLUMNS = [
+const WORKSPACE_TOOL_COLUMNS = [
   "id",
   "workspace_id",
   "workflow_id",
@@ -842,7 +842,7 @@ function sameStrings(left: string[], right: string[]): boolean {
   )
 }
 
-function oauthTokenProductIds(row: McpOAuthTokenRow): string[] {
+function oauthTokenWorkspaceIds(row: McpOAuthTokenRow): string[] {
   return uniqueIds(
     [row.workspace_id, ...(row.workspace_ids ?? [])].filter(
       (id): id is string => Boolean(id)
@@ -859,7 +859,7 @@ function idempotentSurfJobId(
   const bytes = Buffer.from(
     createHash("sha256")
       .update(
-        `${context.productId}:${workflowId}:${sourceId}:${idempotencyKey}`
+        `${context.workspaceId}:${workflowId}:${sourceId}:${idempotencyKey}`
       )
       .digest("hex")
       .slice(0, 32),
@@ -1458,12 +1458,12 @@ export class SignalSurfRepository {
   ) {
     return searchSenderDomains(input, {
       ...this.senderDomainControlPlane,
-      workspaceId: context.productId,
+      workspaceId: context.workspaceId,
     })
   }
 
-  async loadWorkspaceCapabilities(productIds: readonly string[]) {
-    return loadWorkspaceCapabilities(this.db, productIds)
+  async loadWorkspaceCapabilities(workspaceIds: readonly string[]) {
+    return loadWorkspaceCapabilities(this.db, workspaceIds)
   }
 
   async resolveMcpToken(
@@ -1513,8 +1513,8 @@ export class SignalSurfRepository {
     }
 
     return {
-      productId: row.workspace_id,
-      products: await this.resolveProductContexts([row.workspace_id]),
+      workspaceId: row.workspace_id,
+      workspaces: await this.resolveWorkspaceContexts([row.workspace_id]),
       userId: row.created_by,
       role: row.mode === "surfer_session" ? "viewer" : "editor",
       tokenName: row.name ?? undefined,
@@ -1572,11 +1572,11 @@ export class SignalSurfRepository {
       )
     }
 
-    const productIds = await this.currentWorkspaceIdsForUser(
+    const workspaceIds = await this.currentWorkspaceIdsForUser(
       row.user_id,
-      oauthTokenProductIds(row)
+      oauthTokenWorkspaceIds(row)
     )
-    if (productIds.length === 0) return null
+    if (workspaceIds.length === 0) return null
     const tokenName = client.client_name
       ? `OAuth: ${client.client_name}`
       : "OAuth MCP client"
@@ -1584,8 +1584,8 @@ export class SignalSurfRepository {
     // web Surfer session endpoint, which re-authorizes it per workspace.
     if (parseStoredScopes(row.scope).includes(MCP_DM_SCOPE)) {
       return {
-        productId: productIds[0]!,
-        productIds,
+        workspaceId: workspaceIds[0]!,
+        workspaceIds,
         userId: row.user_id,
         role: "viewer",
         tokenName,
@@ -1603,9 +1603,9 @@ export class SignalSurfRepository {
     }
 
     return {
-      productId: productIds[0]!,
-      productIds,
-      products: await this.resolveProductContexts(productIds),
+      workspaceId: workspaceIds[0]!,
+      workspaceIds,
+      workspaces: await this.resolveWorkspaceContexts(workspaceIds),
       userId: row.user_id,
       role: scopesImplyWriteAccess(scopes) ? "editor" : "viewer",
       tokenName,
@@ -1618,41 +1618,41 @@ export class SignalSurfRepository {
     }
   }
 
-  async resolveProductContexts(
-    productIds: string[]
-  ): Promise<SignalSurfProductContext[]> {
-    const uniqueProductIds = uniqueIds(productIds.filter(Boolean))
-    if (uniqueProductIds.length === 0) return []
+  async resolveWorkspaceContexts(
+    workspaceIds: string[]
+  ): Promise<SignalSurfWorkspaceContext[]> {
+    const uniqueWorkspaceIds = uniqueIds(workspaceIds.filter(Boolean))
+    if (uniqueWorkspaceIds.length === 0) return []
 
     const { data, error } = await this.db
-      .from("products")
+      .from("workspaces")
       .select("id, name, organization_id")
-      .in("id", uniqueProductIds)
+      .in("id", uniqueWorkspaceIds)
 
-    requireNoDbError(error, "Failed to resolve SignalSurf product names")
+    requireNoDbError(error, "Failed to resolve SignalSurf workspace names")
 
-    const products = (data ?? []) as ProductContextRow[]
-    const productsById = new Map(
-      products.map((product) => [product.id, product])
+    const workspaces = (data ?? []) as WorkspaceContextRow[]
+    const workspacesById = new Map(
+      workspaces.map((workspace) => [workspace.id, workspace])
     )
     const organizationIds = uniqueIds(
-      products
-        .map((product) => product.organization_id)
+      workspaces
+        .map((workspace) => workspace.organization_id)
         .filter((id): id is string => Boolean(id))
     )
     const organizationsById =
       await this.resolveOrganizationsById(organizationIds)
 
-    return uniqueProductIds.map((productId) => {
-      const product = productsById.get(productId)
-      const organizationId = product?.organization_id ?? null
+    return uniqueWorkspaceIds.map((workspaceId) => {
+      const workspace = workspacesById.get(workspaceId)
+      const organizationId = workspace?.organization_id ?? null
       const organization = organizationId
         ? organizationsById.get(organizationId)
         : null
 
       return {
-        productId,
-        name: product?.name?.trim() || productId,
+        workspaceId,
+        name: workspace?.name?.trim() || workspaceId,
         organizationId,
         organizationName: organization?.name ?? null,
       }
@@ -1663,7 +1663,7 @@ export class SignalSurfRepository {
     if (!context.userId) return
     const workspaceIds = await this.currentWorkspaceIdsForUser(
       context.userId,
-      context.productIds?.length ? context.productIds : [context.productId]
+      context.workspaceIds?.length ? context.workspaceIds : [context.workspaceId]
     )
     if (workspaceIds.length === 0) {
       throw new UserFacingError(
@@ -1671,11 +1671,11 @@ export class SignalSurfRepository {
         { code: "FORBIDDEN", status: 403 }
       )
     }
-    context.productId = workspaceIds.includes(context.productId)
-      ? context.productId
+    context.workspaceId = workspaceIds.includes(context.workspaceId)
+      ? context.workspaceId
       : workspaceIds[0]!
-    context.productIds = workspaceIds
-    context.products = await this.resolveProductContexts(workspaceIds)
+    context.workspaceIds = workspaceIds
+    context.workspaces = await this.resolveWorkspaceContexts(workspaceIds)
   }
 
   private async currentWorkspaceIdsForUser(
@@ -1686,7 +1686,7 @@ export class SignalSurfRepository {
     if (workspaceIds.length === 0) return []
 
     const { data: workspaceRows, error: workspaceError } = await this.db
-      .from("products")
+      .from("workspaces")
       .select("id, organization_id")
       .in("id", workspaceIds)
     requireNoDbError(workspaceError, "Failed to revalidate MCP Workspaces")
@@ -1702,7 +1702,7 @@ export class SignalSurfRepository {
     )
     const [directResult, organizationResult] = await Promise.all([
       this.db
-        .from("product_members")
+        .from("workspace_members")
         .select("workspace_id, role")
         .eq("user_id", userId)
         .in("workspace_id", workspaceIds),
@@ -1777,27 +1777,27 @@ export class SignalSurfRepository {
     )
   }
 
-  private async resolveProductOwnerId(
+  private async resolveWorkspaceOwnerId(
     context: SignalSurfContext
   ): Promise<string | null> {
     const { data, error } = await this.db
-      .from("products")
+      .from("workspaces")
       .select("owner_id")
-      .eq("id", context.productId)
+      .eq("id", context.workspaceId)
       .maybeSingle()
-    requireNoDbError(error, "Failed to resolve product owner")
-    return ((data as ProductOwnerRow | null)?.owner_id as string | null) ?? null
+    requireNoDbError(error, "Failed to resolve workspace owner")
+    return ((data as WorkspaceOwnerRow | null)?.owner_id as string | null) ?? null
   }
 
   async getBrandContext(context: SignalSurfContext) {
     const { data, error } = await this.db.rpc("get_workspace_brand_profile", {
-      p_workspace_id: context.productId,
+      p_workspace_id: context.workspaceId,
     })
 
     requireNoDbError(error, "Failed to read brand context")
     return {
       brandContext: formatBrandContext(
-        context.productId,
+        context.workspaceId,
         (data ?? null) as WorkspaceBrandProfile | null
       ),
     }
@@ -1810,7 +1810,7 @@ export class SignalSurfRepository {
     let query = this.db
       .from("workflows")
       .select(WORKFLOW_COLUMNS)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
 
     if (input.includeInactive === false) {
@@ -1835,7 +1835,7 @@ export class SignalSurfRepository {
       .from("workflows")
       .select(WORKFLOW_COLUMNS)
       .eq("id", workflowId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
       .maybeSingle()
     requireNoDbError(error, "Failed to read Workflow")
@@ -1849,14 +1849,14 @@ export class SignalSurfRepository {
     return { workflow: formatWorkflow(workflow) }
   }
 
-  async listProductTools(
+  async listWorkspaceTools(
     context: SignalSurfContext,
-    input: ListProductToolsInput = {}
+    input: ListWorkspaceToolsInput = {}
   ) {
     let query = this.db
-      .from("product_tools")
-      .select(PRODUCT_TOOL_COLUMNS)
-      .eq("workspace_id", context.productId)
+      .from("workspace_tools")
+      .select(WORKSPACE_TOOL_COLUMNS)
+      .eq("workspace_id", context.workspaceId)
 
     if (input.includeDisabled !== true) query = query.eq("is_enabled", true)
 
@@ -1864,10 +1864,10 @@ export class SignalSurfRepository {
       .order("created_at", { ascending: true })
       .limit(input.limit ?? 100)
 
-    requireNoDbError(error, "Failed to list product tools")
-    const tools = (data ?? []) as ProductToolRow[]
+    requireNoDbError(error, "Failed to list workspace tools")
+    const tools = (data ?? []) as WorkspaceToolRow[]
     return {
-      tools: tools.map(formatProductTool),
+      tools: tools.map(formatWorkspaceTool),
       totalCount: tools.length,
     }
   }
@@ -1879,7 +1879,7 @@ export class SignalSurfRepository {
     let query = this.db
       .from("account_list_profiles")
       .select(ACCOUNT_LIST_PROFILE_COLUMNS)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
 
     if (input.includeArchived !== true) query = query.eq("status", "active")
 
@@ -1925,7 +1925,7 @@ export class SignalSurfRepository {
           profile_version: Math.max(existing.profile_version ?? 1, 1) + 1,
         })
         .eq("id", input.id)
-        .eq("workspace_id", context.productId)
+        .eq("workspace_id", context.workspaceId)
         .select(ACCOUNT_LIST_PROFILE_COLUMNS)
         .single()
 
@@ -1941,7 +1941,7 @@ export class SignalSurfRepository {
       .from("account_list_profiles")
       .insert({
         id: randomUUID(),
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         ...basePayload,
         profile_version: 1,
         created_by: context.userId ?? null,
@@ -1959,7 +1959,7 @@ export class SignalSurfRepository {
   }
 
   // ── Deepline curated capabilities ──────────────────────────────────────────
-  // Resolve the product's Deepline key from integration_accounts (where
+  // Resolve the workspace's Deepline key from integration_accounts (where
   // SignalsurfWeb stores it), falling back to a server-wide DEEPLINE_API_KEY.
   // Hard-disabled by the DEEPLINE_DISABLED kill-switch.
   private async resolveDeeplineApiKey(
@@ -1974,7 +1974,7 @@ export class SignalSurfRepository {
     const { data, error } = await this.db
       .from("integration_accounts")
       .select("credentials")
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .eq("integration_type", "deepline")
       .maybeSingle()
     requireNoDbError(error, "Failed to read Deepline integration")
@@ -1984,7 +1984,7 @@ export class SignalSurfRepository {
     const apiKey = fromRow ?? readTrimmedString(process.env.DEEPLINE_API_KEY)
     if (!apiKey) {
       throw new UserFacingError(
-        "Deepline is not connected for this product. Connect it in SignalSurf Settings -> Integrations.",
+        "Deepline is not connected for this workspace. Connect it in SignalSurf Settings -> Integrations.",
         { code: "NOT_FOUND", status: 404 }
       )
     }
@@ -2183,7 +2183,7 @@ export class SignalSurfRepository {
           .eq("oauth_grant_id", context.oauthGrantId)
           .eq("user_id", context.userId)
           .eq("client_id", context.oauthClientId)
-          .eq("workspace_id", context.productId)
+          .eq("workspace_id", context.workspaceId)
           .eq("tool_name", input.storageToolName)
           .eq("provider_tool_id", input.providerToolId)
           .eq("payload_sha256", payloadSha256)
@@ -2208,7 +2208,7 @@ export class SignalSurfRepository {
           .eq("oauth_grant_id", context.oauthGrantId)
           .eq("user_id", context.userId)
           .eq("client_id", context.oauthClientId)
-          .eq("workspace_id", context.productId)
+          .eq("workspace_id", context.workspaceId)
           .eq("tool_name", input.storageToolName)
           .eq("provider_tool_id", input.providerToolId)
           .eq("payload_sha256", payloadSha256)
@@ -2227,7 +2227,7 @@ export class SignalSurfRepository {
           .from("mcp_action_approvals")
           .insert({
             id: requestId,
-            workspace_id: context.productId,
+            workspace_id: context.workspaceId,
             user_id: context.userId,
             oauth_token_id: context.oauthTokenId,
             oauth_grant_id: context.oauthGrantId,
@@ -2303,7 +2303,7 @@ export class SignalSurfRepository {
       .eq("oauth_grant_id", context.oauthGrantId)
       .eq("user_id", context.userId)
       .eq("client_id", context.oauthClientId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .eq("tool_name", input.storageToolName)
       .eq("provider_tool_id", input.providerToolId)
       .eq("payload_sha256", payloadSha256)
@@ -2350,7 +2350,7 @@ export class SignalSurfRepository {
         .eq("oauth_grant_id", context.oauthGrantId)
         .eq("user_id", context.userId)
         .eq("client_id", context.oauthClientId)
-        .eq("workspace_id", context.productId)
+        .eq("workspace_id", context.workspaceId)
         .eq("status", "executing")
         .select("id")
         .maybeSingle()
@@ -2398,21 +2398,21 @@ export class SignalSurfRepository {
         { code: "UNAUTHORIZED", status: 401 }
       )
     }
-    const { data: product, error: productError } = await this.db
-      .from("products")
+    const { data: workspace, error: workspaceError } = await this.db
+      .from("workspaces")
       .select("owner_id, organization_id")
-      .eq("id", context.productId)
+      .eq("id", context.workspaceId)
       .maybeSingle()
-    requireNoDbError(productError, "Failed to resolve credit product")
-    if (!product) {
-      throw new UserFacingError("The selected product no longer exists.", {
+    requireNoDbError(workspaceError, "Failed to resolve credit workspace")
+    if (!workspace) {
+      throw new UserFacingError("The selected workspace no longer exists.", {
         code: "NOT_FOUND",
         status: 404,
       })
     }
 
-    const organizationId = readTrimmedString(product.organization_id)
-    let ownerId = readTrimmedString(product.owner_id) ?? context.userId
+    const organizationId = readTrimmedString(workspace.organization_id)
+    let ownerId = readTrimmedString(workspace.owner_id) ?? context.userId
     if (organizationId) {
       const { data: organization, error: organizationError } = await this.db
         .from("organizations")
@@ -2427,7 +2427,7 @@ export class SignalSurfRepository {
     }
 
     const { data: subscriptions, error: subscriptionError } = await this.db
-      .from("subscriptions")
+      .from("workspace_subscriptions")
       .select("plan_name, current_period_start, current_period_end")
       .eq("user_id", ownerId)
       .in("status", ["active", "trialing"])
@@ -2496,7 +2496,7 @@ export class SignalSurfRepository {
       source: "hosted_mcp",
       tool_name: "search_instagram_content",
       operation_hash: mcpActionPayloadSha256(payload),
-      workspace_id: context.productId,
+      workspace_id: context.workspaceId,
       approved_credit_ceiling: plan.credits,
       pages: plan.input.pages,
       provider: "bycrawl",
@@ -2509,7 +2509,7 @@ export class SignalSurfRepository {
       p_period_start: accounting.periodStart,
       p_metadata: { ...metadata, attempt_state: "dispatch_pending" },
       p_organization_id: accounting.organizationId,
-      p_workspace_id: context.productId,
+      p_workspace_id: context.workspaceId,
       p_error_message: "External dispatch pending",
       p_idempotency_key: unbookedIdempotencyKey,
     })
@@ -2569,7 +2569,7 @@ export class SignalSurfRepository {
           provider_status: dispatched.response.status,
         },
         p_organization_id: accounting.organizationId,
-        p_workspace_id: context.productId,
+        p_workspace_id: context.workspaceId,
         p_error_message: bookingError,
         p_idempotency_key: unbookedIdempotencyKey,
       })
@@ -2714,7 +2714,7 @@ export class SignalSurfRepository {
         updated_at: new Date().toISOString(),
       })
       .eq("id", profileId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .select(ACCOUNT_LIST_PROFILE_COLUMNS)
       .single()
 
@@ -2731,7 +2731,7 @@ export class SignalSurfRepository {
       input.databaseIds
     )
     const insertData: Record<string, unknown> = {
-      workspace_id: context.productId,
+      workspace_id: context.workspaceId,
       name: input.name.trim(),
       description: input.description?.trim() || null,
       is_default: false,
@@ -2749,7 +2749,7 @@ export class SignalSurfRepository {
     // SIG-2298 renamed `workflows.project_id` to `agent_id`; a Project is an Agent.
     if (input.projectId !== undefined) insertData.agent_id = input.projectId
     if (input.projectId) {
-      await this.assertDatabaseFolderBelongsToProduct(context, input.projectId)
+      await this.assertDatabaseFolderBelongsToWorkspace(context, input.projectId)
     }
     if (input.scoringRubric !== undefined)
       insertData.scoring_rubric = input.scoringRubric
@@ -2771,7 +2771,7 @@ export class SignalSurfRepository {
     if (error?.code === "23505") {
       const existing = await this.findWorkflowByName(context, input.name)
       throw new UserFacingError(
-        `Workflow "${input.name}" already exists for this product${
+        `Workflow "${input.name}" already exists for this workspace${
           existing ? ` (id: ${existing.id})` : ""
         }. Use update_workflow or choose a different name.`,
         { code: "CONFLICT", status: 409 }
@@ -2782,9 +2782,9 @@ export class SignalSurfRepository {
   }
 
   async updateWorkflow(context: SignalSurfContext, input: UpdateWorkflowInput) {
-    await this.assertWorkflowBelongsToProduct(context, input.workflowId)
+    await this.assertWorkflowBelongsToWorkspace(context, input.workflowId)
     if (input.projectId) {
-      await this.assertDatabaseFolderBelongsToProduct(context, input.projectId)
+      await this.assertDatabaseFolderBelongsToWorkspace(context, input.projectId)
     }
     if (input.variables !== undefined && input.variablesPatch !== undefined) {
       throw new UserFacingError(
@@ -2873,9 +2873,9 @@ export class SignalSurfRepository {
     if (updateData.tool_config !== undefined) {
       // Tool attachment is set here (no dedicated attach/detach tool), so the
       // referenced auto_tool_ids must be validated against this Workflow's
-      // product, exactly as the removed attach_workflow_tool did. This blocks
-      // a multi-product token from writing another product's tool id.
-      await this.assertProductToolsBelongToProduct(
+      // workspace, exactly as the removed attach_workflow_tool did. This blocks
+      // a multi-workspace token from writing another workspace's tool id.
+      await this.assertWorkspaceToolsBelongToWorkspace(
         context,
         uniqueStrings(asRecord(updateData.tool_config).auto_tool_ids)
       )
@@ -2902,7 +2902,7 @@ export class SignalSurfRepository {
       .from("workflows")
       .update(updateData)
       .eq("id", input.workflowId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
       .select(WORKFLOW_COLUMNS)
       .single()
@@ -2955,7 +2955,7 @@ export class SignalSurfRepository {
       .from("workflows")
       .select("id, name, config, kind")
       .eq("id", workflowId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
       .maybeSingle()
     requireNoDbError(error, "Failed to load Workflow")
@@ -2994,7 +2994,7 @@ export class SignalSurfRepository {
     databaseId: string,
     requireCapability = true
   ): Promise<string[]> {
-    const database = await this.getDatabaseAndValidateProduct(
+    const database = await this.getDatabaseAndValidateWorkspace(
       context,
       databaseId,
       requireCapability
@@ -3087,7 +3087,7 @@ export class SignalSurfRepository {
       .from("workflows")
       .update(updateData)
       .eq("id", workflowId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
     requireNoDbError(error, "Failed to save Workflow flow")
 
@@ -3162,9 +3162,9 @@ export class SignalSurfRepository {
     mailbox: string
   ): Promise<void> {
     const { data: binding, error: bindingError } = await this.db
-      .from("product_unipile_accounts")
+      .from("workspace_unipile_accounts")
       .select("unipile_account_id, provider")
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .eq("unipile_account_id", mailbox)
       .maybeSingle()
     requireNoDbError(bindingError, "Failed to validate Campaign mailbox")
@@ -3193,7 +3193,7 @@ export class SignalSurfRepository {
       .select(
         "lifecycle_status, desired_state, transport_status, campaign_eligibility_status, readiness_source_observed_at"
       )
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .eq("unipile_account_id", mailbox)
       .maybeSingle()
     requireNoDbError(
@@ -3255,7 +3255,7 @@ export class SignalSurfRepository {
       .from("databases")
       .select("id, name, schema, data_model, folder_id")
       .eq("id", input.audienceDatabaseId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .maybeSingle()
     requireNoDbError(tableError, "Failed to load Campaign audience")
     if (!table) {
@@ -3331,7 +3331,7 @@ export class SignalSurfRepository {
       .from("campaigns")
       .insert({
         id: campaignId,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         name: input.name.trim(),
         description: input.description?.trim() || input.goal.trim(),
         goal: input.goal.trim(),
@@ -3371,7 +3371,7 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     input: { workflowId: string; nodeId: string; sampleText?: string }
   ) {
-    await this.assertWorkflowBelongsToProduct(context, input.workflowId)
+    await this.assertWorkflowBelongsToWorkspace(context, input.workflowId)
     const loaded = await this.loadWorkflowFlow(context, input.workflowId)
     if (!loaded.flow.nodes.some((node) => node.id === input.nodeId)) {
       throw new UserFacingError(
@@ -3437,7 +3437,7 @@ export class SignalSurfRepository {
     const sourceIds = sources.map((source) => source.id)
     const userId =
       context.userId ??
-      (await this.resolveProductOwnerId(context)) ??
+      (await this.resolveWorkspaceOwnerId(context)) ??
       sources.find((source) => source.user_id)?.user_id
     if (!userId) {
       throw new UserFacingError(
@@ -3512,7 +3512,7 @@ export class SignalSurfRepository {
             input.idempotencyKey
           )
         : randomUUID(),
-      workspace_id: context.productId,
+      workspace_id: context.workspaceId,
       user_id: userId,
       workflow_id: input.workflowId,
       job_type: "extract",
@@ -3557,7 +3557,7 @@ export class SignalSurfRepository {
   // whose metadata carries { event_type, database_id, target_field, disabled? }.
   // Running enqueues one `analyze` surf job per row through the normal brain
   // pipeline (so credits are charged by the brain as each job runs); poll with
-  // list_surf_jobs / wait_for_surf_job. Sources are product-scoped through their
+  // list_surf_jobs / wait_for_surf_job. Sources are workspace-scoped through their
   // owning workflow, so every lookup re-verifies the workflow's workspace_id rather
   // than relying on an embedded-resource filter the test double cannot model.
   private async findEnrichSource(
@@ -3589,7 +3589,7 @@ export class SignalSurfRepository {
         .from("workflows")
         .select("id")
         .eq("id", candidate.workflow_id)
-        .eq("workspace_id", context.productId)
+        .eq("workspace_id", context.workspaceId)
         .is("deleted_at", null)
         .maybeSingle()
       if (workflow) {
@@ -3604,7 +3604,7 @@ export class SignalSurfRepository {
   }
 
   async enableEnrich(context: SignalSurfContext, input: EnableEnrichInput) {
-    const database = await this.getDatabaseAndValidateProduct(
+    const database = await this.getDatabaseAndValidateWorkspace(
       context,
       input.databaseId
     )
@@ -3650,7 +3650,7 @@ export class SignalSurfRepository {
             updated_at: new Date().toISOString(),
           })
           .eq("id", existing.workflow_id)
-          .eq("workspace_id", context.productId)
+          .eq("workspace_id", context.workspaceId)
         requireNoDbError(pbError, "Failed to update Enrich instruction")
       }
       return {
@@ -3665,7 +3665,7 @@ export class SignalSurfRepository {
     }
 
     const ownerId =
-      context.userId ?? (await this.resolveProductOwnerId(context))
+      context.userId ?? (await this.resolveWorkspaceOwnerId(context))
     if (!ownerId) {
       throw new UserFacingError(
         "Cannot enable Enrich because no owning user could be resolved.",
@@ -3677,7 +3677,7 @@ export class SignalSurfRepository {
     const workflowName = `${database.name || "Database"} · ${fieldLabel}`
     const { error: pbError } = await this.db.from("workflows").insert({
       id: workflowId,
-      workspace_id: context.productId,
+      workspace_id: context.workspaceId,
       name: workflowName,
       description: null,
       is_default: false,
@@ -3708,7 +3708,7 @@ export class SignalSurfRepository {
         .from("workflows")
         .delete()
         .eq("id", workflowId)
-        .eq("workspace_id", context.productId)
+        .eq("workspace_id", context.workspaceId)
       requireNoDbError(srcError, "Failed to bind Enrich to the column")
     }
     return {
@@ -3759,7 +3759,7 @@ export class SignalSurfRepository {
   }
 
   async listEnrich(context: SignalSurfContext, input: ListEnrichInput) {
-    await this.assertDatabaseBelongsToProduct(context, input.databaseId, false)
+    await this.assertDatabaseBelongsToWorkspace(context, input.databaseId, false)
     const { data, error } = await this.db
       .from("sources")
       .select("id, metadata, workflow_id")
@@ -3790,7 +3790,7 @@ export class SignalSurfRepository {
         .from("workflows")
         .select("id, surf_prompt")
         .eq("id", source.workflow_id)
-        .eq("workspace_id", context.productId)
+        .eq("workspace_id", context.workspaceId)
         .is("deleted_at", null)
         .maybeSingle()
       if (!workflow) continue
@@ -3823,7 +3823,7 @@ export class SignalSurfRepository {
         { code: "BAD_REQUEST", status: 400 }
       )
     }
-    await this.assertDatabaseBelongsToProduct(context, input.databaseId)
+    await this.assertDatabaseBelongsToWorkspace(context, input.databaseId)
 
     const source = await this.findEnrichSource(
       context,
@@ -3847,7 +3847,7 @@ export class SignalSurfRepository {
       .from("workflows")
       .select("id, surf_prompt, scoring_rubric, is_active, workspace_id")
       .eq("id", source.workflow_id)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .maybeSingle()
     requireNoDbError(pbError, "Failed to load the Enrich Workflow")
     const workflow = workflowData as {
@@ -3870,7 +3870,7 @@ export class SignalSurfRepository {
       )
     }
 
-    const userId = context.userId ?? (await this.resolveProductOwnerId(context))
+    const userId = context.userId ?? (await this.resolveWorkspaceOwnerId(context))
     if (!userId) {
       throw new UserFacingError(
         "Cannot queue Enrich because no job user could be resolved.",
@@ -4073,7 +4073,7 @@ export class SignalSurfRepository {
   }
 
   async getSurfJob(context: SignalSurfContext, jobId: string) {
-    const job = await this.getSurfJobAndValidateProduct(context, jobId)
+    const job = await this.getSurfJobAndValidateWorkspace(context, jobId)
     return { job: formatSurfJob(job) }
   }
 
@@ -4089,7 +4089,7 @@ export class SignalSurfRepository {
 
     while (true) {
       polls += 1
-      const job = await this.getSurfJobAndValidateProduct(context, input.jobId)
+      const job = await this.getSurfJobAndValidateWorkspace(context, input.jobId)
       const formattedJob = formatSurfJob(job)
       const terminal = isTerminalSurfJobStatus(job.status)
       if (terminal) {
@@ -4125,10 +4125,10 @@ export class SignalSurfRepository {
     const offset = input.offset ?? 0
     const workflowIds = input.workflowId
       ? [input.workflowId]
-      : await this.listProductWorkflowIds(context)
+      : await this.listWorkspaceWorkflowIds(context)
 
     if (input.workflowId) {
-      await this.assertWorkflowInProduct(context, input.workflowId)
+      await this.assertWorkflowInWorkspace(context, input.workflowId)
     }
     if (workflowIds.length === 0) {
       return { jobs: [], totalCount: 0, limit, offset }
@@ -4155,7 +4155,7 @@ export class SignalSurfRepository {
   }
 
   async cancelSurfJob(context: SignalSurfContext, jobId: string) {
-    const existing = await this.getSurfJobAndValidateProduct(context, jobId)
+    const existing = await this.getSurfJobAndValidateWorkspace(context, jobId)
     if (existing.status !== "pending") {
       throw new UserFacingError(
         "Only pending surf jobs can be cancelled through MCP.",
@@ -4197,7 +4197,7 @@ export class SignalSurfRepository {
     const { data, error } = await this.db
       .from("workflows")
       .update({ deleted_at: now, updated_at: now })
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
       .in("id", ids)
       .select("id, name")
@@ -4253,7 +4253,7 @@ export class SignalSurfRepository {
     let classificationQuery = this.db
       .from("databases")
       .select("id, data_model")
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
 
     if (!input.includeSystem) {
       classificationQuery = classificationQuery.is("system_role", null)
@@ -4271,7 +4271,7 @@ export class SignalSurfRepository {
     let query = this.db
       .from("databases")
       .select(DATABASE_COLUMNS)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .in("id", visibleIds)
     if (!input.includeSystem) query = query.is("system_role", null)
 
@@ -4290,7 +4290,7 @@ export class SignalSurfRepository {
 
   async createTable(context: SignalSurfContext, input: CreateTableInput) {
     if (input.folderId) {
-      await this.assertDatabaseFolderBelongsToProduct(context, input.folderId)
+      await this.assertDatabaseFolderBelongsToWorkspace(context, input.folderId)
     }
     const template = input.template
       ? applyPublicTableTemplate(
@@ -4307,7 +4307,7 @@ export class SignalSurfRepository {
       .from("databases")
       .insert({
         id: randomUUID(),
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         name: input.name.trim(),
         description:
           input.description === undefined
@@ -4337,7 +4337,7 @@ export class SignalSurfRepository {
   }
 
   async updateTable(context: SignalSurfContext, input: UpdateTableInput) {
-    const existing = await this.getDatabaseAndValidateProduct(
+    const existing = await this.getDatabaseAndValidateWorkspace(
       context,
       input.databaseId
     )
@@ -4355,7 +4355,7 @@ export class SignalSurfRepository {
       )
     }
     if (input.folderId) {
-      await this.assertDatabaseFolderBelongsToProduct(context, input.folderId)
+      await this.assertDatabaseFolderBelongsToWorkspace(context, input.folderId)
     }
 
     const updateData: Record<string, unknown> = {
@@ -4428,7 +4428,7 @@ export class SignalSurfRepository {
       .from("databases")
       .update(updateData)
       .eq("id", input.databaseId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .select(DATABASE_COLUMNS)
       .single()
 
@@ -4457,7 +4457,7 @@ export class SignalSurfRepository {
     const { data: databases, error: readError } = await this.db
       .from("databases")
       .select(DATABASE_COLUMNS)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .in("id", ids)
 
     requireNoDbError(readError, "Failed to validate database access")
@@ -4484,7 +4484,7 @@ export class SignalSurfRepository {
     const { error, count } = await this.db
       .from("databases")
       .delete({ count: "exact" })
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .in("id", ids)
 
     requireNoDbError(error, "Failed to delete tables")
@@ -4492,7 +4492,7 @@ export class SignalSurfRepository {
     const { data: linkedWorkflows, error: linkedError } = await this.db
       .from("workflows")
       .select("id, database_ids")
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
 
     requireNoDbError(linkedError, "Failed to list Workflows linked to tables")
@@ -4518,7 +4518,7 @@ export class SignalSurfRepository {
           updated_at: now,
         })
         .eq("id", workflow.id)
-        .eq("workspace_id", context.productId)
+        .eq("workspace_id", context.workspaceId)
         .is("deleted_at", null)
       requireNoDbError(
         updateError,
@@ -4543,7 +4543,7 @@ export class SignalSurfRepository {
   }
 
   async readTable(context: SignalSurfContext, input: ReadTableInput) {
-    await this.assertDatabaseBelongsToProduct(context, input.databaseId, false)
+    await this.assertDatabaseBelongsToWorkspace(context, input.databaseId, false)
 
     const limit = input.limit ?? 50
     const offset = input.offset ?? 0
@@ -4579,7 +4579,7 @@ export class SignalSurfRepository {
   }
 
   async listDatabaseViews(context: SignalSurfContext, databaseId: string) {
-    const database = await this.getDatabaseAndValidateProduct(
+    const database = await this.getDatabaseAndValidateWorkspace(
       context,
       databaseId,
       false
@@ -4591,7 +4591,7 @@ export class SignalSurfRepository {
   }
 
   async readTableView(context: SignalSurfContext, input: ReadTableViewInput) {
-    const database = await this.getDatabaseAndValidateProduct(
+    const database = await this.getDatabaseAndValidateWorkspace(
       context,
       input.databaseId,
       false
@@ -4674,12 +4674,12 @@ export class SignalSurfRepository {
   }
 
   async getTableRow(context: SignalSurfContext, rowId: string) {
-    const entry = await this.getEntryAndValidateProduct(context, rowId, false)
+    const entry = await this.getEntryAndValidateWorkspace(context, rowId, false)
     return { row: formatEntry(entry) }
   }
 
   async createTableRow(context: SignalSurfContext, input: CreateTableRowInput) {
-    await this.assertDatabaseBelongsToProduct(context, input.databaseId)
+    await this.assertDatabaseBelongsToWorkspace(context, input.databaseId)
     if (input.workflowId) {
       await this.assertWorkflowCanWriteDatabase(
         context,
@@ -4732,7 +4732,7 @@ export class SignalSurfRepository {
       })
     }
 
-    const entries = await this.getEntriesAndValidateProduct(context, ids)
+    const entries = await this.getEntriesAndValidateWorkspace(context, ids)
     const byId = new Map(entries.map((entry) => [entry.id, entry]))
     const missing = ids.filter((id) => !byId.has(id))
     if (missing.length > 0) {
@@ -4825,13 +4825,13 @@ export class SignalSurfRepository {
       requireNoDbError(error, "Failed to update row metadata")
     }
 
-    const updated = await this.getEntriesAndValidateProduct(context, ids)
+    const updated = await this.getEntriesAndValidateWorkspace(context, ids)
     return { rows: updated.map((row) => formatEntry(row)) }
   }
 
   async deleteTableRows(context: SignalSurfContext, rowIds: string[]) {
     const ids = uniqueIds(rowIds)
-    const entries = await this.getEntriesAndValidateProduct(context, ids)
+    const entries = await this.getEntriesAndValidateWorkspace(context, ids)
     if (entries.length !== ids.length) {
       throw new UserFacingError("One or more rows were not found.", {
         code: "NOT_FOUND",
@@ -4849,7 +4849,7 @@ export class SignalSurfRepository {
   }
 
   async listDatabaseFields(context: SignalSurfContext, databaseId: string) {
-    const database = await this.getDatabaseAndValidateProduct(
+    const database = await this.getDatabaseAndValidateWorkspace(
       context,
       databaseId,
       false
@@ -4866,7 +4866,7 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     input: { databaseId: string; fieldKey?: string }
   ) {
-    const database = await this.getDatabaseAndValidateProduct(
+    const database = await this.getDatabaseAndValidateWorkspace(
       context,
       input.databaseId,
       false
@@ -4994,7 +4994,7 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     input: CreateRelationFieldInput
   ) {
-    await this.assertDatabaseBelongsToProduct(context, input.targetDatabaseId)
+    await this.assertDatabaseBelongsToWorkspace(context, input.targetDatabaseId)
     const field: JsonRecord = {
       key: input.key,
       type: "item_ref",
@@ -5029,7 +5029,7 @@ export class SignalSurfRepository {
     }
 
     const source = data as SourceRow
-    await this.assertWorkflowBelongsToProduct(context, source.workflow_id)
+    await this.assertWorkflowBelongsToWorkspace(context, source.workflow_id)
     return source
   }
 
@@ -5185,7 +5185,7 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     workflowId: string
   ): Promise<SourceRow[]> {
-    await this.assertWorkflowBelongsToProduct(context, workflowId)
+    await this.assertWorkflowBelongsToWorkspace(context, workflowId)
     const { data, error } = await this.db
       .from("sources")
       .select(SOURCE_COLUMNS)
@@ -5206,7 +5206,7 @@ export class SignalSurfRepository {
     if (!databaseId) {
       if (requiresDatabase) {
         throw new UserFacingError(
-          `Missing config.databaseId. ${sourceType} sources require a product table to watch.`,
+          `Missing config.databaseId. ${sourceType} sources require a workspace table to watch.`,
           { code: "BAD_REQUEST", status: 400 }
         )
       }
@@ -5217,7 +5217,7 @@ export class SignalSurfRepository {
       .from("databases")
       .select("id, name")
       .eq("id", databaseId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .maybeSingle()
 
     requireNoDbError(error, "Failed to validate source database")
@@ -5324,7 +5324,7 @@ export class SignalSurfRepository {
     const { error: searchConfigError } = await this.db
       .from("platform_search_config")
       .update({ is_enabled: false, updated_at: now })
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .eq("workflow_id", workflowId)
       .eq("platform", endpointId)
     requireNoDbError(
@@ -5335,7 +5335,7 @@ export class SignalSurfRepository {
     const { error: trackedAccountsError } = await this.db
       .from("tracked_accounts")
       .update({ is_enabled: false, updated_at: now })
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .eq("workflow_id", workflowId)
       .eq("platform", endpointId)
     requireNoDbError(
@@ -5356,7 +5356,7 @@ export class SignalSurfRepository {
       const keywords = readStringArray(config.keywords)
       const { error } = await this.db.from("platform_search_config").upsert(
         {
-          workspace_id: context.productId,
+          workspace_id: context.workspaceId,
           workflow_id: workflowId,
           platform: endpointId,
           is_enabled: true,
@@ -5375,7 +5375,7 @@ export class SignalSurfRepository {
       const { error: deleteError } = await this.db
         .from("tracked_accounts")
         .delete()
-        .eq("workspace_id", context.productId)
+        .eq("workspace_id", context.workspaceId)
         .eq("workflow_id", workflowId)
         .eq("platform", endpointId)
       requireNoDbError(
@@ -5390,7 +5390,7 @@ export class SignalSurfRepository {
 
       const { error } = await this.db.from("tracked_accounts").upsert(
         trackedAccounts.map((username) => ({
-          workspace_id: context.productId,
+          workspace_id: context.workspaceId,
           workflow_id: workflowId,
           platform: endpointId,
           username,
@@ -5406,7 +5406,7 @@ export class SignalSurfRepository {
   }
 
   async listWorkflowSources(context: SignalSurfContext, workflowId: string) {
-    await this.assertWorkflowBelongsToProduct(context, workflowId, false)
+    await this.assertWorkflowBelongsToWorkspace(context, workflowId, false)
 
     const { data, error } = await this.db
       .from("sources")
@@ -5487,7 +5487,7 @@ export class SignalSurfRepository {
     }
 
     const userId =
-      context.userId ?? (await this.resolveProductOwnerId(context)) ?? undefined
+      context.userId ?? (await this.resolveWorkspaceOwnerId(context)) ?? undefined
     if (!userId) {
       throw new UserFacingError(
         "Cannot create source because no source owner could be resolved.",
@@ -5720,7 +5720,7 @@ export class SignalSurfRepository {
       })
     }
     for (const source of sources) {
-      await this.assertWorkflowBelongsToProduct(context, source.workflow_id)
+      await this.assertWorkflowBelongsToWorkspace(context, source.workflow_id)
     }
 
     const deletedCount = await this.deleteSourceRows(context, sources)
@@ -5749,7 +5749,7 @@ export class SignalSurfRepository {
     }
 
     const source = existing as SourceRow
-    await this.assertWorkflowBelongsToProduct(context, source.workflow_id)
+    await this.assertWorkflowBelongsToWorkspace(context, source.workflow_id)
 
     const { data, error } = await this.db
       .from("sources")
@@ -5861,7 +5861,7 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     input: WorkflowToolInput
   ) {
-    await this.assertProductToolBelongsToProduct(context, input.toolId)
+    await this.assertWorkspaceToolBelongsToWorkspace(context, input.toolId)
     return this.updateWorkflowToolIds(context, input.workflowId, (toolIds) =>
       toolIds.includes(input.toolId) ? toolIds : [...toolIds, input.toolId]
     )
@@ -5871,7 +5871,7 @@ export class SignalSurfRepository {
     context: SignalSurfContext,
     input: WorkflowToolInput
   ) {
-    await this.assertProductToolBelongsToProduct(context, input.toolId)
+    await this.assertWorkspaceToolBelongsToWorkspace(context, input.toolId)
     return this.updateWorkflowToolIds(context, input.workflowId, (toolIds) =>
       toolIds.filter((toolId) => toolId !== input.toolId)
     )
@@ -5885,7 +5885,7 @@ export class SignalSurfRepository {
       .from("account_list_profiles")
       .select(ACCOUNT_LIST_PROFILE_COLUMNS)
       .eq("id", profileId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .maybeSingle()
 
     requireNoDbError(error, "Failed to fetch account list profile")
@@ -5907,14 +5907,14 @@ export class SignalSurfRepository {
   ): Promise<string[]> {
     if (databaseIds !== undefined) {
       const ids = uniqueIds(databaseIds)
-      await this.assertDatabaseIdsBelongToProduct(context, ids)
+      await this.assertDatabaseIdsBelongToWorkspace(context, ids)
       return ids
     }
 
     const { data, error } = await this.db
       .from("databases")
       .select("id")
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("system_role", null)
       .order("display_order", { ascending: true })
 
@@ -5923,12 +5923,12 @@ export class SignalSurfRepository {
     if (rows.length === 1) return [rows[0].id]
     if (rows.length > 1) {
       throw new UserFacingError(
-        "databaseIds is required because this product has multiple databases.",
+        "databaseIds is required because this workspace has multiple databases.",
         { code: "BAD_REQUEST", status: 400 }
       )
     }
     throw new UserFacingError(
-      "databaseIds is required because this product has no user-facing databases. Pass databaseIds: [] only for an intentional action-only Workflow.",
+      "databaseIds is required because this workspace has no user-facing databases. Pass databaseIds: [] only for an intentional action-only Workflow.",
       { code: "BAD_REQUEST", status: 400 }
     )
   }
@@ -5940,7 +5940,7 @@ export class SignalSurfRepository {
     const { data, error } = await this.db
       .from("workflows")
       .select("id")
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .eq("name", name.trim())
       .is("deleted_at", null)
       .maybeSingle()
@@ -5948,7 +5948,7 @@ export class SignalSurfRepository {
     return (data as { id: string } | null) ?? null
   }
 
-  private async assertDatabaseIdsBelongToProduct(
+  private async assertDatabaseIdsBelongToWorkspace(
     context: SignalSurfContext,
     databaseIds: string[],
     requireCapability = true
@@ -5957,7 +5957,7 @@ export class SignalSurfRepository {
     const { data, error } = await this.db
       .from("databases")
       .select("id, data_model")
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .in("id", databaseIds)
 
     requireNoDbError(error, "Failed to validate database access")
@@ -6008,7 +6008,7 @@ export class SignalSurfRepository {
     const { data, error } = await this.db
       .from("workflows")
       .select("database_ids")
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .eq("kind", "listening")
       .is("deleted_at", null)
       .overlaps("database_ids", [...databaseIds])
@@ -6033,12 +6033,12 @@ export class SignalSurfRepository {
     )
   }
 
-  private async assertDatabaseBelongsToProduct(
+  private async assertDatabaseBelongsToWorkspace(
     context: SignalSurfContext,
     databaseId: string,
     requireCapability = true
   ): Promise<void> {
-    await this.assertDatabaseIdsBelongToProduct(
+    await this.assertDatabaseIdsBelongToWorkspace(
       context,
       [databaseId],
       requireCapability
@@ -6067,7 +6067,7 @@ export class SignalSurfRepository {
         field.targetDatabaseId
       )
       if (targetDatabaseId) {
-        await this.assertDatabaseBelongsToProduct(context, targetDatabaseId)
+        await this.assertDatabaseBelongsToWorkspace(context, targetDatabaseId)
       }
     }
 
@@ -6083,12 +6083,12 @@ export class SignalSurfRepository {
         record.databaseId
       )
       if (targetDatabaseId) {
-        await this.assertDatabaseBelongsToProduct(context, targetDatabaseId)
+        await this.assertDatabaseBelongsToWorkspace(context, targetDatabaseId)
       }
     }
   }
 
-  private async getDatabaseAndValidateProduct(
+  private async getDatabaseAndValidateWorkspace(
     context: SignalSurfContext,
     databaseId: string,
     requireCapability = true
@@ -6097,7 +6097,7 @@ export class SignalSurfRepository {
       .from("databases")
       .select(DATABASE_COLUMNS)
       .eq("id", databaseId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .maybeSingle()
     requireNoDbError(error, "Failed to validate database access")
     if (!data) {
@@ -6106,7 +6106,7 @@ export class SignalSurfRepository {
         status: 404,
       })
     }
-    await this.assertDatabaseIdsBelongToProduct(
+    await this.assertDatabaseIdsBelongToWorkspace(
       context,
       [databaseId],
       requireCapability
@@ -6119,7 +6119,7 @@ export class SignalSurfRepository {
     databaseId: string,
     mutate: (schema: JsonRecord) => JsonRecord
   ) {
-    const database = await this.getDatabaseAndValidateProduct(
+    const database = await this.getDatabaseAndValidateWorkspace(
       context,
       databaseId
     )
@@ -6131,7 +6131,7 @@ export class SignalSurfRepository {
         updated_at: new Date().toISOString(),
       })
       .eq("id", databaseId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .select(DATABASE_COLUMNS)
       .single()
 
@@ -6142,7 +6142,7 @@ export class SignalSurfRepository {
     }
   }
 
-  private async assertWorkflowBelongsToProduct(
+  private async assertWorkflowBelongsToWorkspace(
     context: SignalSurfContext,
     workflowId: string,
     requireCapability = true
@@ -6151,7 +6151,7 @@ export class SignalSurfRepository {
       .from("workflows")
       .select("id, kind")
       .eq("id", workflowId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
       .maybeSingle()
     requireNoDbError(error, "Failed to validate Workflow access")
@@ -6166,17 +6166,17 @@ export class SignalSurfRepository {
     }
   }
 
-  private async assertProductToolBelongsToProduct(
+  private async assertWorkspaceToolBelongsToWorkspace(
     context: SignalSurfContext,
     toolId: string
   ): Promise<void> {
     const { data, error } = await this.db
-      .from("product_tools")
+      .from("workspace_tools")
       .select("id")
       .eq("id", toolId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .maybeSingle()
-    requireNoDbError(error, "Failed to validate product tool access")
+    requireNoDbError(error, "Failed to validate workspace tool access")
     if (!data) {
       throw new UserFacingError("Tool not found or access denied.", {
         code: "NOT_FOUND",
@@ -6185,18 +6185,18 @@ export class SignalSurfRepository {
     }
   }
 
-  private async assertProductToolsBelongToProduct(
+  private async assertWorkspaceToolsBelongToWorkspace(
     context: SignalSurfContext,
     toolIds: string[]
   ): Promise<void> {
     const ids = uniqueStrings(toolIds)
     if (ids.length === 0) return
     const { data, error } = await this.db
-      .from("product_tools")
+      .from("workspace_tools")
       .select("id")
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .in("id", ids)
-    requireNoDbError(error, "Failed to validate product tool access")
+    requireNoDbError(error, "Failed to validate workspace tool access")
     const found = new Set(
       ((data ?? []) as Array<{ id: string }>).map((row) => row.id)
     )
@@ -6209,7 +6209,7 @@ export class SignalSurfRepository {
     }
   }
 
-  private async assertWorkflowInProduct(
+  private async assertWorkflowInWorkspace(
     context: SignalSurfContext,
     workflowId: string
   ): Promise<void> {
@@ -6217,7 +6217,7 @@ export class SignalSurfRepository {
       .from("workflows")
       .select("id, kind")
       .eq("id", workflowId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .maybeSingle()
     requireNoDbError(error, "Failed to validate Workflow access")
     if (!data) {
@@ -6228,14 +6228,14 @@ export class SignalSurfRepository {
     }
   }
 
-  private async listProductWorkflowIds(
+  private async listWorkspaceWorkflowIds(
     context: SignalSurfContext
   ): Promise<string[]> {
     const { data, error } = await this.db
       .from("workflows")
       .select("id")
-      .eq("workspace_id", context.productId)
-    requireNoDbError(error, "Failed to resolve product Workflows")
+      .eq("workspace_id", context.workspaceId)
+    requireNoDbError(error, "Failed to resolve workspace Workflows")
     return ((data ?? []) as Array<{ id: string }>).map((row) => row.id)
   }
 
@@ -6249,7 +6249,7 @@ export class SignalSurfRepository {
     return (data as SurfJobRow | null) ?? null
   }
 
-  private async getSurfJobAndValidateProduct(
+  private async getSurfJobAndValidateWorkspace(
     context: SignalSurfContext,
     jobId: string
   ): Promise<SurfJobRow> {
@@ -6260,15 +6260,15 @@ export class SignalSurfRepository {
         status: 404,
       })
     }
-    await this.assertSurfJobBelongsToProduct(context, job)
+    await this.assertSurfJobBelongsToWorkspace(context, job)
     return job
   }
 
-  private async assertSurfJobBelongsToProduct(
+  private async assertSurfJobBelongsToWorkspace(
     context: SignalSurfContext,
     job: SurfJobRow
   ): Promise<void> {
-    await this.assertWorkflowInProduct(context, job.workflow_id)
+    await this.assertWorkflowInWorkspace(context, job.workflow_id)
   }
 
   private async getWorkflowRunTarget(
@@ -6279,7 +6279,7 @@ export class SignalSurfRepository {
       .from("workflows")
       .select("id, name, is_active, kind")
       .eq("id", workflowId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
       .maybeSingle()
     requireNoDbError(error, "Failed to validate Workflow access")
@@ -6302,7 +6302,7 @@ export class SignalSurfRepository {
       .from("workflows")
       .select("id, database_ids")
       .eq("id", workflowId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
       .maybeSingle()
     requireNoDbError(error, "Failed to validate Workflow target databases")
@@ -6332,7 +6332,7 @@ export class SignalSurfRepository {
       .from("databases")
       .select("schema")
       .eq("id", databaseId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .single()
     requireNoDbError(error, "Failed to validate entry references")
 
@@ -6396,7 +6396,7 @@ export class SignalSurfRepository {
         )
       }
       try {
-        await this.assertDatabaseBelongsToProduct(context, target.database_id)
+        await this.assertDatabaseBelongsToWorkspace(context, target.database_id)
       } catch (error) {
         if (error instanceof UserFacingError && error.code === "NOT_FOUND") {
           throw new UserFacingError(
@@ -6415,7 +6415,7 @@ export class SignalSurfRepository {
     }
   }
 
-  private async assertDatabaseFolderBelongsToProduct(
+  private async assertDatabaseFolderBelongsToWorkspace(
     context: SignalSurfContext,
     folderId: string
   ): Promise<void> {
@@ -6423,7 +6423,7 @@ export class SignalSurfRepository {
       .from("agents")
       .select("id")
       .eq("id", folderId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .maybeSingle()
     requireNoDbError(error, "Failed to validate table folder access")
     if (!data) {
@@ -6442,7 +6442,7 @@ export class SignalSurfRepository {
     const { data, error } = await this.db
       .from("workflows")
       .select("id, name, kind")
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
       .in("id", ids)
     requireNoDbError(error, "Failed to validate Workflows")
@@ -6466,7 +6466,7 @@ export class SignalSurfRepository {
       .from("workflows")
       .select(WORKFLOW_COLUMNS)
       .eq("id", id)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
       .maybeSingle()
     requireNoDbError(error, "Failed to fetch Workflow")
@@ -6523,7 +6523,7 @@ export class SignalSurfRepository {
         updated_at: new Date().toISOString(),
       })
       .eq("id", workflowId)
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .is("deleted_at", null)
       .select(WORKFLOW_COLUMNS)
       .single()
@@ -6543,7 +6543,7 @@ export class SignalSurfRepository {
     let query = this.db
       .from("workflows")
       .select("id")
-      .eq("workspace_id", context.productId)
+      .eq("workspace_id", context.workspaceId)
       .eq("is_active", true)
       .is("deleted_at", null)
       .order("display_order", { ascending: true })
@@ -6556,12 +6556,12 @@ export class SignalSurfRepository {
     return (data as { id: string } | null) ?? null
   }
 
-  private async getEntryAndValidateProduct(
+  private async getEntryAndValidateWorkspace(
     context: SignalSurfContext,
     rowId: string,
     requireCapability = true
   ): Promise<EntryRow> {
-    const rows = await this.getEntriesAndValidateProduct(
+    const rows = await this.getEntriesAndValidateWorkspace(
       context,
       [rowId],
       requireCapability
@@ -6576,7 +6576,7 @@ export class SignalSurfRepository {
     return row
   }
 
-  private async getEntriesAndValidateProduct(
+  private async getEntriesAndValidateWorkspace(
     context: SignalSurfContext,
     rowIds: string[],
     requireCapability = true
@@ -6606,7 +6606,7 @@ export class SignalSurfRepository {
         .filter((id): id is string => typeof id === "string")
     )
     try {
-      await this.assertDatabaseIdsBelongToProduct(
+      await this.assertDatabaseIdsBelongToWorkspace(
         context,
         databaseIds,
         requireCapability
@@ -7042,7 +7042,7 @@ function formatAccountListProfile(row: AccountListProfileRow) {
   return {
     id: row.id,
     profileId: row.id,
-    productId: row.workspace_id,
+    workspaceId: row.workspace_id,
     name: row.name,
     description: row.description ?? null,
     status: row.status,
@@ -7121,7 +7121,7 @@ function formatSurfJob(row: SurfJobRow) {
     id: row.id,
     jobId: row.id,
     resourceUri: `signalsurf://surf-jobs/${row.id}`,
-    productId: row.workspace_id ?? null,
+    workspaceId: row.workspace_id ?? null,
     userId: row.user_id ?? null,
     runId: row.run_id ?? null,
     workflowId: row.workflow_id,
@@ -7143,7 +7143,7 @@ function formatSurfJob(row: SurfJobRow) {
   }
 }
 
-function formatProductTool(row: ProductToolRow) {
+function formatWorkspaceTool(row: WorkspaceToolRow) {
   const config = asRecord(row.config)
   const displayName =
     readTrimmedString(config.nickname) ??
@@ -7152,7 +7152,7 @@ function formatProductTool(row: ProductToolRow) {
   return {
     id: row.id,
     toolId: row.id,
-    productId: row.workspace_id,
+    workspaceId: row.workspace_id,
     workflowId: row.workflow_id ?? null,
     toolType: row.tool_type,
     name: displayName,
@@ -7168,7 +7168,7 @@ function formatBrandContext(
 ) {
   const row = profile ?? {}
   return {
-    productId: workspaceId,
+    workspaceId: workspaceId,
     brandName: readTrimmedString(row.brand_name),
     brandDescription: readTrimmedString(row.brand_description),
     productDescription: readTrimmedString(row.product_description),
@@ -7183,16 +7183,16 @@ function formatBrandContext(
   }
 }
 
-function formatProduct(
-  row: ProductRow,
-  productContext?: SignalSurfProductContext
+function formatWorkspace(
+  row: WorkspaceRow,
+  workspaceContext?: SignalSurfWorkspaceContext
 ) {
   return {
     id: row.id,
-    productId: row.id,
+    workspaceId: row.id,
     name: row.name,
-    organizationId: productContext?.organizationId ?? row.organization_id,
-    organizationName: productContext?.organizationName ?? null,
+    organizationId: workspaceContext?.organizationId ?? row.organization_id,
+    organizationName: workspaceContext?.organizationName ?? null,
     ownerId: row.owner_id,
     createdAt: row.created_at ?? null,
     updatedAt: row.updated_at ?? null,

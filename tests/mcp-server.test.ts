@@ -9,10 +9,10 @@ import type { SignalSurfContext } from "../src/types.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 const context: SignalSurfContext = {
-  productId: "00000000-0000-4000-8000-000000000001",
+  workspaceId: "00000000-0000-4000-8000-000000000001",
   role: "viewer",
 }
-const secondProductId = "00000000-0000-4000-8000-000000000002"
+const secondWorkspaceId = "00000000-0000-4000-8000-000000000002"
 const databaseId = "00000000-0000-4000-8000-000000000201"
 const workflowId = "00000000-0000-4000-8000-000000000101"
 
@@ -29,7 +29,7 @@ describe("MCP server", () => {
       workflows: [
         {
           id: workflowId,
-          workspace_id: context.productId,
+          workspace_id: context.workspaceId,
           name: "Active",
           description: null,
           is_default: false,
@@ -55,7 +55,7 @@ describe("MCP server", () => {
       databases: [
         {
           id: databaseId,
-          workspace_id: context.productId,
+          workspace_id: context.workspaceId,
           name: "Companies",
           description: null,
           icon: null,
@@ -88,10 +88,10 @@ describe("MCP server", () => {
           credentials: { token: "secret" },
         },
       ],
-      product_tools: [
+      workspace_tools: [
         {
           id: "00000000-0000-4000-8000-000000000901",
-          workspace_id: context.productId,
+          workspace_id: context.workspaceId,
           tool_type: "slack",
           config: { nickname: "Slack alerts", token: "secret" },
           is_enabled: true,
@@ -101,7 +101,7 @@ describe("MCP server", () => {
       ],
       workspace_brand_profiles: [
         {
-          workspace_id: context.productId,
+          workspace_id: context.workspaceId,
           brand_name: "Acme",
           brand_description: "Acme makes widgets.",
           product_description: "A widget platform.",
@@ -151,7 +151,7 @@ describe("MCP server", () => {
         : ""
     const brandContext = JSON.parse(brandText).data.brandContext
     expect(brandContext).toMatchObject({
-      productId: context.productId,
+      workspaceId: context.workspaceId,
       brandName: "Acme",
       brandDescription: "Acme makes widgets.",
       productDescription: "A widget platform.",
@@ -180,7 +180,7 @@ describe("MCP server", () => {
         `signalsurf://workflows/${workflowId}`,
         `signalsurf://workflows/${workflowId}/sources`,
         `signalsurf://workflows/${workflowId}/tools`,
-        "signalsurf://product-tools",
+        "signalsurf://workspace-tools",
         "signalsurf://databases",
         `signalsurf://databases/${databaseId}/rows`,
       ])
@@ -222,19 +222,19 @@ describe("MCP server", () => {
       toolIds: [],
     })
 
-    const productToolsResource = await client.readResource({
-      uri: "signalsurf://product-tools",
+    const workspaceToolsResource = await client.readResource({
+      uri: "signalsurf://workspace-tools",
     })
-    const productToolsResourceText =
-      productToolsResource.contents?.[0]?.text?.toString() ?? ""
-    const parsedProductToolsResource = JSON.parse(productToolsResourceText)
-    expect(parsedProductToolsResource.tools).toMatchObject([
+    const workspaceToolsResourceText =
+      workspaceToolsResource.contents?.[0]?.text?.toString() ?? ""
+    const parsedWorkspaceToolsResource = JSON.parse(workspaceToolsResourceText)
+    expect(parsedWorkspaceToolsResource.tools).toMatchObject([
       {
         toolType: "slack",
         name: "Slack alerts",
       },
     ])
-    expect(parsedProductToolsResource.tools[0]).not.toHaveProperty("config")
+    expect(parsedWorkspaceToolsResource.tools[0]).not.toHaveProperty("config")
   })
 
   it("advertises the stable public tool contract and denies viewer writes", async () => {
@@ -289,7 +289,7 @@ describe("MCP server", () => {
       sources: [],
     })
     const scopedContext: SignalSurfContext = {
-      productId: context.productId,
+      workspaceId: context.workspaceId,
       role: "editor",
       scopes: ["mcp:tables.read", "mcp:tables.write"],
     }
@@ -339,7 +339,7 @@ describe("MCP server", () => {
       create_signal: false,
       update_signal: false,
       delete_signal: false,
-      list_product_tools: false,
+      list_workspace_tools: false,
       list_workflow_tools: false,
       inspect_sender_infrastructure: false,
       plan_sender_capacity: false,
@@ -403,13 +403,13 @@ describe("MCP server", () => {
     expect(db.tables.workflows).toHaveLength(0)
   })
 
-  it("requires productId for product-scoped tools when context has multiple products", async () => {
+  it("requires workspaceId for workspace-scoped tools when context has multiple workspaces", async () => {
     const db = new FakeSupabase({
       workflows: [
         {
           id: "00000000-0000-4000-8000-000000000101",
-          workspace_id: context.productId,
-          name: "Primary Product Workflow",
+          workspace_id: context.workspaceId,
+          name: "Primary Workspace Workflow",
           description: null,
           is_default: false,
           is_active: true,
@@ -432,8 +432,8 @@ describe("MCP server", () => {
         },
         {
           id: "00000000-0000-4000-8000-000000000102",
-          workspace_id: secondProductId,
-          name: "Second Product Workflow",
+          workspace_id: secondWorkspaceId,
+          name: "Second Workspace Workflow",
           description: null,
           is_default: false,
           is_active: true,
@@ -461,24 +461,24 @@ describe("MCP server", () => {
       user_preferences: [],
       sources: [],
     })
-    const multiProductContext: SignalSurfContext = {
+    const multiWorkspaceContext: SignalSurfContext = {
       ...context,
-      productIds: [context.productId, secondProductId],
-      products: [
+      workspaceIds: [context.workspaceId, secondWorkspaceId],
+      workspaces: [
         {
-          productId: context.productId,
-          name: "Primary Product",
+          workspaceId: context.workspaceId,
+          name: "Primary Workspace",
           organizationName: "Primary Workspace",
         },
         {
-          productId: secondProductId,
-          name: "Second Product",
+          workspaceId: secondWorkspaceId,
+          name: "Second Workspace",
           organizationName: "Second Workspace",
         },
       ],
     }
     const server = await createSignalSurfMcpServer({
-      context: multiProductContext,
+      context: multiWorkspaceContext,
       repository: new SignalSurfRepository(db as any),
     })
     const client = new Client({ name: "test-client", version: "0.0.0" })
@@ -501,45 +501,45 @@ describe("MCP server", () => {
         ? contextResult.content[0].text
         : ""
     const parsedContext = JSON.parse(contextText).data
-    expect(parsedContext.productIds).toEqual([
-      context.productId,
-      secondProductId,
+    expect(parsedContext.workspaceIds).toEqual([
+      context.workspaceId,
+      secondWorkspaceId,
     ])
-    expect(parsedContext.products).toMatchObject([
+    expect(parsedContext.workspaces).toMatchObject([
       {
-        productId: context.productId,
-        name: "Primary Product",
+        workspaceId: context.workspaceId,
+        name: "Primary Workspace",
         organizationName: "Primary Workspace",
       },
       {
-        productId: secondProductId,
-        name: "Second Product",
+        workspaceId: secondWorkspaceId,
+        name: "Second Workspace",
         organizationName: "Second Workspace",
       },
     ])
 
-    const missingProduct = await client.callTool({
+    const missingWorkspace = await client.callTool({
       name: "list_workflows",
       arguments: {},
     })
-    expect(missingProduct.isError).toBe(true)
-    const missingProductText =
-      missingProduct.content?.[0]?.type === "text"
-        ? missingProduct.content[0].text
+    expect(missingWorkspace.isError).toBe(true)
+    const missingWorkspaceText =
+      missingWorkspace.content?.[0]?.type === "text"
+        ? missingWorkspace.content[0].text
         : ""
-    expect(JSON.parse(missingProductText)).toMatchObject({
+    expect(JSON.parse(missingWorkspaceText)).toMatchObject({
       code: "BAD_REQUEST",
     })
 
     const result = await client.callTool({
       name: "list_workflows",
-      arguments: { productId: secondProductId },
+      arguments: { workspaceId: secondWorkspaceId },
     })
     expect(result.isError).toBeFalsy()
     const text =
       result.content?.[0]?.type === "text" ? result.content[0].text : ""
     expect(JSON.parse(text).data.workflows).toMatchObject([
-      { name: "Second Product Workflow" },
+      { name: "Second Workspace Workflow" },
     ])
 
     const resources = await client.listResources()
@@ -553,18 +553,18 @@ describe("MCP server", () => {
     const contextResourceText =
       contextResource.contents?.[0]?.text?.toString() ?? ""
     const parsedContextResource = JSON.parse(contextResourceText)
-    expect(parsedContextResource.productIds).toEqual([
-      context.productId,
-      secondProductId,
+    expect(parsedContextResource.workspaceIds).toEqual([
+      context.workspaceId,
+      secondWorkspaceId,
     ])
-    expect(parsedContextResource.products).toMatchObject([
+    expect(parsedContextResource.workspaces).toMatchObject([
       {
-        productId: context.productId,
-        name: "Primary Product",
+        workspaceId: context.workspaceId,
+        name: "Primary Workspace",
       },
       {
-        productId: secondProductId,
-        name: "Second Product",
+        workspaceId: secondWorkspaceId,
+        name: "Second Workspace",
       },
     ])
   })

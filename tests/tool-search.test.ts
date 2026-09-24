@@ -20,7 +20,7 @@ const catalog = {
     {
       name: "list_tables",
       title: "List Tables",
-      description: "List databases/tables for an authorized product.",
+      description: "List databases/tables for an authorized workspace.",
     },
   ],
   prompts: [
@@ -74,7 +74,7 @@ describe("find_capabilities tool over MCP", () => {
 
   it("returns matching prompts/tools and respects capability gating", async () => {
     const context: SignalSurfContext = {
-      productId: "00000000-0000-4000-8000-000000000001",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       role: "viewer",
     }
     const server = await createSignalSurfMcpServer({

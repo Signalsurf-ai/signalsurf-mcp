@@ -112,7 +112,7 @@ export const agentNodeSchema = z.object({
 })
 
 /** Deterministic action kinds whose config lives inline on the node (no agent,
- * no backing product_tools row): POST a payload to a webhook, call an HTTP
+ * no backing workspace_tools row): POST a payload to a webhook, call an HTTP
  * endpoint, insert a new row into one of the Workflow's databases, or
  * "object_sink" — the editor surface for `workflows.config.object_sink`: a
  * webhook's whole payload lands as one object column on a table. The object_sink
@@ -125,7 +125,7 @@ export const actionKindSchema = z.enum([
   "object_sink",
   // SIG-998: deterministic Unipile send (no agent) — DM today, email/posting as
   // those actions land. actionConfig references a configured Unipile action:
-  // { tool_id } (a product_tools unipile_send_dm / unipile_email row).
+  // { tool_id } (a workspace_tools unipile_send_dm / unipile_email row).
   "unipile",
 ])
 export type ActionKind = z.infer<typeof actionKindSchema>
@@ -134,7 +134,7 @@ export type ActionKind = z.infer<typeof actionKindSchema>
  * Action: a downstream side effect. Two shapes:
  * - inline deterministic: `actionKind` + `actionConfig` fire directly when the
  *   signal reaches the node (no agent).
- * - legacy: `toolId` references a configured product_tools action.
+ * - legacy: `toolId` references a configured workspace_tools action.
  */
 export const actionNodeSchema = z.object({
   ...baseNodeFields,

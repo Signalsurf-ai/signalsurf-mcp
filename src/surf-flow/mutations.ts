@@ -473,7 +473,7 @@ export function describeNodeTypes() {
           actionKind: "'webhook' | 'http' | 'create_row' | 'object_sink'",
           actionConfig:
             "create_row/object_sink: { database_id, fields:[{key,value}] } — each key MUST be a real column (call get_node_upstream_context); webhook/http: { url, method?, headers?, params?, body? }",
-          toolId: "legacy alternative: a configured product tool id",
+          toolId: "legacy alternative: a configured workspace tool id",
         },
         outboundConditions: ["always"],
       },

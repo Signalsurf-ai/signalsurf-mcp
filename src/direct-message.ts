@@ -22,7 +22,7 @@ You act as the SignalSurf member who authorized this connection, with their work
 - Call list_workspaces first when the member reaches more than one workspace, and pass workspaceId on every later call.
 - Read Activity to see what is new and what waits on the member; read a Thread before claiming anything happened there.
 - Work happens in Projects. Start a Thread or reply in one, and that Project's Surfer does the work under its own confirmations. Read the Thread afterwards to see what it actually did.
-- You cannot change workspace data directly — no Tables, rows, Workflow runs, or sending. Ask for it in a Thread instead. Direct product operations are Tools mode, which the member approves separately.`
+- You cannot change workspace data directly — no Tables, rows, Workflow runs, or sending. Ask for it in a Thread instead. Direct workspace operations are Tools mode, which the member approves separately.`
 
 export const DIRECT_MESSAGE_UNAVAILABLE = "DIRECT_MESSAGE_UNAVAILABLE"
 

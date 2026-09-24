@@ -77,7 +77,7 @@ describe("enrich_table prompt over MCP", () => {
 
   it("is listed and renders with a passed databaseId argument", async () => {
     const context: SignalSurfContext = {
-      productId: "00000000-0000-4000-8000-000000000001",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
       role: "viewer",
     }
     const server = await createSignalSurfMcpServer({

@@ -54,43 +54,43 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 
 | Tool                            | Required capability          | Destructive | Notes                                                                                                                        |
 | ------------------------------- | ---------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `get_context`                   | `context.read`               | No          | Returns authorized product ids/names, workspace names, user, role, scopes, and per-tool access booleans                      |
-| `get_brand_context`             | `context.read`               | No          | Reads the active product's brand/positioning context from product goals (empty fields before brand setup)                    |
-| `list_workflows`                | `workflows.read`             | No          | Lists non-deleted Workflows for one authorized product                                                                       |
-| `get_workflow`                  | `workflows.read`             | No          | Reads one product-scoped Workflow                                                                                            |
-| `create_workflow`               | `workflows.write`            | No          | Creates a Workflow in one authorized product                                                                                 |
+| `get_context`                   | `context.read`               | No          | Returns authorized workspace ids/names, organization names, user, role, scopes, and per-tool access booleans                 |
+| `get_brand_context`             | `context.read`               | No          | Reads the active workspace's brand/positioning context from workspace memory (empty fields before brand setup)               |
+| `list_workflows`                | `workflows.read`             | No          | Lists non-deleted Workflows for one authorized workspace                                                                     |
+| `get_workflow`                  | `workflows.read`             | No          | Reads one workspace-scoped Workflow                                                                                          |
+| `create_workflow`               | `workflows.write`            | No          | Creates a Workflow in one authorized workspace                                                                               |
 | `update_workflow`               | `workflows.write`            | No          | Mutates Workflow metadata, prompts, targets, or JSON config                                                                  |
 | `run_workflow`                  | `workflows.execute`          | No          | Queues an active Workflow for asynchronous execution                                                                         |
-| `get_surf_job`                  | `workflows.read`             | No          | Reads one product-scoped Workflow execution job                                                                              |
+| `get_surf_job`                  | `workflows.read`             | No          | Reads one workspace-scoped Workflow execution job                                                                            |
 | `wait_for_surf_job`             | `workflows.read`             | No          | Polls one Workflow execution job until terminal status or timeout                                                            |
-| `list_surf_jobs`                | `workflows.read`             | No          | Lists product-scoped Workflow execution jobs                                                                                 |
+| `list_surf_jobs`                | `workflows.read`             | No          | Lists workspace-scoped Workflow execution jobs                                                                               |
 | `cancel_surf_job`               | `workflows.execute`          | No          | Cancels a pending Workflow execution job                                                                                     |
 | `delete_workflow`               | `workflows.delete`           | Yes         | Soft-deletes Workflows and cancels pending jobs                                                                              |
-| `list_tables`                   | `tables.read`                | No          | Lists product tables                                                                                                         |
+| `list_tables`                   | `tables.read`                | No          | Lists workspace tables                                                                                                       |
 | `create_table`                  | `schemas.write`              | No          | Creates a table from the provider-first 13-field Accounts baseline, Contacts baseline, or custom schema                      |
 | `update_table`                  | `schemas.write`              | No          | Applies template upgrades while preserving additive fields/data and hiding known legacy Accounts fields                      |
-| `delete_table`                  | `tables.delete`              | Yes         | Deletes user-facing tables and unlinks them from active Workflows after product-scope verification                           |
+| `delete_table`                  | `tables.delete`              | Yes         | Deletes user-facing tables and unlinks them from active Workflows after workspace-scope verification                         |
 | `list_table_views`              | `tables.read`                | No          | Lists saved table views from view configuration                                                                              |
 | `read_table`                    | `tables.read`                | No          | Reads rows with pagination, containment filters, and UI-style filters/sorts                                                  |
 | `read_table_view`               | `tables.read`                | No          | Reads rows using compatible saved-view filters/sorts                                                                         |
-| `get_table_row`                 | `tables.read`                | No          | Reads one product-scoped row                                                                                                 |
+| `get_table_row`                 | `tables.read`                | No          | Reads one workspace-scoped row                                                                                               |
 | `create_table_row`              | `tables.write`               | No          | Creates rows with server-side MCP provenance                                                                                 |
 | `update_table_rows`             | `tables.write`               | No          | Edits 1-100 rows (array-based, single or batch) with distinct data/note/workflowId per row, changelog-preserving RPCs        |
-| `delete_table_rows`             | `tables.delete`              | Yes         | Hard-deletes rows after product-scope verification                                                                           |
+| `delete_table_rows`             | `tables.delete`              | Yes         | Hard-deletes rows after workspace-scope verification                                                                         |
 | `list_table_fields`             | `schemas.read`               | No          | Lists schema fields and relation definitions                                                                                 |
 | `add_table_field`               | `schemas.write`              | No          | Adds one schema field without backfilling row data                                                                           |
 | `update_table_field`            | `schemas.write`              | No          | Patches one schema field definition                                                                                          |
 | `remove_table_field`            | `schemas.write`              | No          | Removes one schema field without deleting row data                                                                           |
-| `create_relation_field`         | `schemas.write`              | No          | Adds an `item_ref` relation field to a product-owned target database                                                         |
+| `create_relation_field`         | `schemas.write`              | No          | Adds an `item_ref` relation field to a workspace-owned target database                                                       |
 | `list_signals`                  | `sources.read`               | No          | Lists safe signal metadata only; config and credentials are not exposed                                                      |
-| `create_signal`                 | `sources.write`              | No          | Creates a signal for a Workflow with typed config and product-scope validation                                               |
+| `create_signal`                 | `sources.write`              | No          | Creates a signal for a Workflow with typed config and workspace-scope validation                                             |
 | `update_signal`                 | `sources.write`              | No          | Updates signal name, active state (enable/pause), typed config, `pull_config`, `metadata`, or `data_schema`                  |
-| `delete_signal`                 | `sources.write`              | Yes         | Deletes signals after product-scope validation and removes non-terminal jobs for those source ids                            |
+| `delete_signal`                 | `sources.write`              | Yes         | Deletes signals after workspace-scope validation and removes non-terminal jobs for those source ids                          |
 | `enable_enrich`                 | `sources.write`              | No          | Binds a hidden manual-trigger source to one table column with instruction, optional auto-fill, and optional run gate         |
 | `disable_enrich`                | `sources.write`              | No          | Turns off a column binding while preserving its instruction and gate                                                         |
 | `list_enrich`                   | `sources.read`               | No          | Lists Enrich-enabled columns for a table with their instructions                                                             |
 | `run_enrich`                    | `workflows.execute`          | No          | Queues enrichment, skips populated cells by default, and requires explicit overwrite consent for refreshes                   |
-| `list_product_tools`            | `workflows.read`             | No          | Lists safe product tool metadata; config secrets are not exposed                                                             |
+| `list_workspace_tools`          | `workflows.read`             | No          | Lists safe workspace tool metadata; config secrets are not exposed                                                           |
 | `list_workflow_tools`           | `workflows.read`             | No          | Lists tool ids from `tool_config.auto_tool_ids` (attach/detach via `update_workflow` toolConfigPatch)                        |
 | `search_instagram_content`      | `creator_discovery.read`     | No          | Searches public Instagram posts after one-time Web approval; three credits per page, no Reels fallback                       |
 | `deepline_search_people`        | `deepline.read`              | No          | Runs a bounded managed Crustdata V3 people search after one-time Web approval; Apollo is an explicit BYOC override           |
@@ -98,7 +98,7 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 | `deepline_enrich_contact`       | `deepline.enrich`            | No          | Finds a work email through Deepline after one-time Web approval                                                              |
 | `deepline_search_catalog`       | `deepline.read`              | No          | Searches Deepline's live v2 tool catalog for provider tool ids                                                               |
 | `deepline_execute_tool`         | `deepline.execute`           | No          | Executes one selected Deepline tool only after atomically consuming an exact, unexpired Web approval                         |
-| `inspect_sender_infrastructure` | `sender_infrastructure.read` | No          | Reads product-scoped Domain, mailbox, health, Warm-up, Placement, settings, and entitlement evidence without credentials     |
+| `inspect_sender_infrastructure` | `sender_infrastructure.read` | No          | Reads workspace-scoped Domain, mailbox, health, Warm-up, Placement, settings, and entitlement evidence without credentials   |
 | `plan_sender_capacity`          | `sender_infrastructure.read` | No          | Shows editable assumptions, worst-case formulas, upward rounding, conservative existing-capacity credit, and pricing sources |
 | `search_sender_domains`         | `sender_infrastructure.read` | No          | Checks live Domain availability; exact pricing, purchase, and registrant PII remain in secure Web UI                         |
 
@@ -110,11 +110,11 @@ uses the same 15-day new-mailbox ramp as Campaign capacity planning. It does not
 have verified live provider usage, so the planner shows inventory but credits
 zero existing capacity rather than overstating readiness.
 
-OAuth tokens can authorize multiple products. Agents should call `get_context`
-first; when multiple `productIds` are returned, choose from `products[]` using
-the human-readable product and workspace names, then include the intended
-`productId` in every product-scoped tool call. Static fallback tokens remain
-single-product scoped.
+OAuth tokens can authorize multiple workspaces. Agents should call `get_context`
+first; when multiple `workspaceIds` are returned, choose from `workspaces[]` using
+the human-readable workspace and organization names, then include the intended
+`workspaceId` in every workspace-scoped tool call. Static fallback tokens remain
+single-workspace scoped.
 
 `tools/list` advertises this public contract consistently. A caller whose token
 lacks a required scoped capability over HTTP receives a `403` response with a
@@ -151,7 +151,7 @@ state machine as `deepline_execute_tool`. When
 redacted `pending` request and returns `APPROVAL_REQUIRED` with its id and the
 SignalSurf Web approval URL. This request cannot approve itself. On a follow-up
 call, `approvalRequestId` must identify an `mcp_action_approvals` row whose
-stable `oauth_grant_id`, `user_id`, `client_id`, `product_id`, `tool_name`,
+stable `oauth_grant_id`, `user_id`, `client_id`, `workspace_id`, `tool_name`,
 `provider_tool_id`, and `payload_sha256` match the active call and whose status
 is `approved` with a future `expires_at`.
 

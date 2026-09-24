@@ -5,13 +5,13 @@ import type { SignalSurfContext } from "../src/types.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 const context: SignalSurfContext = {
-  productId: "00000000-0000-4000-8000-000000000001",
+  workspaceId: "00000000-0000-4000-8000-000000000001",
   userId: "00000000-0000-4000-8000-000000000010",
   role: "editor",
   tokenName: "test-agent",
 }
 
-const otherProductId = "00000000-0000-4000-8000-000000000002"
+const otherWorkspaceId = "00000000-0000-4000-8000-000000000002"
 const db1 = "00000000-0000-4000-8000-000000000201"
 const otherDb = "00000000-0000-4000-8000-000000000299"
 const entry1 = "00000000-0000-4000-8000-000000000301"
@@ -19,11 +19,11 @@ const entry2 = "00000000-0000-4000-8000-000000000302"
 
 function makeDb() {
   return new FakeSupabase({
-    products: [{ id: context.productId, owner_id: context.userId }],
+    workspaces: [{ id: context.workspaceId, owner_id: context.userId }],
     databases: [
       {
         id: db1,
-        workspace_id: context.productId,
+        workspace_id: context.workspaceId,
         name: "Customers",
         schema: {
           fields: [
@@ -34,8 +34,8 @@ function makeDb() {
       },
       {
         id: otherDb,
-        workspace_id: otherProductId,
-        name: "Other product DB",
+        workspace_id: otherWorkspaceId,
+        name: "Other workspace DB",
         schema: { fields: [{ key: "work_email", type: "string" }] },
       },
     ],
@@ -65,7 +65,7 @@ function makeRepo(db: FakeSupabase) {
 }
 
 describe("Enrich column enrichment", () => {
-  it("enables Enrich by creating a product-scoped Workflow + manual_trigger source", async () => {
+  it("enables Enrich by creating a workspace-scoped Workflow + manual_trigger source", async () => {
     const db = makeDb()
     const repo = makeRepo(db)
 
@@ -82,7 +82,7 @@ describe("Enrich column enrichment", () => {
     const workflow = db.tables.workflows.find(
       (p) => p.id === result.workflowId
     )
-    expect(workflow?.workspace_id).toBe(context.productId)
+    expect(workflow?.workspace_id).toBe(context.workspaceId)
     expect(workflow?.surf_prompt).toContain("work email")
     expect(workflow?.relevance_threshold).toBe(0)
 
@@ -132,7 +132,7 @@ describe("Enrich column enrichment", () => {
     ).rejects.toThrow(/primary/i)
   })
 
-  it("does not reach a database in another product", async () => {
+  it("does not reach a database in another workspace", async () => {
     const repo = makeRepo(makeDb())
     await expect(
       repo.enableEnrich(context, {
@@ -222,7 +222,7 @@ describe("Enrich column enrichment", () => {
     for (const job of jobs) {
       expect(job.job_type).toBe("analyze")
       expect(job.status).toBe("pending")
-      expect(job.workspace_id).toBe(context.productId)
+      expect(job.workspace_id).toBe(context.workspaceId)
       expect(job.payload.target_field).toBe("work_email")
     }
   })
