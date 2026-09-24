@@ -2,6 +2,7 @@ import type { Server } from "node:http"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { sha256Hex } from "../src/auth.js"
+import { PUBLIC_MCP_TOOL_NAMES } from "../src/capabilities.js"
 import type { AppConfig } from "../src/config.js"
 import { DirectMessageClient } from "../src/direct-message.js"
 import { createHttpApp } from "../src/http.js"
@@ -9,23 +10,25 @@ import { SignalSurfRepository } from "../src/repository.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 /**
- * SIG-2681: Direct Message mode gives an MCP client the member's own Surfer
- * Direct Message capabilities. SignalSurf publishes that catalogue, so these
- * assert the transport and the mode boundary, not a list restated here.
+ * SIG-2681/SIG-2815: the unified MCP connection gives a client the member's
+ * own Surfer capabilities and scoped product tools. SignalSurf publishes the
+ * member catalogue, so these assert the transport boundary, not a duplicate.
  */
 
 const workspaceId = "00000000-0000-4000-8000-000000000001"
 const otherWorkspaceId = "00000000-0000-4000-8000-000000000002"
 const memberId = "00000000-0000-4000-8000-000000000102"
 const resource = "http://127.0.0.1:3333/mcp"
-const manualDm = "ssmcp_session_token"
-const manualTools = "ssmcp_live_manual_tools"
-const dmOAuth = "ssmcp_at_dm_grant"
-const toolOAuth = "ssmcp_at_tool_grant"
+const manualUnified = "ssmcp_live_unified"
+const legacyManual = "ssmcp_session_token"
+const unifiedOAuth = "ssmcp_at_unified_grant"
+const dmOnlyOAuth = "ssmcp_at_dm_only_grant"
+const toolOnlyOAuth = "ssmcp_at_tool_only_grant"
 
 const CATALOG = [
   {
     name: "start_thread",
+    title: "Start Thread",
     description: "Start a Project Thread.",
     inputSchema: {
       type: "object",
@@ -34,8 +37,31 @@ const CATALOG = [
   },
   {
     name: "read_thread",
+    title: "Read Thread",
     description: "Review delegated Project Thread work.",
     inputSchema: { type: "object", properties: {} },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: "publish_project_conclusion",
+    title: "Publish Project Conclusion",
+    description: "Publish a durable conclusion to a Project Thread.",
+    inputSchema: {
+      type: "object",
+      required: ["projectId", "occurrenceId", "title", "summary"],
+      properties: {
+        projectId: { type: "string", format: "uuid" },
+        occurrenceId: { type: "string", format: "uuid" },
+        title: { type: "string" },
+        summary: { type: "string" },
+      },
+      additionalProperties: false,
+    },
   },
 ]
 
@@ -50,6 +76,14 @@ function jsonResponse(status: number, body: unknown): Response {
     status,
     headers: { "content-type": "application/json" },
   })
+}
+
+async function readMcpJson(response: Response) {
+  const body = await response.text()
+  if (!body.startsWith("event:")) return JSON.parse(body)
+  const dataLine = body.split("\n").find((line) => line.startsWith("data: "))
+  if (!dataLine) throw new Error(`Missing SSE data line: ${body}`)
+  return JSON.parse(dataLine.slice("data: ".length))
 }
 
 function signalSurfStub() {
@@ -120,10 +154,10 @@ async function start(stub = signalSurfStub()) {
         id: "00000000-0000-4000-8000-000000000101",
         workspace_id: workspaceId,
         created_by: memberId,
-        name: "claude-dm",
+        name: "claude",
         role: "editor",
-        mode: "surfer_session",
-        token_sha256: sha256Hex(manualDm),
+        mode: "unified",
+        token_sha256: sha256Hex(manualUnified),
         revoked_at: null,
         last_used_at: null,
         last_used_ip: null,
@@ -132,10 +166,10 @@ async function start(stub = signalSurfStub()) {
         id: "00000000-0000-4000-8000-000000000111",
         workspace_id: workspaceId,
         created_by: memberId,
-        name: "tools",
+        name: "legacy",
         role: "editor",
-        mode: "tools",
-        token_sha256: sha256Hex(manualTools),
+        mode: "surfer_session",
+        token_sha256: sha256Hex(legacyManual),
         revoked_at: null,
         last_used_at: null,
         last_used_ip: null,
@@ -144,12 +178,17 @@ async function start(stub = signalSurfStub()) {
     mcp_oauth_tokens: [
       oauthRow(
         "00000000-0000-4000-8000-000000000211",
-        dmOAuth,
-        "mcp:dm offline_access"
+        unifiedOAuth,
+        "mcp:dm mcp:read mcp:write offline_access"
       ),
       oauthRow(
         "00000000-0000-4000-8000-000000000212",
-        toolOAuth,
+        dmOnlyOAuth,
+        "mcp:dm offline_access"
+      ),
+      oauthRow(
+        "00000000-0000-4000-8000-000000000213",
+        toolOnlyOAuth,
         "mcp:read offline_access"
       ),
     ],
@@ -191,7 +230,7 @@ function rpc(base: string, bearer: string | undefined, body: unknown) {
 const listTools = (base: string, bearer?: string) =>
   rpc(base, bearer, { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} })
 
-describe("Direct Message mode transport", () => {
+describe("member capability transport", () => {
   it("calls a fetch bound to globalThis, as workerd requires", async () => {
     // A bare `fetch` called as `this.fetchImpl(...)` throws Illegal invocation
     // on workerd while passing on Node (SIG-2679).
@@ -231,17 +270,57 @@ describe("Direct Message mode transport", () => {
   })
 })
 
-describe("Direct Message mode over HTTP", () => {
-  it("publishes the member's capabilities, never the tool catalogue", async () => {
+describe("unified SignalSurf MCP over HTTP", () => {
+  it("publishes one union of member and product-operation capabilities", async () => {
     const { base } = await start()
-    const response = await listTools(base, manualDm)
+    const response = await listTools(base, manualUnified)
     expect(response.status).toBe(200)
-    const text = await response.text()
-    expect(text).toContain("list_workspaces")
-    for (const tool of CATALOG) expect(text).toContain(tool.name)
-    // Tool mode's workspace operations are a different, separately approved mode.
-    expect(text).not.toContain("get_context")
-    expect(text).not.toContain("create_database")
+    const payload = await readMcpJson(response)
+    const tools = payload.result.tools as Array<{
+      name: string
+      inputSchema: Record<string, any>
+    }>
+    const names = tools.map((tool) => tool.name)
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "list_workspaces",
+        "start_thread",
+        "publish_project_conclusion",
+      ])
+    )
+    expect(names).toEqual(expect.arrayContaining(PUBLIC_MCP_TOOL_NAMES))
+    expect(tools.find((tool) => tool.name === "start_thread")?.inputSchema)
+      .toMatchObject({
+        type: "object",
+        properties: {
+          workspaceId: expect.any(Object),
+          projectId: { type: "string" },
+        },
+      })
+    expect(tools.find((tool) => tool.name === "read_thread")).toMatchObject({
+      title: "Read Thread",
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    })
+  })
+
+  it("discovers Project tools through the unified capability search", async () => {
+    const { base } = await start()
+    const response = await rpc(base, unifiedOAuth, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "find_capabilities",
+        arguments: { query: "publish project conclusion" },
+      },
+    })
+    expect(response.status).toBe(200)
+    const payload = await readMcpJson(response)
+    expect(payload.result.structuredContent.data.tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "publish_project_conclusion" }),
+      ])
+    )
   })
 
   it("merges the catalogues of every available granted workspace", async () => {
@@ -279,7 +358,7 @@ describe("Direct Message mode over HTTP", () => {
     })
     const { base } = await start(stub)
 
-    const response = await listTools(base, dmOAuth)
+    const response = await listTools(base, unifiedOAuth)
     expect(response.status).toBe(200)
     const text = await response.text()
     expect(text).toContain("start_thread")
@@ -311,7 +390,7 @@ describe("Direct Message mode over HTTP", () => {
     })
     const { base } = await start(stub)
 
-    const response = await listTools(base, dmOAuth)
+    const response = await listTools(base, unifiedOAuth)
     expect(response.status).toBe(503)
     await expect(response.json()).resolves.toMatchObject({
       code: "DIRECT_MESSAGE_UNAVAILABLE",
@@ -320,7 +399,7 @@ describe("Direct Message mode over HTTP", () => {
 
   it("runs a capability as the member in one named workspace", async () => {
     const { base, stub } = await start()
-    const response = await rpc(base, manualDm, {
+    const response = await rpc(base, manualUnified, {
       jsonrpc: "2.0",
       id: 2,
       method: "tools/call",
@@ -341,23 +420,46 @@ describe("Direct Message mode over HTTP", () => {
     expect(
       ((call?.[1] as RequestInit).headers as Record<string, string>)
         .Authorization
-    ).toBe(`Bearer ${manualDm}`)
+    ).toBe(`Bearer ${manualUnified}`)
   })
 
-  it("serves Direct Message mode to an mcp:dm grant and tool mode to the others", async () => {
+  it("rejects pre-unification grants instead of preserving separate modes", async () => {
     const { base } = await start()
-    const dm = await (await listTools(base, dmOAuth)).text()
-    expect(dm).toContain("read_thread")
-    expect(dm).not.toContain("get_context")
+    expect((await listTools(base, dmOnlyOAuth)).status).toBe(401)
+    expect((await listTools(base, toolOnlyOAuth)).status).toBe(401)
+    expect((await listTools(base, legacyManual)).status).toBe(401)
+  })
 
-    const tools = await (await listTools(base, toolOAuth)).text()
-    expect(tools).toContain("get_context")
-    expect(tools).not.toContain("read_thread")
+  it("fails closed when a published member tool collides with a product tool", async () => {
+    const stub = signalSurfStub()
+    stub.mockImplementation(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}"))
+      if (body.action === "workspaces") {
+        return jsonResponse(200, {
+          ok: true,
+          workspaces: [{ workspaceId, available: true }],
+        })
+      }
+      if (body.action === "catalog") {
+        return jsonResponse(200, {
+          ok: true,
+          tools: [{ ...CATALOG[0], name: "get_context" }],
+          role: "member",
+        })
+      }
+      return jsonResponse(200, { ok: true, data: {} })
+    })
+    const { base } = await start(stub)
+    const response = await listTools(base, unifiedOAuth)
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toMatchObject({
+      code: "DIRECT_MESSAGE_UNAVAILABLE",
+    })
   })
 
   it("states the role the client acts in", async () => {
     const { base } = await start()
-    const response = await rpc(base, manualDm, {
+    const response = await rpc(base, manualUnified, {
       jsonrpc: "2.0",
       id: 9,
       method: "initialize",
@@ -368,11 +470,12 @@ describe("Direct Message mode over HTTP", () => {
       },
     })
     const text = await response.text()
-    expect(text).toContain("act as the SignalSurf member")
+    expect(text).toContain("act with the authority of the SignalSurf member")
     expect(text).toContain("authorized this connection")
+    expect(text).toContain("publish a durable Project-relevant conclusion")
   })
 
-  it("advertises Direct Message mode first in its OAuth metadata", async () => {
+  it("advertises member capabilities first in its OAuth metadata", async () => {
     const { base } = await start()
     const metadata = await (
       await fetch(`${base}/.well-known/oauth-protected-resource`)

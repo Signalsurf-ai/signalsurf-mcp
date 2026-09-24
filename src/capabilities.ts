@@ -52,10 +52,9 @@ export const MCP_RESOURCE_SCOPES = [
   ...MCP_GRANULAR_SCOPES,
 ] as const
 
-// SIG-2673: a grant approved in Direct Message mode carries only this scope
-// (plus offline_access). It exposes no workspace tools; the server relays to the
-// member's Surfer instead. Advertised first so clients request both modes and
-// the member picks one on the consent page.
+// The unified connection requires this member/Project scope alongside one or
+// more granular product-operation scopes. It is advertised first so every new
+// grant receives the complete conversational + tool surface.
 export const MCP_DM_SCOPE = "mcp:dm"
 
 export const MCP_DEFAULT_RESOURCE_SCOPES = MCP_GRANULAR_SCOPES.filter(

@@ -1,28 +1,26 @@
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js"
-import type { Server } from "@modelcontextprotocol/sdk/server/index.js"
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import { z, type ZodTypeAny } from "zod"
 
 import { UserFacingError } from "./errors.js"
 import { jsonErrorResult, jsonResult } from "./mcp-results.js"
 
 /**
- * SIG-2681: Direct Message mode. The member's conversation lives in their own
+ * SIG-2681/SIG-2815: The member's conversation lives in their own
  * client; SignalSurf keeps no second conversation and no relayed transcript.
- * This mode exposes the capability set the member's in-product Surfer Direct
- * Message has — published by SignalSurf itself, so the two never diverge — and
- * every call executes as that member, in one granted workspace.
+ * The unified connection includes bounded member and Project capabilities
+ * published by SignalSurf itself, plus scoped product tools. Every call stays
+ * within the approving member's authority in one granted workspace.
  */
 
-export const DIRECT_MESSAGE_INSTRUCTIONS = `SignalSurf MCP — Direct Message mode.
+export const DIRECT_MESSAGE_INSTRUCTIONS = `SignalSurf MCP — unified connection.
 
-You act as the SignalSurf member who authorized this connection, with their workspace role and nothing more. Everything you post, answer, or create is recorded as that member, exactly as if they had done it in SignalSurf themselves. SignalSurf keeps no copy of this conversation and runs no assistant of its own for it.
+You act with the authority of the SignalSurf member who authorized this connection, and nothing more. SignalSurf keeps no copy of this external conversation and runs no second assistant for it.
 
 - Call list_workspaces first when the member reaches more than one workspace, and pass workspaceId on every later call.
 - Read Activity to see what is new and what waits on the member; read a Thread before claiming anything happened there.
 - Work happens in Projects. Start a Thread or reply in one, and that Project's Surfer does the work under its own confirmations. Read the Thread afterwards to see what it actually did.
-- You cannot change workspace data directly — no Tables, rows, Workflow runs, or sending. Ask for it in a Thread instead. Direct workspace operations are Tools mode, which the member approves separately.`
+- Use the product-operation tools on this same connection for direct Table, Workflow, Signal, enrichment, and other supported work. Routine atomic edits do not need a Thread just for logging.
+- Before your final answer, publish a durable Project-relevant conclusion when the conversation produced a decision, direction, research summary, assumption, or next step. Append it to the relevant Thread when known; otherwise create a conclusion Thread. Store only the distilled result, never the private transcript or routine tool chatter.`
 
 export const DIRECT_MESSAGE_UNAVAILABLE = "DIRECT_MESSAGE_UNAVAILABLE"
 
@@ -37,8 +35,15 @@ type JsonRecord = Record<string, unknown>
 
 export type DirectMessageTool = {
   name: string
+  title?: string
   description: string
   inputSchema: JsonRecord
+  annotations?: {
+    readOnlyHint?: boolean
+    destructiveHint?: boolean
+    idempotentHint?: boolean
+    openWorldHint?: boolean
+  }
 }
 
 type DirectMessageWorkspace = JsonRecord & {
@@ -75,7 +80,7 @@ export class DirectMessageClient {
   async call(body: JsonRecord): Promise<JsonRecord> {
     if (!this.endpoint || !this.accessToken) {
       throw unavailable(
-        "Direct Message mode is not configured on this hosted MCP deployment."
+        "Member and Project capabilities are not configured on this hosted MCP deployment."
       )
     }
     let response: Response
@@ -188,7 +193,144 @@ function withWorkspaceId(schema: JsonRecord): JsonRecord {
 
 export type DirectMessageSurface = {
   instructions: string
-  register: (server: Server) => void
+  capabilities: Array<{ name: string; title: string; description: string }>
+  register: (
+    server: McpServer,
+    reservedToolNames?: readonly string[]
+  ) => void
+}
+
+function described(schema: ZodTypeAny, json: JsonRecord): ZodTypeAny {
+  return typeof json.description === "string"
+    ? schema.describe(json.description)
+    : schema
+}
+
+/**
+ * SignalSurf Web owns these input contracts and validates them again before
+ * execution. Convert the JSON Schema subset emitted by Zod into an MCP SDK
+ * schema so the member/Project tools can share one registry with static public
+ * tools without weakening the authoritative Web-side validation.
+ */
+function publishedSchemaToZod(input: unknown): ZodTypeAny {
+  const schema =
+    input && typeof input === "object" && !Array.isArray(input)
+      ? (input as JsonRecord)
+      : {}
+
+  if (Array.isArray(schema.allOf) && schema.allOf.length > 0) {
+    const [first, ...rest] = schema.allOf
+    return described(
+      rest.reduce(
+        (combined, part) => z.intersection(combined, publishedSchemaToZod(part)),
+        publishedSchemaToZod(first)
+      ),
+      schema
+    )
+  }
+  const alternatives = Array.isArray(schema.anyOf)
+    ? schema.anyOf
+    : Array.isArray(schema.oneOf)
+      ? schema.oneOf
+      : null
+  if (alternatives?.length) {
+    const variants = alternatives.map(publishedSchemaToZod)
+    return described(
+      variants.length === 1
+        ? variants[0]!
+        : z.union(
+            variants as unknown as [ZodTypeAny, ZodTypeAny, ...ZodTypeAny[]]
+          ),
+      schema
+    )
+  }
+  if (Object.hasOwn(schema, "const")) {
+    return described(z.literal(schema.const as any), schema)
+  }
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+    const variants = schema.enum.map((value) => z.literal(value as any))
+    return described(
+      variants.length === 1
+        ? variants[0]!
+        : z.union(
+            variants as unknown as [ZodTypeAny, ZodTypeAny, ...ZodTypeAny[]]
+          ),
+      schema
+    )
+  }
+
+  const types = Array.isArray(schema.type) ? schema.type : [schema.type]
+  if (types.length > 1) {
+    const variants = types.map((type) =>
+      publishedSchemaToZod({ ...schema, type })
+    )
+    return described(
+      z.union(
+        variants as unknown as [ZodTypeAny, ZodTypeAny, ...ZodTypeAny[]]
+      ),
+      schema
+    )
+  }
+
+  let result: ZodTypeAny
+  switch (types[0]) {
+    case "object": {
+      const required = new Set(
+        Array.isArray(schema.required)
+          ? schema.required.filter((key): key is string => typeof key === "string")
+          : []
+      )
+      const properties =
+        schema.properties &&
+        typeof schema.properties === "object" &&
+        !Array.isArray(schema.properties)
+          ? (schema.properties as JsonRecord)
+          : {}
+      const shape = Object.fromEntries(
+        Object.entries(properties).map(([key, value]) => {
+          const property = publishedSchemaToZod(value)
+          return [key, required.has(key) ? property : property.optional()]
+        })
+      )
+      const object = z.object(shape)
+      result = schema.additionalProperties === false ? object.strict() : object.passthrough()
+      break
+    }
+    case "array": {
+      let array = z.array(publishedSchemaToZod(schema.items))
+      if (typeof schema.minItems === "number") array = array.min(schema.minItems)
+      if (typeof schema.maxItems === "number") array = array.max(schema.maxItems)
+      result = array
+      break
+    }
+    case "string": {
+      let string = z.string()
+      if (schema.format === "uuid") string = string.uuid()
+      if (typeof schema.minLength === "number") string = string.min(schema.minLength)
+      if (typeof schema.maxLength === "number") string = string.max(schema.maxLength)
+      result = string
+      break
+    }
+    case "integer":
+    case "number": {
+      let number = z.number()
+      if (types[0] === "integer") number = number.int()
+      if (typeof schema.minimum === "number") number = number.min(schema.minimum)
+      if (typeof schema.maximum === "number") number = number.max(schema.maximum)
+      result = number
+      break
+    }
+    case "boolean":
+      result = z.boolean()
+      break
+    case "null":
+      result = z.null()
+      break
+    default:
+      result = z.unknown()
+  }
+  if (Object.hasOwn(schema, "default")) result = result.default(schema.default)
+  return described(result, schema)
 }
 
 function mergePublishedTools(
@@ -243,33 +385,45 @@ export async function loadDirectMessageSurface(
     instructions: roles.length
       ? `${DIRECT_MESSAGE_INSTRUCTIONS}\n\n${roles.join("\n\n")}`
       : DIRECT_MESSAGE_INSTRUCTIONS,
-    register(server: Server) {
-      server.setRequestHandler(ListToolsRequestSchema, async () => ({
-        tools: tools.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-        })),
-      }))
-
-      server.setRequestHandler(CallToolRequestSchema, async (request) => {
-        const name = request.params.name
-        const args = (request.params.arguments ?? {}) as JsonRecord
-        try {
-          if (name === LIST_WORKSPACES.name) {
-            return jsonResult({ workspaces: await client.workspaces() })
-          }
-          if (!tools.some((tool) => tool.name === name)) {
-            throw new UserFacingError(`Unknown tool: ${name}`, {
-              code: "UNKNOWN_TOOL",
-              status: 404,
-            })
-          }
-          return jsonResult(await client.run(name, args))
-        } catch (error) {
-          return jsonErrorResult(error)
+    capabilities: tools.map((tool) => ({
+      name: tool.name,
+      title:
+        tool.title ??
+        tool.name
+          .split("_")
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(" "),
+      description: tool.description,
+    })),
+    register(server: McpServer, reservedToolNames = []) {
+      const names = new Set(reservedToolNames)
+      for (const tool of tools) {
+        if (names.has(tool.name)) {
+          throw unavailable(
+            `SignalSurf published a conflicting definition for ${tool.name}.`,
+            { tool: tool.name }
+          )
         }
-      })
+        names.add(tool.name)
+        server.registerTool(
+          tool.name,
+          {
+            title: tool.title,
+            description: tool.description,
+            inputSchema: publishedSchemaToZod(tool.inputSchema),
+            annotations: tool.annotations,
+          },
+          async (args) => {
+            try {
+              return tool.name === LIST_WORKSPACES.name
+                ? jsonResult({ workspaces: await client.workspaces() })
+                : jsonResult(await client.run(tool.name, args as JsonRecord))
+            } catch (error) {
+              return jsonErrorResult(error)
+            }
+          }
+        )
+      }
     },
   }
 }

@@ -259,15 +259,14 @@ OAuth tokens may also carry
 `offline_access` for refresh-token support. The MCP resource server accepts that scope but does not advertise it as
 a resource requirement, and it grants no tool capability by itself.
 
-## Surfer Session Mode
+## Unified hosted connection
 
-Besides the workspace-operation tool mode documented below, a grant approved in
-Direct Message mode (`mcp:dm`, or a manual token with `mode = surfer_session`)
-gives the client the capability set the member's own Surfer Direct Message has,
-acting as that member in each granted workspace. SignalSurf publishes that
-catalogue; this server states no tool list of its own for that mode. See
-[docs/direct-message-mode.md](docs/direct-message-mode.md). Tool mode is
-unchanged by this surface.
+A hosted grant combines `mcp:dm` with at least one granular product scope. The
+client receives one tool catalogue containing both the member's Project
+collaboration capabilities and the scoped public workspace-operation tools.
+SignalSurf publishes the member-specific portion of that catalogue and the MCP
+server merges it with `PUBLIC_MCP_TOOLS`. See
+[docs/direct-message-mode.md](docs/direct-message-mode.md).
 
 ## Architecture
 
