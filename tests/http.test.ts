@@ -153,6 +153,35 @@ function requestWithHost(
   })
 }
 
+function getWithHeaders(
+  url: string,
+  headers: Record<string, string>
+): Promise<{ status: number; location?: string }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url)
+    const req = http.request(
+      {
+        hostname: parsed.hostname,
+        port: Number(parsed.port),
+        path: parsed.pathname,
+        method: "GET",
+        headers,
+      },
+      (res) => {
+        res.resume()
+        res.on("end", () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            location: res.headers.location,
+          })
+        })
+      }
+    )
+    req.on("error", reject)
+    req.end()
+  })
+}
+
 let listeners: Server[] = []
 
 afterEach(async () => {
@@ -955,6 +984,43 @@ describe("HTTP transport", () => {
     })
     expect(response.status).toBe(404)
     expect(response.headers.get("location")).toBeNull()
+  })
+
+  it("does not redirect an icon back through an allowed alternate host", async () => {
+    const config = makeConfig({
+      resourceUrl: "https://mcp.example.com/mcp",
+      authorizationServerUrl: "https://app.example.com",
+      allowedHosts: ["app.example.com"],
+    })
+    const { server, url } = await listen(config)
+    listeners.push(server)
+
+    const response = await getWithHeaders(
+      `${new URL(url).origin}/apple-touch-icon.png`,
+      { Host: "app.example.com:443" }
+    )
+    expect(response.status).toBe(404)
+    expect(response.location).toBeUndefined()
+  })
+
+  it("uses a trusted forwarded host to prevent an icon redirect loop", async () => {
+    const config = makeConfig({
+      trustProxy: true,
+      resourceUrl: "https://mcp.example.com/mcp",
+      authorizationServerUrl: "https://app.example.com",
+    })
+    const { server, url } = await listen(config)
+    listeners.push(server)
+
+    const response = await getWithHeaders(
+      `${new URL(url).origin}/apple-touch-icon.png`,
+      {
+        Host: "127.0.0.1",
+        "X-Forwarded-Host": "app.example.com:443",
+      }
+    )
+    expect(response.status).toBe(404)
+    expect(response.location).toBeUndefined()
   })
 
   it("does not advertise an icon that the same-origin server cannot serve", async () => {

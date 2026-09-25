@@ -71,6 +71,29 @@ function getClientIp(req: express.Request, trustProxy: boolean): string | null {
   return normalizeIp(trustProxy ? req.ip : req.socket.remoteAddress)
 }
 
+function requestAuthorityMatchesTarget(
+  req: express.Request,
+  target: URL,
+  trustProxy: boolean
+): boolean {
+  const candidates: Array<string | undefined> = [req.headers.host]
+  if (trustProxy) {
+    const forwardedHost = req.headers["x-forwarded-host"]
+    candidates.unshift(
+      Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost
+    )
+  }
+  return candidates.some((value) => {
+    const authority = value?.split(",", 1)[0]?.trim()
+    if (!authority) return false
+    try {
+      return new URL(`${target.protocol}//${authority}`).origin === target.origin
+    } catch {
+      return false
+    }
+  })
+}
+
 function getProtectedResourceMetadataUrl(config: AppConfig): string {
   return `${new URL(config.resourceUrl).origin}/.well-known/oauth-protected-resource`
 }
@@ -322,7 +345,10 @@ export function createHttpApp(
       "/apple-touch-icon.png",
       config.authorizationServerUrl
     )
-    if (target.origin === new URL(config.resourceUrl).origin) {
+    if (
+      target.origin === new URL(config.resourceUrl).origin ||
+      requestAuthorityMatchesTarget(req, target, config.trustProxy)
+    ) {
       res.status(404).end()
       return
     }
