@@ -83,6 +83,7 @@ import {
   waitForSurfJobSchema,
 } from "./schemas.js"
 import { searchCapabilities } from "./tool-search.js"
+import { installPaginatedToolList } from "./tool-list-pagination.js"
 import type { SignalSurfContext } from "./types.js"
 import {
   WORKSPACE_CAPABILITIES,
@@ -165,6 +166,9 @@ export async function createSignalSurfMcpServer(
   options: CreateServerOptions
 ): Promise<McpServer> {
   const { context, repository } = options
+  const iconUrl = options.surferSession?.baseUrl
+    ? new URL("/apple-touch-icon.png", options.surferSession.baseUrl).toString()
+    : undefined
   const directMessageSurface = context.scopes?.includes(MCP_DM_SCOPE)
     ? await loadDirectMessageSurface(
         new DirectMessageClient(options.surferSession ?? {})
@@ -190,7 +194,15 @@ export async function createSignalSurfMcpServer(
   const server = new McpServer(
     {
       name: "signalsurf-mcp",
+      title: "SignalSurf",
       version: "0.1.0",
+      ...(iconUrl
+        ? {
+            icons: [
+              { src: iconUrl, mimeType: "image/png", sizes: ["180x180"] },
+            ],
+          }
+        : {}),
     },
     {
       capabilities: {
@@ -216,6 +228,7 @@ export async function createSignalSurfMcpServer(
     tables: isToolVisibleAcrossWorkspaces(context, "list_tables"),
     workflows: isToolVisibleAcrossWorkspaces(context, "create_workflow"),
   })
+  installPaginatedToolList(server)
   return server
 }
 

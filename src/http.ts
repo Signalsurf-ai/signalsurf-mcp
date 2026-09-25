@@ -181,6 +181,9 @@ export function createHttpApp(
   })
 
   app.post(config.path, async (req, res) => {
+    const requestId = crypto.randomUUID()
+    let phase = "resolve_token"
+    res.setHeader("X-SignalSurf-Request-Id", requestId)
     try {
       const accessToken = parseBearerToken(req.headers.authorization)
       const repository =
@@ -201,6 +204,7 @@ export function createHttpApp(
           resource: config.resourceUrl,
         }
       )
+      phase = "read_request"
       const parsedBody = await readJsonBody(req)
       const insufficientScope = findInsufficientScopeRequest(
         context,
@@ -231,6 +235,7 @@ export function createHttpApp(
         return
       }
 
+      phase = "compose_capabilities"
       const server = await createSignalSurfMcpServer({
         context,
         repository,
@@ -247,6 +252,7 @@ export function createHttpApp(
         void transport.close()
         void server.close()
       })
+      phase = "handle_mcp_request"
       await server.connect(transport)
       await transport.handleRequest(req, res, parsedBody)
     } catch (error) {
@@ -262,6 +268,11 @@ export function createHttpApp(
         return
       }
 
+      console.error("SignalSurf MCP request failed", {
+        requestId,
+        phase,
+        failure: errorToObject(error),
+      })
       const status = error instanceof UserFacingError ? error.status : 500
       if (status === 401) {
         res.setHeader("WWW-Authenticate", getWwwAuthenticateHeader(config))
@@ -291,6 +302,18 @@ export function createHttpApp(
       })
     }
   )
+
+  app.get(["/favicon.ico", "/apple-touch-icon.png"], (_req, res) => {
+    if (!config.authorizationServerUrl) {
+      res.status(404).end()
+      return
+    }
+    res.setHeader("Cache-Control", "public, max-age=3600")
+    res.redirect(
+      302,
+      `${new URL(config.authorizationServerUrl).origin}/apple-touch-icon.png`
+    )
+  })
 
   app.get(config.path, (_req, res) => {
     res.status(405).json({

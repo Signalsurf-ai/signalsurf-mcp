@@ -177,6 +177,9 @@ describe("HTTP transport", () => {
     })
 
     expect(response.status).toBe(200)
+    expect(response.headers.get("x-signalsurf-request-id")).toMatch(
+      /^[0-9a-f-]{36}$/
+    )
     const body = await readMcpJson(response)
     expect(body).toMatchObject({
       jsonrpc: "2.0",
@@ -184,6 +187,14 @@ describe("HTTP transport", () => {
       result: {
         serverInfo: {
           name: "signalsurf-mcp",
+          title: "SignalSurf",
+          icons: [
+            {
+              src: "https://app.signalsurf.test/apple-touch-icon.png",
+              mimeType: "image/png",
+              sizes: ["180x180"],
+            },
+          ],
         },
       },
     })
@@ -909,6 +920,25 @@ describe("HTTP transport", () => {
     const deleteResponse = await fetch(url, { method: "DELETE" })
     expect(deleteResponse.status).toBe(405)
     expect(await deleteResponse.json()).toMatchObject({ ok: false })
+  })
+
+  it("publishes the connector icon from the authorization origin", async () => {
+    const { server, url } = await listen(
+      makeConfig({ authorizationServerUrl: "https://www.signalsurf.ai/oauth" })
+    )
+    listeners.push(server)
+    const origin = new URL(url).origin
+
+    for (const path of ["/favicon.ico", "/apple-touch-icon.png"]) {
+      const response = await fetch(`${origin}${path}`, { redirect: "manual" })
+      expect(response.status).toBe(302)
+      expect(response.headers.get("location")).toBe(
+        "https://www.signalsurf.ai/apple-touch-icon.png"
+      )
+      expect(response.headers.get("cache-control")).toBe(
+        "public, max-age=3600"
+      )
+    }
   })
 
   it("rejects auth-disabled mode for HTTP config", () => {
