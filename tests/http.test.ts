@@ -955,6 +955,27 @@ describe("HTTP transport", () => {
     expect(response.headers.get("location")).toBeNull()
   })
 
+  it("does not advertise an icon that the same-origin server cannot serve", async () => {
+    const config = makeConfig()
+    const { server, url } = await listen(config)
+    listeners.push(server)
+    config.authorizationServerUrl = new URL(url).origin
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: initializeBody(),
+    })
+
+    expect(response.status).toBe(200)
+    const body = await readMcpJson(response)
+    expect(body.result.serverInfo.icons).toBeUndefined()
+  })
+
   it("rejects auth-disabled mode for HTTP config", () => {
     expect(() =>
       loadConfig({

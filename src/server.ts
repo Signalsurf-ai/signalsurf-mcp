@@ -98,6 +98,8 @@ export type CreateServerOptions = {
   repository: SignalSurfRepository
   /** Member/Project capability target for connections granted `mcp:dm`. */
   surferSession?: DirectMessageClientOptions
+  /** Public connector icon; omit it when the current HTTP origin cannot serve it. */
+  iconUrl?: string
 }
 
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
@@ -166,9 +168,6 @@ export async function createSignalSurfMcpServer(
   options: CreateServerOptions
 ): Promise<McpServer> {
   const { context, repository } = options
-  const iconUrl = options.surferSession?.baseUrl
-    ? new URL("/apple-touch-icon.png", options.surferSession.baseUrl).toString()
-    : undefined
   const directMessageSurface = context.scopes?.includes(MCP_DM_SCOPE)
     ? await loadDirectMessageSurface(
         new DirectMessageClient(options.surferSession ?? {})
@@ -196,10 +195,14 @@ export async function createSignalSurfMcpServer(
       name: "signalsurf-mcp",
       title: "SignalSurf",
       version: "0.1.0",
-      ...(iconUrl
+      ...(options.iconUrl
         ? {
             icons: [
-              { src: iconUrl, mimeType: "image/png", sizes: ["180x180"] },
+              {
+                src: options.iconUrl,
+                mimeType: "image/png",
+                sizes: ["180x180"],
+              },
             ],
           }
         : {}),

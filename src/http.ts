@@ -236,9 +236,20 @@ export function createHttpApp(
       }
 
       phase = "compose_capabilities"
+      const requestOrigin = `${req.protocol}://${req.get("host")}`
+      const authorizationIconUrl = config.authorizationServerUrl
+        ? new URL(
+            "/apple-touch-icon.png",
+            config.authorizationServerUrl
+          )
+        : undefined
       const server = await createSignalSurfMcpServer({
         context,
         repository,
+        iconUrl:
+          authorizationIconUrl?.origin === requestOrigin
+            ? undefined
+            : authorizationIconUrl?.toString(),
         surferSession: {
           baseUrl: config.authorizationServerUrl,
           accessToken,
