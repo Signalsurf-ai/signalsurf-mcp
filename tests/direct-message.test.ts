@@ -686,6 +686,49 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
     }
   })
 
+  it("bounds a stalled optional role lookup below the connector deadline", async () => {
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockImplementation((milliseconds) => {
+        expect(milliseconds).toBe(5_000)
+        return AbortSignal.abort(new DOMException("Timed out", "TimeoutError"))
+      })
+    const stalled = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      if (init?.signal?.aborted) throw init.signal.reason
+      return new Promise<Response>(() => {})
+    })
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {})
+    try {
+      const { base } = await start(stalled)
+      const response = await rpc(base, combinedOAuth, {
+        jsonrpc: "2.0",
+        id: "initialize-with-stalled-role",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "test", version: "1" },
+        },
+      })
+      expect(response.status).toBe(200)
+      const payload = await readMcpJson(response)
+      expect(payload.result.instructions).toContain(
+        "call list_project_files and read the relevant Files"
+      )
+      expect(timeout).toHaveBeenCalledOnce()
+      expect(stalled).toHaveBeenCalledOnce()
+      expect(warning).toHaveBeenCalledWith(
+        "[mcp] Published collaboration role unavailable",
+        { code: "DIRECT_MESSAGE_UNAVAILABLE", status: 503 }
+      )
+    } finally {
+      timeout.mockRestore()
+      error.mockRestore()
+      warning.mockRestore()
+    }
+  })
+
   it("fails closed when a published member tool collides with a product tool", async () => {
     const stub = signalSurfStub()
     stub.mockImplementation(async (_url: unknown, init?: RequestInit) => {

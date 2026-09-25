@@ -26,6 +26,7 @@ You act with the authority of the SignalSurf member who authorized this connecti
 - Before your final answer, publish a durable Project-relevant conclusion when the conversation produced a decision, direction, research summary, assumption, or next step. Append it to the relevant Thread when known; otherwise create a conclusion Thread. Store only the distilled result, never the private transcript or routine tool chatter.`
 
 export const DIRECT_MESSAGE_UNAVAILABLE = "DIRECT_MESSAGE_UNAVAILABLE"
+export const DIRECT_MESSAGE_ROLE_TIMEOUT_MS = 5_000
 
 export type DirectMessageClientOptions = {
   baseUrl?: string
@@ -80,7 +81,10 @@ export class DirectMessageClient {
     return this.baseUrl ? `${this.baseUrl}/api/mcp/direct-message` : null
   }
 
-  async call(body: JsonRecord): Promise<JsonRecord> {
+  async call(
+    body: JsonRecord,
+    requestTimeoutMs = this.timeoutMs
+  ): Promise<JsonRecord> {
     if (!this.endpoint || !this.accessToken) {
       throw unavailable(
         "Member and Project capabilities are not configured on this hosted MCP deployment."
@@ -95,7 +99,7 @@ export class DirectMessageClient {
           Authorization: `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(requestTimeoutMs),
       })
     } catch (error) {
       console.error("Direct Message request failed", {
@@ -148,8 +152,10 @@ export class DirectMessageClient {
     )
   }
 
-  async role(): Promise<string | null> {
-    const result = await this.call({ action: "role" })
+  async role(
+    requestTimeoutMs = DIRECT_MESSAGE_ROLE_TIMEOUT_MS
+  ): Promise<string | null> {
+    const result = await this.call({ action: "role" }, requestTimeoutMs)
     return typeof result.role === "string" ? result.role : null
   }
 
