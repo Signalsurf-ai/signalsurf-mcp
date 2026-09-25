@@ -589,6 +589,13 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
       },
     })
     expect(initialized.status).toBe(200)
+    const initializedPayload = await readMcpJson(initialized)
+    expect(initializedPayload.result.instructions).toContain(
+      "call list_project_files and read the relevant Files"
+    )
+    expect(initializedPayload.result.instructions).toContain(
+      "Never ask the member whether you should wait"
+    )
     expect(stub).not.toHaveBeenCalled()
 
     const modernProbe = await fetch(`${base}/mcp`, {
