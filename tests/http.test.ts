@@ -942,11 +942,13 @@ describe("HTTP transport", () => {
   })
 
   it("does not redirect an icon request back to the same origin", async () => {
-    const config = makeConfig()
+    const config = makeConfig({
+      resourceUrl: "https://app.example.com:443/mcp",
+      authorizationServerUrl: "https://app.example.com",
+    })
     const { server, url } = await listen(config)
     listeners.push(server)
     const origin = new URL(url).origin
-    config.authorizationServerUrl = origin
 
     const response = await fetch(`${origin}/apple-touch-icon.png`, {
       redirect: "manual",
@@ -956,10 +958,12 @@ describe("HTTP transport", () => {
   })
 
   it("does not advertise an icon that the same-origin server cannot serve", async () => {
-    const config = makeConfig()
+    const config = makeConfig({
+      resourceUrl: "https://app.example.com:443/mcp",
+      authorizationServerUrl: "https://app.example.com",
+    })
     const { server, url } = await listen(config)
     listeners.push(server)
-    config.authorizationServerUrl = new URL(url).origin
 
     const response = await fetch(url, {
       method: "POST",

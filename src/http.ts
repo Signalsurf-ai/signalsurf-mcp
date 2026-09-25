@@ -236,7 +236,6 @@ export function createHttpApp(
       }
 
       phase = "compose_capabilities"
-      const requestOrigin = `${req.protocol}://${req.get("host")}`
       const authorizationIconUrl = config.authorizationServerUrl
         ? new URL(
             "/apple-touch-icon.png",
@@ -247,7 +246,7 @@ export function createHttpApp(
         context,
         repository,
         iconUrl:
-          authorizationIconUrl?.origin === requestOrigin
+          authorizationIconUrl?.origin === new URL(config.resourceUrl).origin
             ? undefined
             : authorizationIconUrl?.toString(),
         surferSession: {
@@ -323,8 +322,7 @@ export function createHttpApp(
       "/apple-touch-icon.png",
       config.authorizationServerUrl
     )
-    const requestOrigin = `${req.protocol}://${req.get("host")}`
-    if (target.origin === requestOrigin) {
+    if (target.origin === new URL(config.resourceUrl).origin) {
       res.status(404).end()
       return
     }
