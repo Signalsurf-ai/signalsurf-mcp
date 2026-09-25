@@ -110,17 +110,21 @@ function callToolBody(name: string, args: Record<string, unknown> = {}) {
   })
 }
 
-async function readMcpJson(response: Response) {
-  const text = await response.text()
+function parseMcpText(text: string) {
   if (!text.startsWith("event:")) return JSON.parse(text)
   const dataLine = text.split("\n").find((line) => line.startsWith("data: "))
   if (!dataLine) throw new Error(`Missing SSE data line: ${text}`)
   return JSON.parse(dataLine.slice("data: ".length))
 }
 
+async function readMcpJson(response: Response) {
+  return parseMcpText(await response.text())
+}
+
 function requestWithHost(
   url: string,
-  host: string
+  host: string,
+  extraHeaders: Record<string, string> = {}
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url)
@@ -135,6 +139,7 @@ function requestWithHost(
           Accept: "application/json, text/event-stream",
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          ...extraHeaders,
         },
       },
       (res) => {
@@ -150,6 +155,35 @@ function requestWithHost(
     )
     req.on("error", reject)
     req.end(initializeBody())
+  })
+}
+
+function getWithHeaders(
+  url: string,
+  headers: Record<string, string>
+): Promise<{ status: number; location?: string }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url)
+    const req = http.request(
+      {
+        hostname: parsed.hostname,
+        port: Number(parsed.port),
+        path: parsed.pathname,
+        method: "GET",
+        headers,
+      },
+      (res) => {
+        res.resume()
+        res.on("end", () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            location: res.headers.location,
+          })
+        })
+      }
+    )
+    req.on("error", reject)
+    req.end()
   })
 }
 
@@ -177,6 +211,9 @@ describe("HTTP transport", () => {
     })
 
     expect(response.status).toBe(200)
+    expect(response.headers.get("x-signalsurf-request-id")).toMatch(
+      /^[0-9a-f-]{36}$/
+    )
     const body = await readMcpJson(response)
     expect(body).toMatchObject({
       jsonrpc: "2.0",
@@ -184,6 +221,14 @@ describe("HTTP transport", () => {
       result: {
         serverInfo: {
           name: "signalsurf-mcp",
+          title: "SignalSurf",
+          icons: [
+            {
+              src: "https://app.signalsurf.test/apple-touch-icon.png",
+              mimeType: "image/png",
+              sizes: ["180x180"],
+            },
+          ],
         },
       },
     })
@@ -909,6 +954,151 @@ describe("HTTP transport", () => {
     const deleteResponse = await fetch(url, { method: "DELETE" })
     expect(deleteResponse.status).toBe(405)
     expect(await deleteResponse.json()).toMatchObject({ ok: false })
+  })
+
+  it("publishes the connector icon from the authorization origin", async () => {
+    const { server, url } = await listen(
+      makeConfig({ authorizationServerUrl: "https://www.signalsurf.ai/oauth" })
+    )
+    listeners.push(server)
+    const origin = new URL(url).origin
+
+    for (const path of ["/favicon.ico", "/apple-touch-icon.png"]) {
+      const response = await fetch(`${origin}${path}`, { redirect: "manual" })
+      expect(response.status).toBe(302)
+      expect(response.headers.get("location")).toBe(
+        "https://www.signalsurf.ai/apple-touch-icon.png"
+      )
+      expect(response.headers.get("cache-control")).toBe(
+        "public, max-age=3600"
+      )
+    }
+  })
+
+  it("does not redirect an icon request back to the same origin", async () => {
+    const config = makeConfig({
+      resourceUrl: "https://app.example.com:443/mcp",
+      authorizationServerUrl: "https://app.example.com",
+    })
+    const { server, url } = await listen(config)
+    listeners.push(server)
+    const origin = new URL(url).origin
+
+    const response = await fetch(`${origin}/apple-touch-icon.png`, {
+      redirect: "manual",
+    })
+    expect(response.status).toBe(404)
+    expect(response.headers.get("location")).toBeNull()
+  })
+
+  it("does not redirect an icon back through an allowed alternate host", async () => {
+    const config = makeConfig({
+      trustProxy: true,
+      resourceUrl: "https://mcp.example.com/mcp",
+      authorizationServerUrl: "https://app.example.com",
+      allowedHosts: ["app.example.com"],
+    })
+    const { server, url } = await listen(config)
+    listeners.push(server)
+
+    const response = await getWithHeaders(
+      `${new URL(url).origin}/apple-touch-icon.png`,
+      { Host: "app.example.com:443", "X-Forwarded-Proto": "https" }
+    )
+    expect(response.status).toBe(404)
+    expect(response.location).toBeUndefined()
+  })
+
+  it("does not advertise an icon through an allowed alternate host", async () => {
+    const config = makeConfig({
+      trustProxy: true,
+      resourceUrl: "https://mcp.example.com/mcp",
+      authorizationServerUrl: "https://app.example.com",
+      allowedHosts: ["app.example.com"],
+    })
+    const { server, url } = await listen(config)
+    listeners.push(server)
+
+    const response = await requestWithHost(url, "app.example.com:443", {
+      "X-Forwarded-Proto": "https",
+    })
+    expect(response.status).toBe(200)
+    expect(parseMcpText(response.body).result.serverInfo.icons).toBeUndefined()
+  })
+
+  it("uses a trusted forwarded host to prevent an icon redirect loop", async () => {
+    const config = makeConfig({
+      trustProxy: true,
+      resourceUrl: "https://mcp.example.com/mcp",
+      authorizationServerUrl: "https://app.example.com",
+    })
+    const { server, url } = await listen(config)
+    listeners.push(server)
+
+    const response = await getWithHeaders(
+      `${new URL(url).origin}/apple-touch-icon.png`,
+      {
+        Host: "127.0.0.1",
+        "X-Forwarded-Host": "app.example.com:443",
+        "X-Forwarded-Proto": "https",
+      }
+    )
+    expect(response.status).toBe(404)
+    expect(response.location).toBeUndefined()
+  })
+
+  it("preserves a valid HTTP-to-HTTPS icon redirect on the same host", async () => {
+    const config = makeConfig({
+      resourceUrl: "http://mcp.example.com/mcp",
+      authorizationServerUrl: "https://app.example.com",
+      allowedHosts: ["app.example.com"],
+    })
+    const { server, url } = await listen(config)
+    listeners.push(server)
+
+    const iconResponse = await getWithHeaders(
+      `${new URL(url).origin}/apple-touch-icon.png`,
+      { Host: "app.example.com" }
+    )
+    expect(iconResponse.status).toBe(302)
+    expect(iconResponse.location).toBe(
+      "https://app.example.com/apple-touch-icon.png"
+    )
+
+    const initializeResponse = await requestWithHost(url, "app.example.com")
+    expect(initializeResponse.status).toBe(200)
+    expect(parseMcpText(initializeResponse.body).result.serverInfo.icons).toEqual(
+      [
+        {
+          src: "https://app.example.com/apple-touch-icon.png",
+          mimeType: "image/png",
+          sizes: ["180x180"],
+        },
+      ]
+    )
+  })
+
+  it("does not advertise an icon that the same-origin server cannot serve", async () => {
+    const config = makeConfig({
+      resourceUrl: "https://app.example.com:443/mcp",
+      authorizationServerUrl: "https://app.example.com",
+    })
+    const { server, url } = await listen(config)
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: initializeBody(),
+    })
+
+    expect(response.status).toBe(200)
+    const body = await readMcpJson(response)
+    expect(body.result.serverInfo.icons).toBeUndefined()
   })
 
   it("rejects auth-disabled mode for HTTP config", () => {

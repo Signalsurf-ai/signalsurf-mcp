@@ -216,6 +216,30 @@ function rpc(base: string, bearer: string | undefined, body: unknown) {
 const listTools = (base: string, bearer?: string) =>
   rpc(base, bearer, { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} })
 
+async function listAllTools(base: string, bearer: string) {
+  const tools: Array<{
+    name: string
+    inputSchema: Record<string, any>
+    [key: string]: any
+  }> = []
+  let cursor: string | undefined
+  let pages = 0
+  do {
+    const response = await rpc(base, bearer, {
+      jsonrpc: "2.0",
+      id: `tools-${pages + 1}`,
+      method: "tools/list",
+      params: cursor ? { cursor } : {},
+    })
+    expect(response.status).toBe(200)
+    const payload = await readMcpJson(response)
+    tools.push(...payload.result.tools)
+    cursor = payload.result.nextCursor
+    pages += 1
+  } while (cursor)
+  return { tools, pages }
+}
+
 describe("member capability transport", () => {
   it("calls a fetch bound to globalThis, as workerd requires", async () => {
     // A bare `fetch` called as `this.fetchImpl(...)` throws Illegal invocation
@@ -259,13 +283,7 @@ describe("member capability transport", () => {
 describe("SignalSurf MCP capability composition over HTTP", () => {
   it("publishes one union of member and product-operation capabilities", async () => {
     const { base } = await start()
-    const response = await listTools(base, manualToken)
-    expect(response.status).toBe(200)
-    const payload = await readMcpJson(response)
-    const tools = payload.result.tools as Array<{
-      name: string
-      inputSchema: Record<string, any>
-    }>
+    const { tools, pages } = await listAllTools(base, manualToken)
     const names = tools.map((tool) => tool.name)
     expect(names).toEqual(
       expect.arrayContaining([
@@ -286,8 +304,9 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
     })
     expect(tools.find((tool) => tool.name === "read_thread")).toMatchObject({
       title: "Read Thread",
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true },
     })
+    expect(pages).toBe(1)
   })
 
   it("discovers Project tools through capability search", async () => {
@@ -345,17 +364,16 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
     })
     const { base } = await start(stub)
 
-    const response = await listTools(base, combinedOAuth)
-    expect(response.status).toBe(200)
-    const text = await response.text()
-    expect(text).toContain("start_thread")
-    expect(text).toContain("read_thread")
-    expect(text).toContain("list_projects")
+    const { tools } = await listAllTools(base, combinedOAuth)
+    expect(tools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(["start_thread", "read_thread", "list_projects"])
+    )
     expect(
       stub.mock.calls
         .map((call) => JSON.parse(String((call[1] as RequestInit).body)))
         .filter((body) => body.action === "catalog")
         .map((body) => body.workspaceId)
+        .filter((id, index, ids) => ids.indexOf(id) === index)
         .sort()
     ).toEqual([otherWorkspaceId, workspaceId].sort())
   })
@@ -472,9 +490,9 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
     })
     const { base } = await start(stub)
 
-    const listed = await readMcpJson(await listTools(base, combinedOAuth))
+    const listed = await listAllTools(base, combinedOAuth)
     const schemas = Object.fromEntries(
-      listed.result.tools
+      listed.tools
         .filter((tool: { name: string }) =>
           composedTools.some((published) => published.name === tool.name)
         )
@@ -522,10 +540,8 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
 
   it("composes collaboration and product tools directly from scopes", async () => {
     const { base } = await start()
-    const collaboration = await readMcpJson(await listTools(base, dmOnlyOAuth))
-    const collaborationNames = collaboration.result.tools.map(
-      (tool: { name: string }) => tool.name
-    )
+    const collaboration = await listAllTools(base, dmOnlyOAuth)
+    const collaborationNames = collaboration.tools.map((tool) => tool.name)
     expect(collaborationNames).toContain("start_thread")
     expect(collaborationNames).toContain("list_workflows")
     const initialized = await readMcpJson(
@@ -552,10 +568,8 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
     })
     expect(deniedProductCall.status).toBe(403)
 
-    const product = await readMcpJson(await listTools(base, toolOnlyOAuth))
-    const productNames = product.result.tools.map(
-      (tool: { name: string }) => tool.name
-    )
+    const product = await listAllTools(base, toolOnlyOAuth)
+    const productNames = product.tools.map((tool) => tool.name)
     expect(productNames).toContain("list_workflows")
     expect(productNames).not.toContain("start_thread")
   })

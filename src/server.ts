@@ -83,6 +83,7 @@ import {
   waitForSurfJobSchema,
 } from "./schemas.js"
 import { searchCapabilities } from "./tool-search.js"
+import { installPaginatedToolList } from "./tool-list-pagination.js"
 import type { SignalSurfContext } from "./types.js"
 import {
   WORKSPACE_CAPABILITIES,
@@ -97,6 +98,8 @@ export type CreateServerOptions = {
   repository: SignalSurfRepository
   /** Member/Project capability target for connections granted `mcp:dm`. */
   surferSession?: DirectMessageClientOptions
+  /** Public connector icon; omit it when the current HTTP origin cannot serve it. */
+  iconUrl?: string
 }
 
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
@@ -190,7 +193,19 @@ export async function createSignalSurfMcpServer(
   const server = new McpServer(
     {
       name: "signalsurf-mcp",
+      title: "SignalSurf",
       version: "0.1.0",
+      ...(options.iconUrl
+        ? {
+            icons: [
+              {
+                src: options.iconUrl,
+                mimeType: "image/png",
+                sizes: ["180x180"],
+              },
+            ],
+          }
+        : {}),
     },
     {
       capabilities: {
@@ -216,6 +231,7 @@ export async function createSignalSurfMcpServer(
     tables: isToolVisibleAcrossWorkspaces(context, "list_tables"),
     workflows: isToolVisibleAcrossWorkspaces(context, "create_workflow"),
   })
+  installPaginatedToolList(server)
   return server
 }
 

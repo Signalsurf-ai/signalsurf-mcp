@@ -71,6 +71,28 @@ function getClientIp(req: express.Request, trustProxy: boolean): string | null {
   return normalizeIp(trustProxy ? req.ip : req.socket.remoteAddress)
 }
 
+function requestOriginMatchesTarget(
+  req: express.Request,
+  target: URL,
+  trustProxy: boolean
+): boolean {
+  let authority = req.headers.host
+  if (trustProxy) {
+    const forwardedHost = req.headers["x-forwarded-host"]
+    authority = Array.isArray(forwardedHost)
+      ? forwardedHost[0]
+      : (forwardedHost ?? authority)
+  }
+  authority = authority?.split(",", 1)[0]?.trim()
+  const protocol = req.protocol
+  if (!authority || (protocol !== "http" && protocol !== "https")) return false
+  try {
+    return new URL(`${protocol}://${authority}`).origin === target.origin
+  } catch {
+    return false
+  }
+}
+
 function getProtectedResourceMetadataUrl(config: AppConfig): string {
   return `${new URL(config.resourceUrl).origin}/.well-known/oauth-protected-resource`
 }
@@ -181,6 +203,9 @@ export function createHttpApp(
   })
 
   app.post(config.path, async (req, res) => {
+    const requestId = crypto.randomUUID()
+    let phase = "resolve_token"
+    res.setHeader("X-SignalSurf-Request-Id", requestId)
     try {
       const accessToken = parseBearerToken(req.headers.authorization)
       const repository =
@@ -201,6 +226,7 @@ export function createHttpApp(
           resource: config.resourceUrl,
         }
       )
+      phase = "read_request"
       const parsedBody = await readJsonBody(req)
       const insufficientScope = findInsufficientScopeRequest(
         context,
@@ -231,9 +257,26 @@ export function createHttpApp(
         return
       }
 
+      phase = "compose_capabilities"
+      const authorizationIconUrl = config.authorizationServerUrl
+        ? new URL(
+            "/apple-touch-icon.png",
+            config.authorizationServerUrl
+          )
+        : undefined
       const server = await createSignalSurfMcpServer({
         context,
         repository,
+        iconUrl:
+          !authorizationIconUrl ||
+          authorizationIconUrl.origin === new URL(config.resourceUrl).origin ||
+          requestOriginMatchesTarget(
+            req,
+            authorizationIconUrl,
+            config.trustProxy
+          )
+            ? undefined
+            : authorizationIconUrl.toString(),
         surferSession: {
           baseUrl: config.authorizationServerUrl,
           accessToken,
@@ -247,6 +290,7 @@ export function createHttpApp(
         void transport.close()
         void server.close()
       })
+      phase = "handle_mcp_request"
       await server.connect(transport)
       await transport.handleRequest(req, res, parsedBody)
     } catch (error) {
@@ -262,6 +306,11 @@ export function createHttpApp(
         return
       }
 
+      console.error("SignalSurf MCP request failed", {
+        requestId,
+        phase,
+        failure: errorToObject(error),
+      })
       const status = error instanceof UserFacingError ? error.status : 500
       if (status === 401) {
         res.setHeader("WWW-Authenticate", getWwwAuthenticateHeader(config))
@@ -291,6 +340,26 @@ export function createHttpApp(
       })
     }
   )
+
+  app.get(["/favicon.ico", "/apple-touch-icon.png"], (req, res) => {
+    if (!config.authorizationServerUrl) {
+      res.status(404).end()
+      return
+    }
+    const target = new URL(
+      "/apple-touch-icon.png",
+      config.authorizationServerUrl
+    )
+    if (
+      target.origin === new URL(config.resourceUrl).origin ||
+      requestOriginMatchesTarget(req, target, config.trustProxy)
+    ) {
+      res.status(404).end()
+      return
+    }
+    res.setHeader("Cache-Control", "public, max-age=3600")
+    res.redirect(302, target.toString())
+  })
 
   app.get(config.path, (_req, res) => {
     res.status(405).json({

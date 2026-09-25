@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises"
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
+import { normalizeObjectSchema } from "@modelcontextprotocol/sdk/server/zod-compat.js"
+import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js"
 import { afterEach, describe, expect, it } from "vitest"
 import { z } from "zod"
 
@@ -15,6 +17,45 @@ import { FakeSupabase } from "./fake-supabase.js"
 type Contract = {
   inputSchemaSha256: Record<string, string>
   semanticFixtures: Record<string, { valid: unknown[]; invalid: unknown[] }>
+}
+
+function executableInputSchema(inputSchema: Record<string, unknown>) {
+  const normalized = normalizeObjectSchema(inputSchema)
+  return normalized
+    ? toJsonSchemaCompat(normalized, {
+        strictUnions: true,
+        pipeStrategy: "input",
+      })
+    : { type: "object", properties: {} }
+}
+
+function discoveryInputSchema(inputSchema: Record<string, unknown>) {
+  const schema = structuredClone(executableInputSchema(inputSchema)) as Record<
+    string,
+    unknown
+  >
+  delete schema.$schema
+  return schema
+}
+
+function propertyPaths(schema: unknown, prefix = ""): string[] {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return []
+  const record = schema as Record<string, unknown>
+  const properties =
+    record.properties && typeof record.properties === "object"
+      ? (record.properties as Record<string, unknown>)
+      : {}
+  const paths = Object.entries(properties).flatMap(([name, child]) => {
+    const path = prefix ? `${prefix}.${name}` : name
+    return [path, ...propertyPaths(child, path)]
+  })
+  for (const keyword of ["allOf", "anyOf", "oneOf"] as const) {
+    const children = record[keyword]
+    if (Array.isArray(children)) {
+      for (const child of children) paths.push(...propertyPaths(child, prefix))
+    }
+  }
+  return paths.sort()
 }
 
 const cleanup: Array<() => Promise<void>> = []
@@ -68,9 +109,38 @@ describe("public MCP tool contract", () => {
     )
     expect(
       Object.fromEntries(
-        tools.map((tool) => [tool.name, canonicalSha256(tool.inputSchema)])
+        tools.map((tool) => [
+          tool.name,
+          canonicalSha256(
+            executableInputSchema(
+              PUBLIC_MCP_TOOL_SCHEMAS[
+                tool.name as keyof typeof PUBLIC_MCP_TOOL_SCHEMAS
+              ]
+            )
+          ),
+        ])
       )
     ).toEqual(contract.inputSchemaSha256)
+    expect(
+      Object.fromEntries(tools.map((tool) => [tool.name, tool.inputSchema]))
+    ).toEqual(
+      Object.fromEntries(
+        PUBLIC_MCP_TOOL_NAMES.map((name) => [
+          name,
+          discoveryInputSchema(PUBLIC_MCP_TOOL_SCHEMAS[name]),
+        ])
+      )
+    )
+    for (const tool of tools) {
+      const source = executableInputSchema(
+        PUBLIC_MCP_TOOL_SCHEMAS[
+          tool.name as keyof typeof PUBLIC_MCP_TOOL_SCHEMAS
+        ]
+      )
+      expect(propertyPaths(tool.inputSchema), tool.name).toEqual(
+        propertyPaths(source)
+      )
+    }
   })
 
   it("keeps shared semantic fixtures accepted or rejected by the canonical schemas", async () => {
