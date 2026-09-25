@@ -104,8 +104,6 @@ export type CreateServerOptions = {
   iconUrl?: string
   /** Skip the dynamic collaboration catalog for requests that cannot consume it. */
   includeDirectMessageTools?: boolean
-  /** Load only the publisher-owned role instructions for initialize. */
-  includeDirectMessageRole?: boolean
 }
 
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
@@ -127,20 +125,6 @@ I want to… →
 - Plan or inspect sender infrastructure → inspect_sender_infrastructure, then plan_sender_capacity; use search_sender_domains for live Domain availability. Exact pricing, purchases, registrant details, and secrets stay in the secure SignalSurf app.
 
 When multiple workspaces are authorized, pass workspaces[].workspaceId (from get_context) on every workspace-scoped call.`
-
-async function loadPublishedDirectMessageRole(
-  client: DirectMessageClient
-): Promise<string | null> {
-  try {
-    return await client.role()
-  } catch (error) {
-    console.warn("[mcp] Published collaboration role unavailable", {
-      code: error instanceof UserFacingError ? error.code : "INTERNAL_ERROR",
-      status: error instanceof UserFacingError ? error.status : 500,
-    })
-    return null
-  }
-}
 
 export function workspaceProjectedServerInstructions(
   context: SignalSurfContext
@@ -192,20 +176,6 @@ export async function createSignalSurfMcpServer(
   const directMessageClient = hasDirectMessageScope
     ? new DirectMessageClient(options.surferSession ?? {})
     : null
-  const directMessageSurface =
-    hasDirectMessageScope && options.includeDirectMessageTools !== false
-    ? await loadDirectMessageSurface(directMessageClient!)
-    : null
-  const publishedRole =
-    !directMessageSurface &&
-    directMessageClient &&
-    options.includeDirectMessageRole
-      ? await loadPublishedDirectMessageRole(directMessageClient)
-      : null
-  const directMessageInstructions = directMessageSurface?.instructions ??
-    (hasDirectMessageScope
-      ? [DIRECT_MESSAGE_INSTRUCTIONS, publishedRole].filter(Boolean).join("\n\n")
-      : null)
   // OAuth/database tokens resolve workspace names during token resolution; static
   // env tokens do not. Resolve them once here so every response (get_context and
   // the signalsurf://context resource) reports real names instead of raw UUIDs.
@@ -219,10 +189,19 @@ export async function createSignalSurfMcpServer(
       // Name resolution is best-effort; fall back to UUID display on failure.
     }
   }
-  context.workspaceCapabilitiesByWorkspaceId = await loadRepositoryCapabilities(
-    repository,
-    authorizedWorkspaceIds(context)
-  )
+  // Connector bootstrap has a short end-to-end deadline. The Project catalog
+  // and product capability projection are independent, so do not serialize
+  // their remote reads. Initialize deliberately uses the complete static role
+  // contract above instead of making an optional publisher round trip.
+  const [directMessageSurface, workspaceCapabilities] = await Promise.all([
+    hasDirectMessageScope && options.includeDirectMessageTools !== false
+      ? loadDirectMessageSurface(directMessageClient!)
+      : Promise.resolve(null),
+    loadRepositoryCapabilities(repository, authorizedWorkspaceIds(context)),
+  ])
+  context.workspaceCapabilitiesByWorkspaceId = workspaceCapabilities
+  const directMessageInstructions = directMessageSurface?.instructions ??
+    (hasDirectMessageScope ? DIRECT_MESSAGE_INSTRUCTIONS : null)
   const server = new McpServer(
     {
       name: "signalsurf-mcp",

@@ -251,13 +251,6 @@ function requiresDirectMessageTools(body: unknown): boolean {
   })
 }
 
-function requiresDirectMessageRole(body: unknown): boolean {
-  const messages = Array.isArray(body) ? body : [body]
-  return messages.some(
-    (message) => isRecord(message) && message.method === "initialize"
-  )
-}
-
 function firstHeaderValue(
   value: string | string[] | undefined
 ): string | undefined {
@@ -485,7 +478,6 @@ export function createHttpApp(
         context,
         repository,
         includeDirectMessageTools: requiresDirectMessageTools(parsedBody),
-        includeDirectMessageRole: requiresDirectMessageRole(parsedBody),
         iconUrl:
           !authorizationIconUrl ||
           authorizationIconUrl.origin === new URL(config.resourceUrl).origin ||
