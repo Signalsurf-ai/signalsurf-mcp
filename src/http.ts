@@ -4,6 +4,7 @@ import { isIP } from "node:net"
 import express from "express"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
 import {
+  JSONRPCNotificationSchema,
   JSONRPCRequestSchema,
   SUPPORTED_PROTOCOL_VERSIONS,
 } from "@modelcontextprotocol/sdk/types.js"
@@ -57,6 +58,10 @@ class McpPreauthReadTimeoutError extends Error {
 
 const MAX_PREAUTH_DISCOVERY_BYTES = 8 * 1024
 const PREAUTH_DISCOVERY_TIMEOUT_MS = 2_000
+const STATELESS_NOOP_NOTIFICATIONS = new Set([
+  "notifications/initialized",
+  "notifications/cancelled",
+])
 
 function normalizeHostHeader(value: string | undefined): string | null {
   if (!value) return null
@@ -259,7 +264,18 @@ function firstHeaderValue(
   return Array.isArray(value) ? value[0] : value
 }
 
+function hasMcpPostMediaHeaders(req: express.Request): boolean {
+  const accept = firstHeaderValue(req.headers.accept)
+  const contentType = firstHeaderValue(req.headers["content-type"])
+  return (
+    accept?.includes("application/json") === true &&
+    accept.includes("text/event-stream") &&
+    contentType?.includes("application/json") === true
+  )
+}
+
 function shouldReadPreauthDiscoveryProbe(req: express.Request): boolean {
+  if (!hasMcpPostMediaHeaders(req)) return false
   const protocolVersion = firstHeaderValue(
     req.headers["mcp-protocol-version"]
   )
@@ -280,9 +296,45 @@ function shouldReadPreauthDiscoveryProbe(req: express.Request): boolean {
   )
 }
 
+function shouldReadPreauthNoopNotification(req: express.Request): boolean {
+  if (!hasMcpPostMediaHeaders(req)) return false
+  const protocolVersion = firstHeaderValue(
+    req.headers["mcp-protocol-version"]
+  )
+  const method = firstHeaderValue(req.headers["mcp-method"])
+  if (
+    !protocolVersion ||
+    !SUPPORTED_PROTOCOL_VERSIONS.includes(protocolVersion) ||
+    !method ||
+    !STATELESS_NOOP_NOTIFICATIONS.has(method)
+  ) {
+    return false
+  }
+  const contentLength = Number(firstHeaderValue(req.headers["content-length"]))
+  return (
+    Number.isSafeInteger(contentLength) &&
+    contentLength > 0 &&
+    contentLength <= MAX_PREAUTH_DISCOVERY_BYTES
+  )
+}
+
 function isUnsupportedDiscoveryProbe(body: unknown): boolean {
   const parsed = JSONRPCRequestSchema.safeParse(body)
   return parsed.success && parsed.data.method === "server/discover"
+}
+
+function isStatelessNoopNotification(
+  body: unknown,
+  methodHeader: string | string[] | undefined
+): boolean {
+  if (!isRecord(body) || Object.hasOwn(body, "id")) return false
+  const parsed = JSONRPCNotificationSchema.safeParse(body)
+  const method = firstHeaderValue(methodHeader)
+  return (
+    parsed.success &&
+    parsed.data.method === method &&
+    STATELESS_NOOP_NOTIFICATIONS.has(parsed.data.method)
+  )
 }
 
 function rejectUnsupportedDiscoveryProbe(
@@ -333,7 +385,10 @@ export function createHttpApp(
       let preauthBodyRead = false
       let preauthParseFailed = false
       const protocolVersionHeader = req.headers["mcp-protocol-version"]
-      if (shouldReadPreauthDiscoveryProbe(req)) {
+      const preauthDiscoveryProbe = shouldReadPreauthDiscoveryProbe(req)
+      const preauthNoopNotification =
+        shouldReadPreauthNoopNotification(req)
+      if (preauthDiscoveryProbe || preauthNoopNotification) {
         phase = "read_request"
         preauthBodyRead = true
         try {
@@ -347,8 +402,20 @@ export function createHttpApp(
           if (!(error instanceof McpJsonParseError)) throw error
           preauthParseFailed = true
         }
-        if (!preauthParseFailed && isUnsupportedDiscoveryProbe(parsedBody)) {
+        if (
+          !preauthParseFailed &&
+          preauthDiscoveryProbe &&
+          isUnsupportedDiscoveryProbe(parsedBody)
+        ) {
           rejectUnsupportedDiscoveryProbe(res, protocolVersionHeader)
+          return
+        }
+        if (
+          !preauthParseFailed &&
+          preauthNoopNotification &&
+          isStatelessNoopNotification(parsedBody, req.headers["mcp-method"])
+        ) {
+          res.status(202).end()
           return
         }
       }

@@ -323,6 +323,125 @@ describe("HTTP transport", () => {
     expect(createRepository).not.toHaveBeenCalled()
   })
 
+  it("acknowledges stateless no-op notifications before remote auth", async () => {
+    const createRepository = vi.fn(() => {
+      throw new Error("remote token resolution must not run")
+    })
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] }),
+      createRepository
+    )
+    listeners.push(server)
+
+    for (const [method, params] of [
+      ["notifications/initialized", undefined],
+      ["notifications/cancelled", { requestId: "expired", reason: "done" }],
+    ] as const) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json, text/event-stream",
+          "Content-Type": "application/json",
+          "MCP-Method": method,
+          "MCP-Protocol-Version": "2025-11-25",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method,
+          ...(params ? { params } : {}),
+        }),
+      })
+      expect(response.status).toBe(202)
+    }
+
+    expect(createRepository).not.toHaveBeenCalled()
+  })
+
+  it("keeps other notifications behind bearer auth", async () => {
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] })
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        "Content-Type": "application/json",
+        "MCP-Method": "notifications/progress",
+        "MCP-Protocol-Version": "2025-11-25",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "notifications/progress",
+        params: { progressToken: "test", progress: 1 },
+      }),
+    })
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get("www-authenticate")).toContain("Bearer")
+  })
+
+  it("keeps id-bearing notification-shaped requests behind bearer auth", async () => {
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] })
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        "Content-Type": "application/json",
+        "MCP-Method": "notifications/initialized",
+        "MCP-Protocol-Version": "2025-11-25",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "notifications/initialized",
+      }),
+    })
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get("www-authenticate")).toContain("Bearer")
+  })
+
+  it("preserves MCP media-header validation for no-op notifications", async () => {
+    const { server, url } = await listen()
+    listeners.push(server)
+    const body = JSON.stringify({
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+    })
+
+    const invalidAccept = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "MCP-Method": "notifications/initialized",
+        "MCP-Protocol-Version": "2025-11-25",
+      },
+      body,
+    })
+    expect(invalidAccept.status).toBe(406)
+
+    const invalidContentType = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "text/plain",
+        "MCP-Method": "notifications/initialized",
+        "MCP-Protocol-Version": "2025-11-25",
+      },
+      body,
+    })
+    expect(invalidContentType.status).toBe(415)
+  })
+
   it("serves stateless MCP initialize requests with bearer auth", async () => {
     const { server, url } = await listen()
     listeners.push(server)
