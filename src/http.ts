@@ -71,27 +71,26 @@ function getClientIp(req: express.Request, trustProxy: boolean): string | null {
   return normalizeIp(trustProxy ? req.ip : req.socket.remoteAddress)
 }
 
-function requestAuthorityMatchesTarget(
+function requestOriginMatchesTarget(
   req: express.Request,
   target: URL,
   trustProxy: boolean
 ): boolean {
-  const candidates: Array<string | undefined> = [req.headers.host]
+  let authority = req.headers.host
   if (trustProxy) {
     const forwardedHost = req.headers["x-forwarded-host"]
-    candidates.unshift(
-      Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost
-    )
+    authority = Array.isArray(forwardedHost)
+      ? forwardedHost[0]
+      : (forwardedHost ?? authority)
   }
-  return candidates.some((value) => {
-    const authority = value?.split(",", 1)[0]?.trim()
-    if (!authority) return false
-    try {
-      return new URL(`${target.protocol}//${authority}`).origin === target.origin
-    } catch {
-      return false
-    }
-  })
+  authority = authority?.split(",", 1)[0]?.trim()
+  const protocol = req.protocol
+  if (!authority || (protocol !== "http" && protocol !== "https")) return false
+  try {
+    return new URL(`${protocol}://${authority}`).origin === target.origin
+  } catch {
+    return false
+  }
 }
 
 function getProtectedResourceMetadataUrl(config: AppConfig): string {
@@ -271,7 +270,7 @@ export function createHttpApp(
         iconUrl:
           !authorizationIconUrl ||
           authorizationIconUrl.origin === new URL(config.resourceUrl).origin ||
-          requestAuthorityMatchesTarget(
+          requestOriginMatchesTarget(
             req,
             authorizationIconUrl,
             config.trustProxy
@@ -353,7 +352,7 @@ export function createHttpApp(
     )
     if (
       target.origin === new URL(config.resourceUrl).origin ||
-      requestAuthorityMatchesTarget(req, target, config.trustProxy)
+      requestOriginMatchesTarget(req, target, config.trustProxy)
     ) {
       res.status(404).end()
       return

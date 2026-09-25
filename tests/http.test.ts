@@ -123,7 +123,8 @@ async function readMcpJson(response: Response) {
 
 function requestWithHost(
   url: string,
-  host: string
+  host: string,
+  extraHeaders: Record<string, string> = {}
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url)
@@ -138,6 +139,7 @@ function requestWithHost(
           Accept: "application/json, text/event-stream",
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          ...extraHeaders,
         },
       },
       (res) => {
@@ -991,6 +993,7 @@ describe("HTTP transport", () => {
 
   it("does not redirect an icon back through an allowed alternate host", async () => {
     const config = makeConfig({
+      trustProxy: true,
       resourceUrl: "https://mcp.example.com/mcp",
       authorizationServerUrl: "https://app.example.com",
       allowedHosts: ["app.example.com"],
@@ -1000,7 +1003,7 @@ describe("HTTP transport", () => {
 
     const response = await getWithHeaders(
       `${new URL(url).origin}/apple-touch-icon.png`,
-      { Host: "app.example.com:443" }
+      { Host: "app.example.com:443", "X-Forwarded-Proto": "https" }
     )
     expect(response.status).toBe(404)
     expect(response.location).toBeUndefined()
@@ -1008,6 +1011,7 @@ describe("HTTP transport", () => {
 
   it("does not advertise an icon through an allowed alternate host", async () => {
     const config = makeConfig({
+      trustProxy: true,
       resourceUrl: "https://mcp.example.com/mcp",
       authorizationServerUrl: "https://app.example.com",
       allowedHosts: ["app.example.com"],
@@ -1015,7 +1019,9 @@ describe("HTTP transport", () => {
     const { server, url } = await listen(config)
     listeners.push(server)
 
-    const response = await requestWithHost(url, "app.example.com:443")
+    const response = await requestWithHost(url, "app.example.com:443", {
+      "X-Forwarded-Proto": "https",
+    })
     expect(response.status).toBe(200)
     expect(parseMcpText(response.body).result.serverInfo.icons).toBeUndefined()
   })
@@ -1034,10 +1040,42 @@ describe("HTTP transport", () => {
       {
         Host: "127.0.0.1",
         "X-Forwarded-Host": "app.example.com:443",
+        "X-Forwarded-Proto": "https",
       }
     )
     expect(response.status).toBe(404)
     expect(response.location).toBeUndefined()
+  })
+
+  it("preserves a valid HTTP-to-HTTPS icon redirect on the same host", async () => {
+    const config = makeConfig({
+      resourceUrl: "http://mcp.example.com/mcp",
+      authorizationServerUrl: "https://app.example.com",
+      allowedHosts: ["app.example.com"],
+    })
+    const { server, url } = await listen(config)
+    listeners.push(server)
+
+    const iconResponse = await getWithHeaders(
+      `${new URL(url).origin}/apple-touch-icon.png`,
+      { Host: "app.example.com" }
+    )
+    expect(iconResponse.status).toBe(302)
+    expect(iconResponse.location).toBe(
+      "https://app.example.com/apple-touch-icon.png"
+    )
+
+    const initializeResponse = await requestWithHost(url, "app.example.com")
+    expect(initializeResponse.status).toBe(200)
+    expect(parseMcpText(initializeResponse.body).result.serverInfo.icons).toEqual(
+      [
+        {
+          src: "https://app.example.com/apple-touch-icon.png",
+          mimeType: "image/png",
+          sizes: ["180x180"],
+        },
+      ]
+    )
   })
 
   it("does not advertise an icon that the same-origin server cannot serve", async () => {
