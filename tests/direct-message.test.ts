@@ -101,6 +101,12 @@ function signalSurfStub() {
         workspaces: [{ workspaceId: workspaceId, available: true }],
       })
     }
+    if (body.action === "role") {
+      return jsonResponse(200, {
+        ok: true,
+        role: "Publisher-owned role instructions.",
+      })
+    }
     return jsonResponse(200, { ok: true, data: { echoed: body } })
   })
 }
@@ -572,6 +578,155 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
     const productNames = product.tools.map((tool) => tool.name)
     expect(productNames).toContain("list_workflows")
     expect(productNames).not.toContain("start_thread")
+  })
+
+  it("loads the collaboration catalog only for requests that consume it", async () => {
+    const { base, stub } = await start()
+    stub.mockClear()
+
+    const initialized = await rpc(base, combinedOAuth, {
+      jsonrpc: "2.0",
+      id: "initialize-without-catalog",
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1" },
+      },
+    })
+    expect(initialized.status).toBe(200)
+    const initializedPayload = await readMcpJson(initialized)
+    expect(initializedPayload.result.instructions).toContain(
+      "call list_project_files and read the relevant Files"
+    )
+    expect(initializedPayload.result.instructions).toContain(
+      "Never ask the member whether you should wait"
+    )
+    expect(initializedPayload.result.instructions).toContain(
+      "Publisher-owned role instructions."
+    )
+    expect(
+      stub.mock.calls.map((call) =>
+        JSON.parse(String((call[1] as RequestInit).body)).action
+      )
+    ).toEqual(["role"])
+
+    const modernProbe = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${combinedOAuth}`,
+        "Content-Type": "application/json",
+        "Mcp-Protocol-Version": "2026-07-28",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "modern-discovery-probe",
+        method: "server/discover",
+        params: {},
+      }),
+    })
+    expect(modernProbe.status).toBe(400)
+    expect(stub).toHaveBeenCalledTimes(1)
+
+    const productCall = await rpc(base, combinedOAuth, {
+      jsonrpc: "2.0",
+      id: "product-call-without-catalog",
+      method: "tools/call",
+      params: { name: "get_context", arguments: {} },
+    })
+    expect(productCall.status).toBe(200)
+    expect(stub).toHaveBeenCalledTimes(1)
+
+    const listed = await listTools(base, combinedOAuth)
+    expect(listed.status).toBe(200)
+    expect(
+      stub.mock.calls.map((call) =>
+        JSON.parse(String((call[1] as RequestInit).body)).action
+      )
+    ).toEqual(["role", "workspaces", "catalog"])
+  })
+
+  it("falls back to static instructions when the role action is unavailable", async () => {
+    const fallback = signalSurfStub()
+    const stub = vi.fn(async (url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}"))
+      return body.action === "role"
+        ? jsonResponse(422, {
+            ok: false,
+            code: "INVALID",
+            error: "Request does not match the contract",
+          })
+        : fallback(url, init)
+    })
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {})
+    try {
+      const { base } = await start(stub)
+      const response = await rpc(base, combinedOAuth, {
+        jsonrpc: "2.0",
+        id: "initialize-with-static-fallback",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "test", version: "1" },
+        },
+      })
+      expect(response.status).toBe(200)
+      const payload = await readMcpJson(response)
+      expect(payload.result.instructions).toContain(
+        "call list_project_files and read the relevant Files"
+      )
+      expect(warning).toHaveBeenCalledWith(
+        "[mcp] Published collaboration role unavailable",
+        { code: "INVALID", status: 422 }
+      )
+    } finally {
+      warning.mockRestore()
+    }
+  })
+
+  it("bounds a stalled optional role lookup below the connector deadline", async () => {
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockImplementation((milliseconds) => {
+        expect(milliseconds).toBe(5_000)
+        return AbortSignal.abort(new DOMException("Timed out", "TimeoutError"))
+      })
+    const stalled = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      if (init?.signal?.aborted) throw init.signal.reason
+      return new Promise<Response>(() => {})
+    })
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {})
+    try {
+      const { base } = await start(stalled)
+      const response = await rpc(base, combinedOAuth, {
+        jsonrpc: "2.0",
+        id: "initialize-with-stalled-role",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "test", version: "1" },
+        },
+      })
+      expect(response.status).toBe(200)
+      const payload = await readMcpJson(response)
+      expect(payload.result.instructions).toContain(
+        "call list_project_files and read the relevant Files"
+      )
+      expect(timeout).toHaveBeenCalledOnce()
+      expect(stalled).toHaveBeenCalledOnce()
+      expect(warning).toHaveBeenCalledWith(
+        "[mcp] Published collaboration role unavailable",
+        { code: "DIRECT_MESSAGE_UNAVAILABLE", status: 503 }
+      )
+    } finally {
+      timeout.mockRestore()
+      error.mockRestore()
+      warning.mockRestore()
+    }
   })
 
   it("fails closed when a published member tool collides with a product tool", async () => {

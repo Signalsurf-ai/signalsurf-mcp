@@ -20,10 +20,13 @@ You act with the authority of the SignalSurf member who authorized this connecti
 - Call list_workspaces first when the member reaches more than one workspace, and pass workspaceId on every later call.
 - Read Activity to see what is new and what waits on the member; read a Thread before claiming anything happened there.
 - Work happens in Projects. Start a Thread or reply in one, and that Project's Surfer does the work under its own confirmations. Read the Thread afterwards to see what it actually did.
+- Before proposing or delegating work that depends on a Project's data or automation, call list_project_files and read the relevant Files. Do not guess their contents from names alone.
+- When a write returns waiting_for_surfer, immediately call wait_for_thread_response with its eventSequence as both inputSequence and afterSequence. Keep inputSequence fixed; while still_working, inspect member-safe activity and call again with afterSequence advanced to latestSequence. Inspect and report the settled response. Never ask the member whether you should wait or present a delivery receipt as the result.
 - When product scopes are granted, use the product-operation tools on this same connection for direct Table, Workflow, Signal, enrichment, and other supported work. Routine atomic edits do not need a Thread just for logging.
 - Before your final answer, publish a durable Project-relevant conclusion when the conversation produced a decision, direction, research summary, assumption, or next step. Append it to the relevant Thread when known; otherwise create a conclusion Thread. Store only the distilled result, never the private transcript or routine tool chatter.`
 
 export const DIRECT_MESSAGE_UNAVAILABLE = "DIRECT_MESSAGE_UNAVAILABLE"
+export const DIRECT_MESSAGE_ROLE_TIMEOUT_MS = 5_000
 
 export type DirectMessageClientOptions = {
   baseUrl?: string
@@ -78,7 +81,10 @@ export class DirectMessageClient {
     return this.baseUrl ? `${this.baseUrl}/api/mcp/direct-message` : null
   }
 
-  async call(body: JsonRecord): Promise<JsonRecord> {
+  async call(
+    body: JsonRecord,
+    requestTimeoutMs = this.timeoutMs
+  ): Promise<JsonRecord> {
     if (!this.endpoint || !this.accessToken) {
       throw unavailable(
         "Member and Project capabilities are not configured on this hosted MCP deployment."
@@ -93,7 +99,7 @@ export class DirectMessageClient {
           Authorization: `Bearer ${this.accessToken}`,
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(requestTimeoutMs),
       })
     } catch (error) {
       console.error("Direct Message request failed", {
@@ -144,6 +150,13 @@ export class DirectMessageClient {
         !Array.isArray(workspace) &&
         typeof (workspace as JsonRecord).workspaceId === "string"
     )
+  }
+
+  async role(
+    requestTimeoutMs = DIRECT_MESSAGE_ROLE_TIMEOUT_MS
+  ): Promise<string | null> {
+    const result = await this.call({ action: "role" }, requestTimeoutMs)
+    return typeof result.role === "string" ? result.role : null
   }
 
   async catalog(
