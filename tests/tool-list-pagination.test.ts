@@ -59,8 +59,13 @@ describe("tools/list pagination", () => {
       async () => ({ content: [{ type: "text", text: "ok" }] })
     )
     server.registerTool(
-      "long_description",
-      { description: "Detailed guidance. ".repeat(30) },
+      "run_enrich",
+      {
+        description:
+          "Queue Enrich. " +
+          "Operational guidance before the safety contract. ".repeat(20) +
+          "overwriteExisting=true requires explicit user consent. Credits are charged.",
+      },
       async () => ({ content: [{ type: "text", text: "ok" }] })
     )
     installPaginatedToolList(server)
@@ -124,12 +129,11 @@ describe("tools/list pagination", () => {
     expect(
       listed.tools[0]?.inputSchema.properties?.description
     ).toHaveProperty("description", "Member-provided description")
-    const compactDescription = listed.tools.find(
-      (tool) => tool.name === "long_description"
+    const safetyDescription = listed.tools.find(
+      (tool) => tool.name === "run_enrich"
     )?.description
-    expect(compactDescription!.length).toBeLessThanOrEqual(250)
-    expect(compactDescription!.length).toBeGreaterThan(200)
-    expect(compactDescription).toMatch(/\.\.\.$/)
+    expect(safetyDescription).toContain("explicit user consent")
+    expect(safetyDescription).toContain("Credits are charged")
     await Promise.all([client.close(), server.close()])
   })
 
