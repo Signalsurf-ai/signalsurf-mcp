@@ -465,6 +465,11 @@ describe("HTTP transport", () => {
       jsonrpc: "2.0",
       id: 1,
       result: {
+        capabilities: {
+          prompts: {},
+          resources: {},
+          tools: {},
+        },
         serverInfo: {
           name: "signalsurf-mcp",
           title: "SignalSurf",
@@ -745,6 +750,7 @@ describe("HTTP transport", () => {
 
   it("resolves OAuth access tokens with harmless additive scopes", async () => {
     const resourceUrl = "https://mcp.example.com/mcp"
+    const oauthToken = "ssmcp_at_additive_scopes"
     const userId = "00000000-0000-4000-8000-000000000202"
     const db = new FakeSupabase({
       workspaces: [{ id: workspaceId, organization_id: null }],
@@ -761,7 +767,7 @@ describe("HTTP transport", () => {
           workspace_id: workspaceId,
           scope: "mcp:dm mcp:read mcp:write offline_access openid profile",
           resource: resourceUrl,
-          access_token_sha256: sha256Hex(token),
+          access_token_sha256: sha256Hex(oauthToken),
           access_token_expires_at: "2999-01-01T00:00:00.000Z",
           revoked_at: null,
           last_used_at: null,
@@ -782,6 +788,7 @@ describe("HTTP transport", () => {
       user_preferences: [],
       sources: [],
     })
+    const from = vi.spyOn(db, "from")
     const { server, url } = await listen(
       makeConfig({
         authMode: "database",
@@ -796,8 +803,9 @@ describe("HTTP transport", () => {
       method: "POST",
       headers: {
         Accept: "application/json, text/event-stream",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${oauthToken}`,
         "Content-Type": "application/json",
+        "MCP-Method": "initialize",
       },
       body: initializeBody(),
     })
@@ -806,6 +814,10 @@ describe("HTTP transport", () => {
     expect(db.tables.mcp_oauth_tokens[0].last_used_at).toEqual(
       expect.any(String)
     )
+    const queriedTables = from.mock.calls.map(([table]) => table)
+    expect(queriedTables).not.toContain("mcp_tokens")
+    expect(queriedTables).not.toContain("workspace_capability_overrides")
+    expect(queriedTables).not.toContain("workspace_subscriptions")
   })
 
   it("returns an OAuth insufficient-scope challenge for scoped HTTP tool calls", async () => {

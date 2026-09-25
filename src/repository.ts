@@ -1470,8 +1470,18 @@ export class SignalSurfRepository {
 
   async resolveMcpToken(
     token: string,
-    metadata: { ip?: string | null; resource?: string | null } = {}
+    metadata: {
+      ip?: string | null
+      resource?: string | null
+      includeWorkspaceCapabilities?: boolean
+    } = {}
   ): Promise<SignalSurfContext | null> {
+    // Issued OAuth and manual tokens have disjoint, versioned prefixes. Route
+    // directly to the owning table so every hosted request does not pay for a
+    // guaranteed miss first. Unknown legacy shapes keep the defensive fallback.
+    if (token.startsWith("ssmcp_at_")) {
+      return this.resolveMcpOAuthToken(token, metadata)
+    }
     const { data, error } = await this.db
       .from("mcp_tokens")
       // The column is `workspace_id` since the SIG-2318 rename; alias it onto
@@ -1499,14 +1509,18 @@ export class SignalSurfRepository {
     }
     if (metadata.ip) update.last_used_ip = metadata.ip
 
-    const { error: updateError } = await this.db
-      .from("mcp_tokens")
-      .update(update)
-      .eq("id", row.id)
+    const [updateResult, workspaces, workspaceCapabilitiesByWorkspaceId] =
+      await Promise.all([
+        this.db.from("mcp_tokens").update(update).eq("id", row.id),
+        this.resolveWorkspaceContexts(workspaceIds),
+        metadata.includeWorkspaceCapabilities === true
+          ? this.loadWorkspaceCapabilities(workspaceIds)
+          : Promise.resolve(undefined),
+      ])
 
-    if (updateError) {
+    if (updateResult.error) {
       console.error(
-        `Failed to update MCP token usage metadata: ${updateError.message}`
+        `Failed to update MCP token usage metadata: ${updateResult.error.message}`
       )
     }
 
@@ -1515,7 +1529,10 @@ export class SignalSurfRepository {
         ? row.workspace_id
         : workspaceIds[0]!,
       workspaceIds,
-      workspaces: await this.resolveWorkspaceContexts(workspaceIds),
+      workspaces,
+      ...(workspaceCapabilitiesByWorkspaceId
+        ? { workspaceCapabilitiesByWorkspaceId }
+        : {}),
       userId: row.created_by,
       role: "editor",
       tokenName: row.name ?? undefined,
@@ -1526,7 +1543,11 @@ export class SignalSurfRepository {
 
   private async resolveMcpOAuthToken(
     token: string,
-    metadata: { ip?: string | null; resource?: string | null }
+    metadata: {
+      ip?: string | null
+      resource?: string | null
+      includeWorkspaceCapabilities?: boolean
+    }
   ): Promise<SignalSurfContext | null> {
     const { data, error } = await this.db
       .from("mcp_oauth_tokens")
@@ -1546,38 +1567,40 @@ export class SignalSurfRepository {
       return null
     }
 
-    const { data: clientData, error: clientError } = await this.db
-      .from("mcp_oauth_clients")
-      .select("client_id, client_name, revoked_at")
-      .eq("client_id", row.client_id)
-      .is("revoked_at", null)
-      .maybeSingle()
+    const [clientResult, workspaceIds] = await Promise.all([
+      this.db
+        .from("mcp_oauth_clients")
+        .select("client_id, client_name, revoked_at")
+        .eq("client_id", row.client_id)
+        .is("revoked_at", null)
+        .maybeSingle(),
+      this.currentWorkspaceIdsForUser(row.user_id, oauthTokenWorkspaceIds(row)),
+    ])
 
-    requireNoDbError(clientError, "Failed to resolve MCP OAuth client")
-    const client = clientData as McpOAuthClientRow | null
+    requireNoDbError(clientResult.error, "Failed to resolve MCP OAuth client")
+    const client = clientResult.data as McpOAuthClientRow | null
     if (!client) return null
+    if (workspaceIds.length === 0) return null
 
     const update: Record<string, unknown> = {
       last_used_at: new Date().toISOString(),
     }
     if (metadata.ip) update.last_used_ip = metadata.ip
 
-    const { error: updateError } = await this.db
-      .from("mcp_oauth_tokens")
-      .update(update)
-      .eq("id", row.id)
+    const [updateResult, workspaces, workspaceCapabilitiesByWorkspaceId] =
+      await Promise.all([
+        this.db.from("mcp_oauth_tokens").update(update).eq("id", row.id),
+        this.resolveWorkspaceContexts(workspaceIds),
+        metadata.includeWorkspaceCapabilities === true
+          ? this.loadWorkspaceCapabilities(workspaceIds)
+          : Promise.resolve(undefined),
+      ])
 
-    if (updateError) {
+    if (updateResult.error) {
       console.error(
-        `Failed to update MCP OAuth token usage metadata: ${updateError.message}`
+        `Failed to update MCP OAuth token usage metadata: ${updateResult.error.message}`
       )
     }
-
-    const workspaceIds = await this.currentWorkspaceIdsForUser(
-      row.user_id,
-      oauthTokenWorkspaceIds(row)
-    )
-    if (workspaceIds.length === 0) return null
     const tokenName = client.client_name
       ? `OAuth: ${client.client_name}`
       : "OAuth MCP client"
@@ -1595,7 +1618,10 @@ export class SignalSurfRepository {
       workspaceId: workspaceIds[0]!,
       workspaceIds,
       userId: row.user_id,
-      workspaces: await this.resolveWorkspaceContexts(workspaceIds),
+      workspaces,
+      ...(workspaceCapabilitiesByWorkspaceId
+        ? { workspaceCapabilitiesByWorkspaceId }
+        : {}),
       role: scopesImplyWriteAccess(scopes) ? "editor" : "viewer",
       tokenName,
       scopes,
