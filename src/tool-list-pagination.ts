@@ -8,7 +8,7 @@ import {
   type Tool,
 } from "@modelcontextprotocol/sdk/types.js"
 
-const CURSOR_PREFIX = "signalsurf-tools-v1:"
+const CURSOR_PREFIX = "signalsurf-tools-v2:"
 export const DEFAULT_TOOL_LIST_PAGE_BYTES = 64 * 1024
 export const TOOL_LIST_FRAMING_RESERVE_BYTES = 512
 const EMPTY_OBJECT_JSON_SCHEMA = { type: "object", properties: {} } as const
@@ -142,12 +142,32 @@ function toolDefinition(name: string, tool: RegisteredTool): Tool {
   return definition
 }
 
-function parseCursor(cursor: string | undefined, length: number): number {
+function cursorFor(index: number, fingerprint: string): string {
+  return `${CURSOR_PREFIX}${fingerprint}:${index}`
+}
+
+function parseCursor(
+  cursor: string | undefined,
+  length: number,
+  fingerprint: string
+): number {
   if (cursor === undefined) return 0
   if (!cursor.startsWith(CURSOR_PREFIX)) {
     throw new McpError(ErrorCode.InvalidParams, "Invalid tools/list cursor")
   }
-  const index = Number(cursor.slice(CURSOR_PREFIX.length))
+  const match = /^([a-f0-9]{64}):(\d+)$/.exec(
+    cursor.slice(CURSOR_PREFIX.length)
+  )
+  if (!match) {
+    throw new McpError(ErrorCode.InvalidParams, "Invalid tools/list cursor")
+  }
+  if (match[1] !== fingerprint) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      "Tools catalog changed; restart tools/list without a cursor"
+    )
+  }
+  const index = Number(match[2])
   if (!Number.isSafeInteger(index) || index <= 0 || index >= length) {
     throw new McpError(ErrorCode.InvalidParams, "Invalid tools/list cursor")
   }
@@ -156,6 +176,14 @@ function parseCursor(cursor: string | undefined, length: number): number {
 
 function encodedBytes(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).byteLength
+}
+
+async function fingerprintCatalog(tools: Tool[]): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(tools))
+  const digest = await crypto.subtle.digest("SHA-256", bytes)
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("")
 }
 
 /**
@@ -177,11 +205,16 @@ export function installPaginatedToolList(
     throw new Error("MCP SDK tool registry is unavailable")
   }
 
-  server.server.setRequestHandler(ListToolsRequestSchema, (request) => {
+  server.server.setRequestHandler(ListToolsRequestSchema, async (request) => {
     const tools = Object.entries(registered)
       .filter(([, tool]) => tool.enabled)
       .map(([name, tool]) => toolDefinition(name, tool))
-    const start = parseCursor(request.params?.cursor, tools.length)
+    const fingerprint = await fingerprintCatalog(tools)
+    const start = parseCursor(
+      request.params?.cursor,
+      tools.length,
+      fingerprint
+    )
     const page: Tool[] = []
 
     for (let index = start; index < tools.length; index += 1) {
@@ -190,7 +223,7 @@ export function installPaginatedToolList(
       const result = {
         tools: candidate,
         ...(hasMore
-          ? { nextCursor: `${CURSOR_PREFIX}${index + 1}` }
+          ? { nextCursor: cursorFor(index + 1, fingerprint) }
           : {}),
       }
       if (encodedBytes(result) + TOOL_LIST_FRAMING_RESERVE_BYTES > maxPageBytes) {
@@ -209,7 +242,7 @@ export function installPaginatedToolList(
     return {
       tools: page,
       ...(nextIndex < tools.length
-        ? { nextCursor: `${CURSOR_PREFIX}${nextIndex}` }
+        ? { nextCursor: cursorFor(nextIndex, fingerprint) }
         : {}),
     }
   })

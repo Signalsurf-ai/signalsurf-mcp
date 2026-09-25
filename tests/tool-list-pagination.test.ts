@@ -177,6 +177,38 @@ describe("tools/list pagination", () => {
     await Promise.all([client.close(), server.close()])
   })
 
+  it("rejects a cursor after the tool catalog changes", async () => {
+    const server = new McpServer({ name: "pagination-test", version: "1.0.0" })
+    const client = new Client({ name: "pagination-client", version: "1.0.0" })
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
+    for (let index = 0; index < 20; index += 1) {
+      server.registerTool(
+        `tool_${index.toString().padStart(2, "0")}`,
+        { description: "x".repeat(200) },
+        async () => ({ content: [{ type: "text", text: "ok" }] })
+      )
+    }
+    installPaginatedToolList(server, 2_000)
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    const firstPage = await client.listTools()
+    expect(firstPage.nextCursor).toBeDefined()
+    server.registerTool("new_tool", {}, async () => ({
+      content: [{ type: "text", text: "ok" }],
+    }))
+
+    await expect(
+      client.listTools({ cursor: firstPage.nextCursor! })
+    ).rejects.toThrow(
+      "Tools catalog changed; restart tools/list without a cursor"
+    )
+    await Promise.all([client.close(), server.close()])
+  })
+
   it("rejects one tool that cannot fit inside the wire budget", async () => {
     const server = new McpServer({ name: "oversize-test", version: "1.0.0" })
     const client = new Client({ name: "oversize-client", version: "1.0.0" })
