@@ -382,6 +382,31 @@ describe("HTTP transport", () => {
     expect(response.headers.get("www-authenticate")).toContain("Bearer")
   })
 
+  it("keeps id-bearing notification-shaped requests behind bearer auth", async () => {
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] })
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        "Content-Type": "application/json",
+        "MCP-Method": "notifications/initialized",
+        "MCP-Protocol-Version": "2025-11-25",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "notifications/initialized",
+      }),
+    })
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get("www-authenticate")).toContain("Bearer")
+  })
+
   it("serves stateless MCP initialize requests with bearer auth", async () => {
     const { server, url } = await listen()
     listeners.push(server)

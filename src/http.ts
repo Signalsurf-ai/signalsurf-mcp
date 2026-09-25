@@ -315,6 +315,7 @@ function isStatelessNoopNotification(
   body: unknown,
   methodHeader: string | string[] | undefined
 ): boolean {
+  if (!isRecord(body) || Object.hasOwn(body, "id")) return false
   const parsed = JSONRPCNotificationSchema.safeParse(body)
   const method = firstHeaderValue(methodHeader)
   return (
