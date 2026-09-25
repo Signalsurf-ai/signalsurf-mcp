@@ -3,6 +3,7 @@ import { isIP } from "node:net"
 
 import express from "express"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
+import { SUPPORTED_PROTOCOL_VERSIONS } from "@modelcontextprotocol/sdk/types.js"
 
 import {
   canUseCapability,
@@ -206,6 +207,46 @@ function requiresDirectMessageRole(body: unknown): boolean {
   )
 }
 
+function isUnsupportedDiscoveryProbe(
+  protocolVersionHeader: string | string[] | undefined,
+  body: unknown
+): boolean {
+  const protocolVersion = Array.isArray(protocolVersionHeader)
+    ? protocolVersionHeader[0]
+    : protocolVersionHeader
+  if (
+    !protocolVersion ||
+    SUPPORTED_PROTOCOL_VERSIONS.includes(protocolVersion)
+  ) {
+    return false
+  }
+  const messages = Array.isArray(body) ? body : [body]
+  return (
+    messages.length === 1 &&
+    isRecord(messages[0]) &&
+    messages[0].jsonrpc === "2.0" &&
+    messages[0].method === "server/discover" &&
+    "id" in messages[0]
+  )
+}
+
+function rejectUnsupportedDiscoveryProbe(
+  res: express.Response,
+  protocolVersionHeader: string | string[] | undefined
+): void {
+  const protocolVersion = Array.isArray(protocolVersionHeader)
+    ? protocolVersionHeader[0]
+    : protocolVersionHeader
+  res.status(400).json({
+    jsonrpc: "2.0",
+    error: {
+      code: -32000,
+      message: `Bad Request: Unsupported protocol version: ${protocolVersion} (supported versions: ${SUPPORTED_PROTOCOL_VERSIONS.join(", ")})`,
+    },
+    id: null,
+  })
+}
+
 export function createHttpApp(
   config: AppConfig,
   dependencies: HttpServerDependencies = {}
@@ -230,6 +271,24 @@ export function createHttpApp(
     let phase = "resolve_token"
     res.setHeader("X-SignalSurf-Request-Id", requestId)
     try {
+      // Modern clients probe legacy servers with server/discover before
+      // falling back to initialize. The legacy SDK's answer is invariant and
+      // discloses no member state, so reject it before remote token resolution.
+      // This avoids spending one full authorization round trip on a request
+      // that the transport must reject regardless of the bearer token.
+      let parsedBody: unknown
+      const protocolVersionHeader = req.headers["mcp-protocol-version"]
+      if (protocolVersionHeader) {
+        phase = "read_request"
+        parsedBody = await readJsonBody(req)
+        if (
+          isUnsupportedDiscoveryProbe(protocolVersionHeader, parsedBody)
+        ) {
+          rejectUnsupportedDiscoveryProbe(res, protocolVersionHeader)
+          return
+        }
+      }
+      phase = "resolve_token"
       const accessToken = parseBearerToken(req.headers.authorization)
       const repository =
         dependencies.createRepository?.({
@@ -249,8 +308,10 @@ export function createHttpApp(
           resource: config.resourceUrl,
         }
       )
-      phase = "read_request"
-      const parsedBody = await readJsonBody(req)
+      if (!protocolVersionHeader) {
+        phase = "read_request"
+        parsedBody = await readJsonBody(req)
+      }
       const insufficientScope = findInsufficientScopeRequest(
         context,
         parsedBody
