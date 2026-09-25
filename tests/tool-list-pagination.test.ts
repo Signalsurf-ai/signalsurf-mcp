@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { describe, expect, it } from "vitest"
 import { z } from "zod"
 
+import { PUBLIC_MCP_TOOLS } from "../src/capabilities.js"
 import {
   TOOL_LIST_FRAMING_RESERVE_BYTES,
   installPaginatedToolList,
@@ -61,10 +62,7 @@ describe("tools/list pagination", () => {
     server.registerTool(
       "run_enrich",
       {
-        description:
-          "Queue Enrich. " +
-          "Operational guidance before the safety contract. ".repeat(20) +
-          "overwriteExisting=true requires explicit user consent. Credits are charged.",
+        description: PUBLIC_MCP_TOOLS.run_enrich.description,
       },
       async () => ({ content: [{ type: "text", text: "ok" }] })
     )
@@ -134,6 +132,34 @@ describe("tools/list pagination", () => {
     )?.description
     expect(safetyDescription).toContain("explicit user consent")
     expect(safetyDescription).toContain("Credits are charged")
+    await Promise.all([client.close(), server.close()])
+  })
+
+  it("preserves a changed source description instead of applying a stale summary", async () => {
+    const server = new McpServer({ name: "metadata-test", version: "1.0.0" })
+    const client = new Client({ name: "metadata-client", version: "1.0.0" })
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
+    const futureDescription =
+      "A future run_enrich contract with materially different safety guidance."
+    server.registerTool(
+      "run_enrich",
+      { description: futureDescription },
+      async () => ({ content: [{ type: "text", text: "ok" }] })
+    )
+    installPaginatedToolList(server)
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    const listed = await client.listTools()
+    expect(listed.tools).toEqual([
+      expect.objectContaining({
+        name: "run_enrich",
+        description: futureDescription,
+      }),
+    ])
     await Promise.all([client.close(), server.close()])
   })
 

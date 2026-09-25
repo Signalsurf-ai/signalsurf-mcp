@@ -462,7 +462,7 @@ export const PUBLIC_MCP_TOOLS = {
   update_table_rows: {
     title: "Update Table Rows",
     description:
-      "Modify one or more rows/items in an authorized workspace in a single call — always pass `edits` as an array, length 1 for a single row, N to apply distinct edits to several rows at once (e.g. after enrichment); one atomic write for the data/dataPatch part. Input { workspaceId, edits }. Each edit is { rowId, databaseId?, data?, dataPatch?, note?, workflowId? } — use dataPatch for shallow field updates or data to replace the row's data object (exactly one of the two), note to set the row's note, workflowId to reassign its Workflow, and databaseId as an optional ownership check. rowIds must be unique. If any rowId is not found/authorized or any edit is invalid, the whole call is rejected and nothing is written.",
+      "Modify authorized rows with an edits array. Each edit may update data or dataPatch (mutually exclusive), note, and/or workflowId; rowIds must be unique. Data changes are atomic as a batch. Note and Workflow updates run afterward and may partially succeed if a later write fails.",
     requiredCapability: "tables.write",
     surferSurface: "manage_data",
     publicStatus: "supported",
