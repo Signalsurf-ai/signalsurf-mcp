@@ -103,6 +103,8 @@ export type CreateServerOptions = {
   iconUrl?: string
   /** Skip the dynamic collaboration catalog for requests that cannot consume it. */
   includeDirectMessageTools?: boolean
+  /** Load only the publisher-owned role instructions for initialize. */
+  includeDirectMessageRole?: boolean
 }
 
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
@@ -172,14 +174,23 @@ export async function createSignalSurfMcpServer(
 ): Promise<McpServer> {
   const { context, repository } = options
   const hasDirectMessageScope = context.scopes?.includes(MCP_DM_SCOPE) === true
+  const directMessageClient = hasDirectMessageScope
+    ? new DirectMessageClient(options.surferSession ?? {})
+    : null
   const directMessageSurface =
     hasDirectMessageScope && options.includeDirectMessageTools !== false
-    ? await loadDirectMessageSurface(
-        new DirectMessageClient(options.surferSession ?? {})
-      )
+    ? await loadDirectMessageSurface(directMessageClient!)
     : null
+  const publishedRole =
+    !directMessageSurface &&
+    directMessageClient &&
+    options.includeDirectMessageRole
+      ? await directMessageClient.role()
+      : null
   const directMessageInstructions = directMessageSurface?.instructions ??
-    (hasDirectMessageScope ? DIRECT_MESSAGE_INSTRUCTIONS : null)
+    (hasDirectMessageScope
+      ? [DIRECT_MESSAGE_INSTRUCTIONS, publishedRole].filter(Boolean).join("\n\n")
+      : null)
   // OAuth/database tokens resolve workspace names during token resolution; static
   // env tokens do not. Resolve them once here so every response (get_context and
   // the signalsurf://context resource) reports real names instead of raw UUIDs.

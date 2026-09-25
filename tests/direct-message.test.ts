@@ -101,6 +101,12 @@ function signalSurfStub() {
         workspaces: [{ workspaceId: workspaceId, available: true }],
       })
     }
+    if (body.action === "role") {
+      return jsonResponse(200, {
+        ok: true,
+        role: "Publisher-owned role instructions.",
+      })
+    }
     return jsonResponse(200, { ok: true, data: { echoed: body } })
   })
 }
@@ -596,7 +602,14 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
     expect(initializedPayload.result.instructions).toContain(
       "Never ask the member whether you should wait"
     )
-    expect(stub).not.toHaveBeenCalled()
+    expect(initializedPayload.result.instructions).toContain(
+      "Publisher-owned role instructions."
+    )
+    expect(
+      stub.mock.calls.map((call) =>
+        JSON.parse(String((call[1] as RequestInit).body)).action
+      )
+    ).toEqual(["role"])
 
     const modernProbe = await fetch(`${base}/mcp`, {
       method: "POST",
@@ -614,7 +627,7 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
       }),
     })
     expect(modernProbe.status).toBe(400)
-    expect(stub).not.toHaveBeenCalled()
+    expect(stub).toHaveBeenCalledTimes(1)
 
     const productCall = await rpc(base, combinedOAuth, {
       jsonrpc: "2.0",
@@ -623,7 +636,7 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
       params: { name: "get_context", arguments: {} },
     })
     expect(productCall.status).toBe(200)
-    expect(stub).not.toHaveBeenCalled()
+    expect(stub).toHaveBeenCalledTimes(1)
 
     const listed = await listTools(base, combinedOAuth)
     expect(listed.status).toBe(200)
@@ -631,7 +644,7 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
       stub.mock.calls.map((call) =>
         JSON.parse(String((call[1] as RequestInit).body)).action
       )
-    ).toEqual(["workspaces", "catalog"])
+    ).toEqual(["role", "workspaces", "catalog"])
   })
 
   it("fails closed when a published member tool collides with a product tool", async () => {

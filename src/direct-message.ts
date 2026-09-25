@@ -148,6 +148,11 @@ export class DirectMessageClient {
     )
   }
 
+  async role(): Promise<string | null> {
+    const result = await this.call({ action: "role" })
+    return typeof result.role === "string" ? result.role : null
+  }
+
   async catalog(
     workspaceId?: string | null
   ): Promise<{ tools: DirectMessageTool[]; role: string | null }> {
