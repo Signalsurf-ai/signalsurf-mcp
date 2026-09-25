@@ -574,6 +574,59 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
     expect(productNames).not.toContain("start_thread")
   })
 
+  it("loads the collaboration catalog only for requests that consume it", async () => {
+    const { base, stub } = await start()
+    stub.mockClear()
+
+    const initialized = await rpc(base, combinedOAuth, {
+      jsonrpc: "2.0",
+      id: "initialize-without-catalog",
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1" },
+      },
+    })
+    expect(initialized.status).toBe(200)
+    expect(stub).not.toHaveBeenCalled()
+
+    const modernProbe = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${combinedOAuth}`,
+        "Content-Type": "application/json",
+        "Mcp-Protocol-Version": "2026-07-28",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "modern-discovery-probe",
+        method: "server/discover",
+        params: {},
+      }),
+    })
+    expect(modernProbe.status).toBe(400)
+    expect(stub).not.toHaveBeenCalled()
+
+    const productCall = await rpc(base, combinedOAuth, {
+      jsonrpc: "2.0",
+      id: "product-call-without-catalog",
+      method: "tools/call",
+      params: { name: "get_context", arguments: {} },
+    })
+    expect(productCall.status).toBe(200)
+    expect(stub).not.toHaveBeenCalled()
+
+    const listed = await listTools(base, combinedOAuth)
+    expect(listed.status).toBe(200)
+    expect(
+      stub.mock.calls.map((call) =>
+        JSON.parse(String((call[1] as RequestInit).body)).action
+      )
+    ).toEqual(["workspaces", "catalog"])
+  })
+
   it("fails closed when a published member tool collides with a product tool", async () => {
     const stub = signalSurfStub()
     stub.mockImplementation(async (_url: unknown, init?: RequestInit) => {

@@ -19,6 +19,7 @@ import {
   type PublicMcpToolName,
 } from "./capabilities.js"
 import {
+  DIRECT_MESSAGE_INSTRUCTIONS,
   DirectMessageClient,
   loadDirectMessageSurface,
   type DirectMessageClientOptions,
@@ -100,6 +101,8 @@ export type CreateServerOptions = {
   surferSession?: DirectMessageClientOptions
   /** Public connector icon; omit it when the current HTTP origin cannot serve it. */
   iconUrl?: string
+  /** Skip the dynamic collaboration catalog for requests that cannot consume it. */
+  includeDirectMessageTools?: boolean
 }
 
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
@@ -168,11 +171,15 @@ export async function createSignalSurfMcpServer(
   options: CreateServerOptions
 ): Promise<McpServer> {
   const { context, repository } = options
-  const directMessageSurface = context.scopes?.includes(MCP_DM_SCOPE)
+  const hasDirectMessageScope = context.scopes?.includes(MCP_DM_SCOPE) === true
+  const directMessageSurface =
+    hasDirectMessageScope && options.includeDirectMessageTools !== false
     ? await loadDirectMessageSurface(
         new DirectMessageClient(options.surferSession ?? {})
       )
     : null
+  const directMessageInstructions = directMessageSurface?.instructions ??
+    (hasDirectMessageScope ? DIRECT_MESSAGE_INSTRUCTIONS : null)
   // OAuth/database tokens resolve workspace names during token resolution; static
   // env tokens do not. Resolve them once here so every response (get_context and
   // the signalsurf://context resource) reports real names instead of raw UUIDs.
@@ -213,8 +220,8 @@ export async function createSignalSurfMcpServer(
         tools: {},
         prompts: {},
       },
-      instructions: directMessageSurface
-        ? `${directMessageSurface.instructions}\n\n${workspaceProjectedServerInstructions(context)}`
+      instructions: directMessageInstructions
+        ? `${directMessageInstructions}\n\n${workspaceProjectedServerInstructions(context)}`
         : workspaceProjectedServerInstructions(context),
     }
   )

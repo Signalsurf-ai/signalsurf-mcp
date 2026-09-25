@@ -183,6 +183,22 @@ function findInsufficientScopeRequest(
   return null
 }
 
+function requiresDirectMessageTools(body: unknown): boolean {
+  const messages = Array.isArray(body) ? body : [body]
+  return messages.some((message) => {
+    if (!isRecord(message)) return false
+    if (message.method === "tools/list") return true
+    if (message.method !== "tools/call") return false
+    const params = message.params
+    return (
+      isRecord(params) &&
+      typeof params.name === "string" &&
+      (params.name === "find_capabilities" ||
+        !(params.name in PUBLIC_MCP_TOOLS))
+    )
+  })
+}
+
 export function createHttpApp(
   config: AppConfig,
   dependencies: HttpServerDependencies = {}
@@ -267,6 +283,7 @@ export function createHttpApp(
       const server = await createSignalSurfMcpServer({
         context,
         repository,
+        includeDirectMessageTools: requiresDirectMessageTools(parsedBody),
         iconUrl:
           !authorizationIconUrl ||
           authorizationIconUrl.origin === new URL(config.resourceUrl).origin ||
