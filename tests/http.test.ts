@@ -407,6 +407,41 @@ describe("HTTP transport", () => {
     expect(response.headers.get("www-authenticate")).toContain("Bearer")
   })
 
+  it("preserves MCP media-header validation for no-op notifications", async () => {
+    const { server, url } = await listen()
+    listeners.push(server)
+    const body = JSON.stringify({
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+    })
+
+    const invalidAccept = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "MCP-Method": "notifications/initialized",
+        "MCP-Protocol-Version": "2025-11-25",
+      },
+      body,
+    })
+    expect(invalidAccept.status).toBe(406)
+
+    const invalidContentType = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "text/plain",
+        "MCP-Method": "notifications/initialized",
+        "MCP-Protocol-Version": "2025-11-25",
+      },
+      body,
+    })
+    expect(invalidContentType.status).toBe(415)
+  })
+
   it("serves stateless MCP initialize requests with bearer auth", async () => {
     const { server, url } = await listen()
     listeners.push(server)

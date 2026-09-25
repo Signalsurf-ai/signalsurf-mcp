@@ -264,7 +264,18 @@ function firstHeaderValue(
   return Array.isArray(value) ? value[0] : value
 }
 
+function hasMcpPostMediaHeaders(req: express.Request): boolean {
+  const accept = firstHeaderValue(req.headers.accept)
+  const contentType = firstHeaderValue(req.headers["content-type"])
+  return (
+    accept?.includes("application/json") === true &&
+    accept.includes("text/event-stream") &&
+    contentType?.includes("application/json") === true
+  )
+}
+
 function shouldReadPreauthDiscoveryProbe(req: express.Request): boolean {
+  if (!hasMcpPostMediaHeaders(req)) return false
   const protocolVersion = firstHeaderValue(
     req.headers["mcp-protocol-version"]
   )
@@ -286,6 +297,7 @@ function shouldReadPreauthDiscoveryProbe(req: express.Request): boolean {
 }
 
 function shouldReadPreauthNoopNotification(req: express.Request): boolean {
+  if (!hasMcpPostMediaHeaders(req)) return false
   const protocolVersion = firstHeaderValue(
     req.headers["mcp-protocol-version"]
   )
