@@ -323,6 +323,65 @@ describe("HTTP transport", () => {
     expect(createRepository).not.toHaveBeenCalled()
   })
 
+  it("acknowledges stateless no-op notifications before remote auth", async () => {
+    const createRepository = vi.fn(() => {
+      throw new Error("remote token resolution must not run")
+    })
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] }),
+      createRepository
+    )
+    listeners.push(server)
+
+    for (const [method, params] of [
+      ["notifications/initialized", undefined],
+      ["notifications/cancelled", { requestId: "expired", reason: "done" }],
+    ] as const) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json, text/event-stream",
+          "Content-Type": "application/json",
+          "MCP-Method": method,
+          "MCP-Protocol-Version": "2025-11-25",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method,
+          ...(params ? { params } : {}),
+        }),
+      })
+      expect(response.status).toBe(202)
+    }
+
+    expect(createRepository).not.toHaveBeenCalled()
+  })
+
+  it("keeps other notifications behind bearer auth", async () => {
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] })
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        "Content-Type": "application/json",
+        "MCP-Method": "notifications/progress",
+        "MCP-Protocol-Version": "2025-11-25",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "notifications/progress",
+        params: { progressToken: "test", progress: 1 },
+      }),
+    })
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get("www-authenticate")).toContain("Bearer")
+  })
+
   it("serves stateless MCP initialize requests with bearer auth", async () => {
     const { server, url } = await listen()
     listeners.push(server)
