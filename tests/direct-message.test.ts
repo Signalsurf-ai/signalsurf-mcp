@@ -647,6 +647,45 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
     ).toEqual(["role", "workspaces", "catalog"])
   })
 
+  it("falls back to static instructions when the role action is unavailable", async () => {
+    const fallback = signalSurfStub()
+    const stub = vi.fn(async (url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}"))
+      return body.action === "role"
+        ? jsonResponse(422, {
+            ok: false,
+            code: "INVALID",
+            error: "Request does not match the contract",
+          })
+        : fallback(url, init)
+    })
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {})
+    try {
+      const { base } = await start(stub)
+      const response = await rpc(base, combinedOAuth, {
+        jsonrpc: "2.0",
+        id: "initialize-with-static-fallback",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "test", version: "1" },
+        },
+      })
+      expect(response.status).toBe(200)
+      const payload = await readMcpJson(response)
+      expect(payload.result.instructions).toContain(
+        "call list_project_files and read the relevant Files"
+      )
+      expect(warning).toHaveBeenCalledWith(
+        "[mcp] Published collaboration role unavailable",
+        { code: "INVALID", status: 422 }
+      )
+    } finally {
+      warning.mockRestore()
+    }
+  })
+
   it("fails closed when a published member tool collides with a product tool", async () => {
     const stub = signalSurfStub()
     stub.mockImplementation(async (_url: unknown, init?: RequestInit) => {

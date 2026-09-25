@@ -24,6 +24,7 @@ import {
   loadDirectMessageSurface,
   type DirectMessageClientOptions,
 } from "./direct-message.js"
+import { UserFacingError } from "./errors.js"
 import { jsonErrorResult, jsonResource, runJsonTool } from "./mcp-results.js"
 import { registerPrompts, workspaceVisiblePromptCatalog } from "./prompts.js"
 import { SignalSurfRepository } from "./repository.js"
@@ -127,6 +128,20 @@ I want to… →
 
 When multiple workspaces are authorized, pass workspaces[].workspaceId (from get_context) on every workspace-scoped call.`
 
+async function loadPublishedDirectMessageRole(
+  client: DirectMessageClient
+): Promise<string | null> {
+  try {
+    return await client.role()
+  } catch (error) {
+    console.warn("[mcp] Published collaboration role unavailable", {
+      code: error instanceof UserFacingError ? error.code : "INTERNAL_ERROR",
+      status: error instanceof UserFacingError ? error.status : 500,
+    })
+    return null
+  }
+}
+
 export function workspaceProjectedServerInstructions(
   context: SignalSurfContext
 ): string {
@@ -185,7 +200,7 @@ export async function createSignalSurfMcpServer(
     !directMessageSurface &&
     directMessageClient &&
     options.includeDirectMessageRole
-      ? await directMessageClient.role()
+      ? await loadPublishedDirectMessageRole(directMessageClient)
       : null
   const directMessageInstructions = directMessageSurface?.instructions ??
     (hasDirectMessageScope
