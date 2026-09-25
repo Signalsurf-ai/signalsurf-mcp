@@ -269,9 +269,15 @@ export function createHttpApp(
         context,
         repository,
         iconUrl:
-          authorizationIconUrl?.origin === new URL(config.resourceUrl).origin
+          !authorizationIconUrl ||
+          authorizationIconUrl.origin === new URL(config.resourceUrl).origin ||
+          requestAuthorityMatchesTarget(
+            req,
+            authorizationIconUrl,
+            config.trustProxy
+          )
             ? undefined
-            : authorizationIconUrl?.toString(),
+            : authorizationIconUrl.toString(),
         surferSession: {
           baseUrl: config.authorizationServerUrl,
           accessToken,

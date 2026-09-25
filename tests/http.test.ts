@@ -110,12 +110,15 @@ function callToolBody(name: string, args: Record<string, unknown> = {}) {
   })
 }
 
-async function readMcpJson(response: Response) {
-  const text = await response.text()
+function parseMcpText(text: string) {
   if (!text.startsWith("event:")) return JSON.parse(text)
   const dataLine = text.split("\n").find((line) => line.startsWith("data: "))
   if (!dataLine) throw new Error(`Missing SSE data line: ${text}`)
   return JSON.parse(dataLine.slice("data: ".length))
+}
+
+async function readMcpJson(response: Response) {
+  return parseMcpText(await response.text())
 }
 
 function requestWithHost(
@@ -1001,6 +1004,20 @@ describe("HTTP transport", () => {
     )
     expect(response.status).toBe(404)
     expect(response.location).toBeUndefined()
+  })
+
+  it("does not advertise an icon through an allowed alternate host", async () => {
+    const config = makeConfig({
+      resourceUrl: "https://mcp.example.com/mcp",
+      authorizationServerUrl: "https://app.example.com",
+      allowedHosts: ["app.example.com"],
+    })
+    const { server, url } = await listen(config)
+    listeners.push(server)
+
+    const response = await requestWithHost(url, "app.example.com:443")
+    expect(response.status).toBe(200)
+    expect(parseMcpText(response.body).result.serverInfo.icons).toBeUndefined()
   })
 
   it("uses a trusted forwarded host to prevent an icon redirect loop", async () => {
