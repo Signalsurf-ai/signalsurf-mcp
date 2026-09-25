@@ -37,6 +37,8 @@ export type HttpServerDependencies = {
   /** Test seam for the Surfer session relay; production uses global fetch. */
   /** SIG-2681: injected transport for the Direct Message capability relay. */
   directMessageFetch?: typeof fetch
+  /** Test seam for the bounded pre-auth compatibility probe reader. */
+  preauthDiscoveryTimeoutMs?: number
 }
 
 class McpJsonParseError extends Error {
@@ -46,7 +48,15 @@ class McpJsonParseError extends Error {
   }
 }
 
+class McpPreauthReadTimeoutError extends Error {
+  constructor() {
+    super("Timed out reading MCP discovery probe")
+    this.name = "McpPreauthReadTimeoutError"
+  }
+}
+
 const MAX_PREAUTH_DISCOVERY_BYTES = 8 * 1024
+const PREAUTH_DISCOVERY_TIMEOUT_MS = 2_000
 
 function normalizeHostHeader(value: string | undefined): string | null {
   if (!value) return null
@@ -137,27 +147,46 @@ function getInsufficientScopeHeader(
 
 async function readJsonBody(
   req: express.Request,
-  maxBytes?: number
+  maxBytes?: number,
+  timeoutMs?: number
 ): Promise<unknown> {
-  const chunks: Buffer[] = []
-  let totalBytes = 0
-  for await (const chunk of req) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    totalBytes += buffer.byteLength
-    if (maxBytes !== undefined && totalBytes > maxBytes) {
-      throw new UserFacingError("MCP discovery probe body is too large.", {
-        code: "PAYLOAD_TOO_LARGE",
-        status: 413,
-      })
+  const read = async () => {
+    const chunks: Buffer[] = []
+    let totalBytes = 0
+    for await (const chunk of req) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      totalBytes += buffer.byteLength
+      if (maxBytes !== undefined && totalBytes > maxBytes) {
+        throw new UserFacingError("MCP discovery probe body is too large.", {
+          code: "PAYLOAD_TOO_LARGE",
+          status: 413,
+        })
+      }
+      chunks.push(buffer)
     }
-    chunks.push(buffer)
+    const text = Buffer.concat(chunks).toString("utf8")
+    if (!text.trim()) return undefined
+    try {
+      return JSON.parse(text)
+    } catch {
+      throw new McpJsonParseError()
+    }
   }
-  const text = Buffer.concat(chunks).toString("utf8")
-  if (!text.trim()) return undefined
+
+  if (timeoutMs === undefined) return read()
+  let timeout: ReturnType<typeof setTimeout> | undefined
   try {
-    return JSON.parse(text)
-  } catch {
-    throw new McpJsonParseError()
+    return await Promise.race([
+      read(),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new McpPreauthReadTimeoutError()),
+          timeoutMs
+        )
+      }),
+    ])
+  } finally {
+    if (timeout) clearTimeout(timeout)
   }
 }
 
@@ -308,7 +337,12 @@ export function createHttpApp(
         phase = "read_request"
         preauthBodyRead = true
         try {
-          parsedBody = await readJsonBody(req, MAX_PREAUTH_DISCOVERY_BYTES)
+          parsedBody = await readJsonBody(
+            req,
+            MAX_PREAUTH_DISCOVERY_BYTES,
+            dependencies.preauthDiscoveryTimeoutMs ??
+              PREAUTH_DISCOVERY_TIMEOUT_MS
+          )
         } catch (error) {
           if (!(error instanceof McpJsonParseError)) throw error
           preauthParseFailed = true
@@ -412,6 +446,12 @@ export function createHttpApp(
       await server.connect(transport)
       await transport.handleRequest(req, res, parsedBody)
     } catch (error) {
+      if (error instanceof McpPreauthReadTimeoutError) {
+        res.setHeader("Connection", "close")
+        res.once("finish", () => req.destroy())
+        res.status(408).end()
+        return
+      }
       if (error instanceof McpJsonParseError) {
         res.status(400).json({
           jsonrpc: "2.0",

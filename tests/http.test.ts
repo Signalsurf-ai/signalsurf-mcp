@@ -56,13 +56,15 @@ function makeRepository() {
 
 async function listen(
   config = makeConfig(),
-  createRepository = makeRepository
+  createRepository = makeRepository,
+  preauthDiscoveryTimeoutMs?: number
 ): Promise<{
   server: Server
   url: string
 }> {
   const app = createHttpApp(config, {
     createRepository,
+    preauthDiscoveryTimeoutMs,
     directMessageFetch: (async () =>
       new Response(JSON.stringify({ ok: true, workspaces: [] }), {
         status: 200,
@@ -276,6 +278,49 @@ describe("HTTP transport", () => {
       expect(response.status).toBe(401)
       expect(response.headers.get("www-authenticate")).toContain("Bearer")
     }
+  })
+
+  it("closes a stalled pre-auth discovery body on a short deadline", async () => {
+    const createRepository = vi.fn(() => {
+      throw new Error("remote token resolution must not run")
+    })
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] }),
+      createRepository,
+      25
+    )
+    listeners.push(server)
+
+    const parsed = new URL(url)
+    const startedAt = Date.now()
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = http.request(
+        {
+          hostname: parsed.hostname,
+          port: Number(parsed.port),
+          path: parsed.pathname,
+          method: "POST",
+          headers: {
+            Host: parsed.host,
+            Accept: "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "Content-Length": "8192",
+            "MCP-Method": "server/discover",
+            "MCP-Protocol-Version": "2026-07-28",
+          },
+        },
+        (response) => {
+          response.resume()
+          response.on("end", () => resolve(response.statusCode ?? 0))
+        }
+      )
+      req.on("error", reject)
+      req.write("{")
+    })
+
+    expect(status).toBe(408)
+    expect(Date.now() - startedAt).toBeLessThan(1_000)
+    expect(createRepository).not.toHaveBeenCalled()
   })
 
   it("serves stateless MCP initialize requests with bearer auth", async () => {
