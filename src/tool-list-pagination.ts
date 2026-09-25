@@ -17,6 +17,7 @@ const REPEATED_WORKSPACE_GUIDANCE =
 
 type RegisteredTool = {
   enabled: boolean
+  title?: string
   description?: string
   inputSchema?: Parameters<typeof normalizeObjectSchema>[0]
   outputSchema?: Parameters<typeof normalizeObjectSchema>[0]
@@ -33,8 +34,14 @@ function compactAnnotations(
   // These are the protocol defaults. Leaving them implicit preserves the same
   // client semantics without repeating four booleans across every definition.
   if (compact.readOnlyHint === false) delete compact.readOnlyHint
-  if (compact.destructiveHint === true) delete compact.destructiveHint
-  if (compact.idempotentHint === false) delete compact.idempotentHint
+  if (compact.readOnlyHint === true) {
+    // MCP defines both hints as meaningful only for mutating tools.
+    delete compact.destructiveHint
+    delete compact.idempotentHint
+  } else {
+    if (compact.destructiveHint === true) delete compact.destructiveHint
+    if (compact.idempotentHint === false) delete compact.idempotentHint
+  }
   if (compact.openWorldHint === true) delete compact.openWorldHint
   return Object.keys(compact).length > 0 ? compact : undefined
 }
@@ -125,6 +132,7 @@ function toolDefinition(name: string, tool: RegisteredTool): Tool {
   omitSchemaUsageMetadata(inputSchema)
   const definition: Tool = {
     name,
+    title: tool.title,
     description: compactDescription(tool.description, Boolean(outputSchema)),
     inputSchema,
     outputSchema,
@@ -185,11 +193,15 @@ export function installPaginatedToolList(
           ? { nextCursor: `${CURSOR_PREFIX}${index + 1}` }
           : {}),
       }
-      if (
-        page.length > 0 &&
-        encodedBytes(result) + TOOL_LIST_FRAMING_RESERVE_BYTES > maxPageBytes
-      )
+      if (encodedBytes(result) + TOOL_LIST_FRAMING_RESERVE_BYTES > maxPageBytes) {
+        if (page.length === 0) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            "A tool definition exceeds the discovery page limit"
+          )
+        }
         break
+      }
       page.push(tools[index]!)
     }
 

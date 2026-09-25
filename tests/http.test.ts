@@ -941,6 +941,20 @@ describe("HTTP transport", () => {
     }
   })
 
+  it("does not redirect an icon request back to the same origin", async () => {
+    const config = makeConfig()
+    const { server, url } = await listen(config)
+    listeners.push(server)
+    const origin = new URL(url).origin
+    config.authorizationServerUrl = origin
+
+    const response = await fetch(`${origin}/apple-touch-icon.png`, {
+      redirect: "manual",
+    })
+    expect(response.status).toBe(404)
+    expect(response.headers.get("location")).toBeNull()
+  })
+
   it("rejects auth-disabled mode for HTTP config", () => {
     expect(() =>
       loadConfig({

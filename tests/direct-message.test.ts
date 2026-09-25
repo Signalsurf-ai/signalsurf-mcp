@@ -303,7 +303,8 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
       },
     })
     expect(tools.find((tool) => tool.name === "read_thread")).toMatchObject({
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      title: "Read Thread",
+      annotations: { readOnlyHint: true },
     })
     expect(pages).toBe(1)
   })

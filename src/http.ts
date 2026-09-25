@@ -303,16 +303,22 @@ export function createHttpApp(
     }
   )
 
-  app.get(["/favicon.ico", "/apple-touch-icon.png"], (_req, res) => {
+  app.get(["/favicon.ico", "/apple-touch-icon.png"], (req, res) => {
     if (!config.authorizationServerUrl) {
       res.status(404).end()
       return
     }
-    res.setHeader("Cache-Control", "public, max-age=3600")
-    res.redirect(
-      302,
-      `${new URL(config.authorizationServerUrl).origin}/apple-touch-icon.png`
+    const target = new URL(
+      "/apple-touch-icon.png",
+      config.authorizationServerUrl
     )
+    const requestOrigin = `${req.protocol}://${req.get("host")}`
+    if (target.origin === requestOrigin) {
+      res.status(404).end()
+      return
+    }
+    res.setHeader("Cache-Control", "public, max-age=3600")
+    res.redirect(302, target.toString())
   })
 
   app.get(config.path, (_req, res) => {

@@ -40,6 +40,18 @@ describe("tools/list pagination", () => {
       },
       async () => ({ content: [{ type: "text", text: "ok" }] })
     )
+    server.registerTool(
+      "write_context",
+      {
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async () => ({ content: [{ type: "text", text: "ok" }] })
+    )
     installPaginatedToolList(server)
     await Promise.all([
       server.connect(serverTransport),
@@ -47,25 +59,35 @@ describe("tools/list pagination", () => {
     ])
 
     const listed = await client.listTools()
-    expect(listed.tools).toEqual([
-      expect.objectContaining({
-        name: "read_context",
-        description: "Read the current context.",
-        outputSchema: {
-          type: "object",
-          properties: {
-            ok: { type: "boolean" },
-            data: {},
+    expect(listed.tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "read_context",
+          title: "Read context",
+          description: "Read the current context.",
+          outputSchema: {
+            type: "object",
+            properties: {
+              ok: { type: "boolean" },
+              data: {},
+            },
+            required: ["ok"],
+            additionalProperties: false,
           },
-          required: ["ok"],
-          additionalProperties: false,
-        },
-        annotations: {
-          readOnlyHint: true,
-          destructiveHint: false,
-        },
-      }),
-    ])
+          annotations: {
+            readOnlyHint: true,
+          },
+        }),
+        expect.objectContaining({
+          name: "write_context",
+          annotations: {
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: false,
+          },
+        }),
+      ])
+    )
     expect(listed.tools[0]?.inputSchema).not.toHaveProperty("$schema")
     expect(listed.tools[0]?.inputSchema).toMatchObject({
       properties: {
@@ -151,6 +173,28 @@ describe("tools/list pagination", () => {
 
     await expect(client.listTools({ cursor: "made-up" })).rejects.toThrow(
       "Invalid tools/list cursor"
+    )
+    await Promise.all([client.close(), server.close()])
+  })
+
+  it("rejects one tool that cannot fit inside the wire budget", async () => {
+    const server = new McpServer({ name: "oversize-test", version: "1.0.0" })
+    const client = new Client({ name: "oversize-client", version: "1.0.0" })
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
+    server.registerTool(
+      "oversized_tool",
+      { description: "x".repeat(4_000) },
+      async () => ({ content: [{ type: "text", text: "ok" }] })
+    )
+    installPaginatedToolList(server, 2_000)
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    await expect(client.listTools()).rejects.toThrow(
+      "A tool definition exceeds the discovery page limit"
     )
     await Promise.all([client.close(), server.close()])
   })
