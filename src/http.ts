@@ -3,7 +3,10 @@ import { isIP } from "node:net"
 
 import express from "express"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
-import { SUPPORTED_PROTOCOL_VERSIONS } from "@modelcontextprotocol/sdk/types.js"
+import {
+  JSONRPCRequestSchema,
+  SUPPORTED_PROTOCOL_VERSIONS,
+} from "@modelcontextprotocol/sdk/types.js"
 
 import {
   canUseCapability,
@@ -42,6 +45,8 @@ class McpJsonParseError extends Error {
     this.name = "McpJsonParseError"
   }
 }
+
+const MAX_PREAUTH_DISCOVERY_BYTES = 8 * 1024
 
 function normalizeHostHeader(value: string | undefined): string | null {
   if (!value) return null
@@ -130,10 +135,22 @@ function getInsufficientScopeHeader(
   return parts.join(", ")
 }
 
-async function readJsonBody(req: express.Request): Promise<unknown> {
+async function readJsonBody(
+  req: express.Request,
+  maxBytes?: number
+): Promise<unknown> {
   const chunks: Buffer[] = []
+  let totalBytes = 0
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    totalBytes += buffer.byteLength
+    if (maxBytes !== undefined && totalBytes > maxBytes) {
+      throw new UserFacingError("MCP discovery probe body is too large.", {
+        code: "PAYLOAD_TOO_LARGE",
+        status: 413,
+      })
+    }
+    chunks.push(buffer)
   }
   const text = Buffer.concat(chunks).toString("utf8")
   if (!text.trim()) return undefined
@@ -207,36 +224,43 @@ function requiresDirectMessageRole(body: unknown): boolean {
   )
 }
 
-function isUnsupportedDiscoveryProbe(
-  protocolVersionHeader: string | string[] | undefined,
-  body: unknown
-): boolean {
-  const protocolVersion = Array.isArray(protocolVersionHeader)
-    ? protocolVersionHeader[0]
-    : protocolVersionHeader
+function firstHeaderValue(
+  value: string | string[] | undefined
+): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
+
+function shouldReadPreauthDiscoveryProbe(req: express.Request): boolean {
+  const protocolVersion = firstHeaderValue(
+    req.headers["mcp-protocol-version"]
+  )
   if (
     !protocolVersion ||
     SUPPORTED_PROTOCOL_VERSIONS.includes(protocolVersion)
   ) {
     return false
   }
-  const messages = Array.isArray(body) ? body : [body]
+  if (firstHeaderValue(req.headers["mcp-method"]) !== "server/discover") {
+    return false
+  }
+  const contentLength = Number(firstHeaderValue(req.headers["content-length"]))
   return (
-    messages.length === 1 &&
-    isRecord(messages[0]) &&
-    messages[0].jsonrpc === "2.0" &&
-    messages[0].method === "server/discover" &&
-    "id" in messages[0]
+    Number.isSafeInteger(contentLength) &&
+    contentLength > 0 &&
+    contentLength <= MAX_PREAUTH_DISCOVERY_BYTES
   )
+}
+
+function isUnsupportedDiscoveryProbe(body: unknown): boolean {
+  const parsed = JSONRPCRequestSchema.safeParse(body)
+  return parsed.success && parsed.data.method === "server/discover"
 }
 
 function rejectUnsupportedDiscoveryProbe(
   res: express.Response,
   protocolVersionHeader: string | string[] | undefined
 ): void {
-  const protocolVersion = Array.isArray(protocolVersionHeader)
-    ? protocolVersionHeader[0]
-    : protocolVersionHeader
+  const protocolVersion = firstHeaderValue(protocolVersionHeader)
   res.status(400).json({
     jsonrpc: "2.0",
     error: {
@@ -277,13 +301,19 @@ export function createHttpApp(
       // This avoids spending one full authorization round trip on a request
       // that the transport must reject regardless of the bearer token.
       let parsedBody: unknown
+      let preauthBodyRead = false
+      let preauthParseFailed = false
       const protocolVersionHeader = req.headers["mcp-protocol-version"]
-      if (protocolVersionHeader) {
+      if (shouldReadPreauthDiscoveryProbe(req)) {
         phase = "read_request"
-        parsedBody = await readJsonBody(req)
-        if (
-          isUnsupportedDiscoveryProbe(protocolVersionHeader, parsedBody)
-        ) {
+        preauthBodyRead = true
+        try {
+          parsedBody = await readJsonBody(req, MAX_PREAUTH_DISCOVERY_BYTES)
+        } catch (error) {
+          if (!(error instanceof McpJsonParseError)) throw error
+          preauthParseFailed = true
+        }
+        if (!preauthParseFailed && isUnsupportedDiscoveryProbe(parsedBody)) {
           rejectUnsupportedDiscoveryProbe(res, protocolVersionHeader)
           return
         }
@@ -308,9 +338,11 @@ export function createHttpApp(
           resource: config.resourceUrl,
         }
       )
-      if (!protocolVersionHeader) {
+      if (!preauthBodyRead) {
         phase = "read_request"
         parsedBody = await readJsonBody(req)
+      } else if (preauthParseFailed) {
+        throw new McpJsonParseError()
       }
       const insufficientScope = findInsufficientScopeRequest(
         context,
