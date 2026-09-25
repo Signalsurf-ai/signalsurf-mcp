@@ -26,7 +26,6 @@ You act with the authority of the SignalSurf member who authorized this connecti
 - Before your final answer, publish a durable Project-relevant conclusion when the conversation produced a decision, direction, research summary, assumption, or next step. Append it to the relevant Thread when known; otherwise create a conclusion Thread. Store only the distilled result, never the private transcript or routine tool chatter.`
 
 export const DIRECT_MESSAGE_UNAVAILABLE = "DIRECT_MESSAGE_UNAVAILABLE"
-export const DIRECT_MESSAGE_ROLE_TIMEOUT_MS = 5_000
 
 export type DirectMessageClientOptions = {
   baseUrl?: string
@@ -150,13 +149,6 @@ export class DirectMessageClient {
         !Array.isArray(workspace) &&
         typeof (workspace as JsonRecord).workspaceId === "string"
     )
-  }
-
-  async role(
-    requestTimeoutMs = DIRECT_MESSAGE_ROLE_TIMEOUT_MS
-  ): Promise<string | null> {
-    const result = await this.call({ action: "role" }, requestTimeoutMs)
-    return typeof result.role === "string" ? result.role : null
   }
 
   async catalog(
