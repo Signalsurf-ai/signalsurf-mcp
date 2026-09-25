@@ -30,6 +30,13 @@ describe("tools/list pagination", () => {
           ok: z.boolean(),
           data: z.unknown().optional(),
         },
+        inputSchema: {
+          description: z.string().describe("Member-provided description"),
+          default: z.string().optional().describe("Member-provided default"),
+          nested: z.object({
+            description: z.string().describe("Nested description"),
+          }),
+        },
       },
       async () => ({ content: [{ type: "text", text: "ok" }] })
     )
@@ -60,6 +67,20 @@ describe("tools/list pagination", () => {
       }),
     ])
     expect(listed.tools[0]?.inputSchema).not.toHaveProperty("$schema")
+    expect(listed.tools[0]?.inputSchema).toMatchObject({
+      properties: {
+        description: { type: "string" },
+        default: { type: "string" },
+        nested: {
+          type: "object",
+          properties: { description: { type: "string" } },
+        },
+      },
+      required: ["description", "nested"],
+    })
+    expect(
+      listed.tools[0]?.inputSchema.properties?.description
+    ).not.toHaveProperty("description")
     await Promise.all([client.close(), server.close()])
   })
 

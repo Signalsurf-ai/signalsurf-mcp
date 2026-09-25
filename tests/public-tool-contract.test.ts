@@ -35,19 +35,70 @@ function discoveryInputSchema(inputSchema: Record<string, unknown>) {
     unknown
   >
   const omitUsageMetadata = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      for (const item of value) omitUsageMetadata(item)
-      return
-    }
-    if (!value || typeof value !== "object") return
+    if (!value || typeof value !== "object" || Array.isArray(value)) return
     const record = value as Record<string, unknown>
     delete record.description
     delete record.default
-    for (const item of Object.values(record)) omitUsageMetadata(item)
+    for (const [keyword, item] of Object.entries(record)) {
+      if (
+        [
+          "$defs",
+          "definitions",
+          "dependentSchemas",
+          "patternProperties",
+          "properties",
+        ].includes(keyword) &&
+        item &&
+        typeof item === "object"
+      ) {
+        for (const child of Object.values(item)) omitUsageMetadata(child)
+      } else if (
+        ["allOf", "anyOf", "oneOf", "prefixItems"].includes(keyword) &&
+        Array.isArray(item)
+      ) {
+        for (const child of item) omitUsageMetadata(child)
+      } else if (
+        [
+          "additionalItems",
+          "additionalProperties",
+          "contains",
+          "else",
+          "if",
+          "items",
+          "not",
+          "propertyNames",
+          "then",
+          "unevaluatedItems",
+          "unevaluatedProperties",
+        ].includes(keyword)
+      ) {
+        omitUsageMetadata(item)
+      }
+    }
   }
   delete schema.$schema
   omitUsageMetadata(schema)
   return schema
+}
+
+function propertyPaths(schema: unknown, prefix = ""): string[] {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return []
+  const record = schema as Record<string, unknown>
+  const properties =
+    record.properties && typeof record.properties === "object"
+      ? (record.properties as Record<string, unknown>)
+      : {}
+  const paths = Object.entries(properties).flatMap(([name, child]) => {
+    const path = prefix ? `${prefix}.${name}` : name
+    return [path, ...propertyPaths(child, path)]
+  })
+  for (const keyword of ["allOf", "anyOf", "oneOf"] as const) {
+    const children = record[keyword]
+    if (Array.isArray(children)) {
+      for (const child of children) paths.push(...propertyPaths(child, prefix))
+    }
+  }
+  return paths.sort()
 }
 
 const cleanup: Array<() => Promise<void>> = []
@@ -123,6 +174,16 @@ describe("public MCP tool contract", () => {
         ])
       )
     )
+    for (const tool of tools) {
+      const source = executableInputSchema(
+        PUBLIC_MCP_TOOL_SCHEMAS[
+          tool.name as keyof typeof PUBLIC_MCP_TOOL_SCHEMAS
+        ]
+      )
+      expect(propertyPaths(tool.inputSchema), tool.name).toEqual(
+        propertyPaths(source)
+      )
+    }
   })
 
   it("keeps shared semantic fixtures accepted or rejected by the canonical schemas", async () => {

@@ -17,7 +17,6 @@ const REPEATED_WORKSPACE_GUIDANCE =
 
 type RegisteredTool = {
   enabled: boolean
-  title?: string
   description?: string
   inputSchema?: Parameters<typeof normalizeObjectSchema>[0]
   outputSchema?: Parameters<typeof normalizeObjectSchema>[0]
@@ -40,16 +39,56 @@ function compactAnnotations(
   return Object.keys(compact).length > 0 ? compact : undefined
 }
 
-function omitSchemaUsageMetadata(value: unknown): void {
-  if (Array.isArray(value)) {
-    for (const item of value) omitSchemaUsageMetadata(item)
-    return
-  }
-  if (!value || typeof value !== "object") return
-  const record = value as Record<string, unknown>
+const SCHEMA_MAP_KEYWORDS = new Set([
+  "$defs",
+  "definitions",
+  "dependentSchemas",
+  "patternProperties",
+  "properties",
+])
+const SCHEMA_ARRAY_KEYWORDS = new Set([
+  "allOf",
+  "anyOf",
+  "oneOf",
+  "prefixItems",
+])
+const SCHEMA_VALUE_KEYWORDS = new Set([
+  "additionalItems",
+  "additionalProperties",
+  "contains",
+  "else",
+  "if",
+  "items",
+  "not",
+  "propertyNames",
+  "then",
+  "unevaluatedItems",
+  "unevaluatedProperties",
+])
+
+function omitSchemaUsageMetadata(schema: unknown): void {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return
+  const record = schema as Record<string, unknown>
   delete record.description
   delete record.default
-  for (const item of Object.values(record)) omitSchemaUsageMetadata(item)
+
+  for (const [keyword, value] of Object.entries(record)) {
+    if (SCHEMA_MAP_KEYWORDS.has(keyword) && value && typeof value === "object") {
+      for (const child of Object.values(value)) omitSchemaUsageMetadata(child)
+    } else if (SCHEMA_ARRAY_KEYWORDS.has(keyword) && Array.isArray(value)) {
+      for (const child of value) omitSchemaUsageMetadata(child)
+    } else if (SCHEMA_VALUE_KEYWORDS.has(keyword)) {
+      omitSchemaUsageMetadata(value)
+    } else if (
+      keyword === "dependencies" &&
+      value &&
+      typeof value === "object"
+    ) {
+      for (const child of Object.values(value)) {
+        if (!Array.isArray(child)) omitSchemaUsageMetadata(child)
+      }
+    }
+  }
 }
 
 function compactDescription(
@@ -86,9 +125,6 @@ function toolDefinition(name: string, tool: RegisteredTool): Tool {
   omitSchemaUsageMetadata(inputSchema)
   const definition: Tool = {
     name,
-    // Product tools already carry rich descriptions; keep titles on the
-    // Project-collaboration catalog while avoiding 54 redundant display labels.
-    title: outputSchema ? undefined : tool.title,
     description: compactDescription(tool.description, Boolean(outputSchema)),
     inputSchema,
     outputSchema,
