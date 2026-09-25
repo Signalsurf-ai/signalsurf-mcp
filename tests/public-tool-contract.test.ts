@@ -34,50 +34,7 @@ function discoveryInputSchema(inputSchema: Record<string, unknown>) {
     string,
     unknown
   >
-  const omitUsageMetadata = (value: unknown): void => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return
-    const record = value as Record<string, unknown>
-    delete record.description
-    delete record.default
-    for (const [keyword, item] of Object.entries(record)) {
-      if (
-        [
-          "$defs",
-          "definitions",
-          "dependentSchemas",
-          "patternProperties",
-          "properties",
-        ].includes(keyword) &&
-        item &&
-        typeof item === "object"
-      ) {
-        for (const child of Object.values(item)) omitUsageMetadata(child)
-      } else if (
-        ["allOf", "anyOf", "oneOf", "prefixItems"].includes(keyword) &&
-        Array.isArray(item)
-      ) {
-        for (const child of item) omitUsageMetadata(child)
-      } else if (
-        [
-          "additionalItems",
-          "additionalProperties",
-          "contains",
-          "else",
-          "if",
-          "items",
-          "not",
-          "propertyNames",
-          "then",
-          "unevaluatedItems",
-          "unevaluatedProperties",
-        ].includes(keyword)
-      ) {
-        omitUsageMetadata(item)
-      }
-    }
-  }
   delete schema.$schema
-  omitUsageMetadata(schema)
   return schema
 }
 

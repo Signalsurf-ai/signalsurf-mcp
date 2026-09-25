@@ -14,6 +14,7 @@ export const TOOL_LIST_FRAMING_RESERVE_BYTES = 512
 const EMPTY_OBJECT_JSON_SCHEMA = { type: "object", properties: {} } as const
 const REPEATED_WORKSPACE_GUIDANCE =
   "Pass workspaceId when this connection can access multiple workspaces."
+const MAX_TOOL_DESCRIPTION_CHARS = 250
 
 type RegisteredTool = {
   enabled: boolean
@@ -46,67 +47,16 @@ function compactAnnotations(
   return Object.keys(compact).length > 0 ? compact : undefined
 }
 
-const SCHEMA_MAP_KEYWORDS = new Set([
-  "$defs",
-  "definitions",
-  "dependentSchemas",
-  "patternProperties",
-  "properties",
-])
-const SCHEMA_ARRAY_KEYWORDS = new Set([
-  "allOf",
-  "anyOf",
-  "oneOf",
-  "prefixItems",
-])
-const SCHEMA_VALUE_KEYWORDS = new Set([
-  "additionalItems",
-  "additionalProperties",
-  "contains",
-  "else",
-  "if",
-  "items",
-  "not",
-  "propertyNames",
-  "then",
-  "unevaluatedItems",
-  "unevaluatedProperties",
-])
-
-function omitSchemaUsageMetadata(schema: unknown): void {
-  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return
-  const record = schema as Record<string, unknown>
-  delete record.description
-  delete record.default
-
-  for (const [keyword, value] of Object.entries(record)) {
-    if (SCHEMA_MAP_KEYWORDS.has(keyword) && value && typeof value === "object") {
-      for (const child of Object.values(value)) omitSchemaUsageMetadata(child)
-    } else if (SCHEMA_ARRAY_KEYWORDS.has(keyword) && Array.isArray(value)) {
-      for (const child of value) omitSchemaUsageMetadata(child)
-    } else if (SCHEMA_VALUE_KEYWORDS.has(keyword)) {
-      omitSchemaUsageMetadata(value)
-    } else if (
-      keyword === "dependencies" &&
-      value &&
-      typeof value === "object"
-    ) {
-      for (const child of Object.values(value)) {
-        if (!Array.isArray(child)) omitSchemaUsageMetadata(child)
-      }
-    }
-  }
-}
-
 function compactDescription(
-  description: string | undefined,
-  hasOutputSchema: boolean
+  description: string | undefined
 ): string | undefined {
-  if (!description || !hasOutputSchema) return description
-  return description
+  if (!description) return description
+  const compact = description
     .replace(` ${REPEATED_WORKSPACE_GUIDANCE}`, "")
     .replace(REPEATED_WORKSPACE_GUIDANCE, "")
     .trim()
+  if (compact.length <= MAX_TOOL_DESCRIPTION_CHARS) return compact
+  return `${compact.slice(0, MAX_TOOL_DESCRIPTION_CHARS - 3).trimEnd()}...`
 }
 
 function toolDefinition(name: string, tool: RegisteredTool): Tool {
@@ -124,16 +74,15 @@ function toolDefinition(name: string, tool: RegisteredTool): Tool {
         pipeStrategy: "input",
       }) as Tool["outputSchema"])
     : undefined
-  // The root draft marker and schema usage prose are repeated for every tool
-  // and do not alter validation. The server retains the registered schemas and
-  // remains the authority for input/output validation.
+  // The root draft marker is repeated for every tool and does not alter
+  // validation. Keep parameter descriptions/defaults: remote models need them
+  // to construct correct calls from discovery alone.
   delete inputSchema.$schema
   if (outputSchema) delete outputSchema.$schema
-  omitSchemaUsageMetadata(inputSchema)
   const definition: Tool = {
     name,
     title: tool.title,
-    description: compactDescription(tool.description, Boolean(outputSchema)),
+    description: compactDescription(tool.description),
     inputSchema,
     outputSchema,
     annotations: compactAnnotations(tool.annotations),

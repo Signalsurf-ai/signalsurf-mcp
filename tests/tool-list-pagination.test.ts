@@ -33,6 +33,12 @@ describe("tools/list pagination", () => {
         inputSchema: {
           description: z.string().describe("Member-provided description"),
           default: z.string().optional().describe("Member-provided default"),
+          limit: z
+            .number()
+            .int()
+            .optional()
+            .default(10)
+            .describe("Maximum results"),
           nested: z.object({
             description: z.string().describe("Nested description"),
           }),
@@ -50,6 +56,11 @@ describe("tools/list pagination", () => {
           openWorldHint: false,
         },
       },
+      async () => ({ content: [{ type: "text", text: "ok" }] })
+    )
+    server.registerTool(
+      "long_description",
+      { description: "Detailed guidance. ".repeat(30) },
       async () => ({ content: [{ type: "text", text: "ok" }] })
     )
     installPaginatedToolList(server)
@@ -93,16 +104,32 @@ describe("tools/list pagination", () => {
       properties: {
         description: { type: "string" },
         default: { type: "string" },
+        limit: {
+          type: "integer",
+          default: 10,
+          description: "Maximum results",
+        },
         nested: {
           type: "object",
-          properties: { description: { type: "string" } },
+          properties: {
+            description: {
+              type: "string",
+              description: "Nested description",
+            },
+          },
         },
       },
       required: ["description", "nested"],
     })
     expect(
       listed.tools[0]?.inputSchema.properties?.description
-    ).not.toHaveProperty("description")
+    ).toHaveProperty("description", "Member-provided description")
+    const compactDescription = listed.tools.find(
+      (tool) => tool.name === "long_description"
+    )?.description
+    expect(compactDescription!.length).toBeLessThanOrEqual(250)
+    expect(compactDescription!.length).toBeGreaterThan(200)
+    expect(compactDescription).toMatch(/\.\.\.$/)
     await Promise.all([client.close(), server.close()])
   })
 
@@ -216,7 +243,11 @@ describe("tools/list pagination", () => {
       InMemoryTransport.createLinkedPair()
     server.registerTool(
       "oversized_tool",
-      { description: "x".repeat(4_000) },
+      {
+        inputSchema: {
+          query: z.string().describe("x".repeat(4_000)),
+        },
+      },
       async () => ({ content: [{ type: "text", text: "ok" }] })
     )
     installPaginatedToolList(server, 2_000)
