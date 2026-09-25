@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises"
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
+import { normalizeObjectSchema } from "@modelcontextprotocol/sdk/server/zod-compat.js"
+import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js"
 import { afterEach, describe, expect, it } from "vitest"
 import { z } from "zod"
 
@@ -17,20 +19,35 @@ type Contract = {
   semanticFixtures: Record<string, { valid: unknown[]; invalid: unknown[] }>
 }
 
-const JSON_SCHEMA_DRAFT_7 = "http://json-schema.org/draft-07/schema#"
+function executableInputSchema(inputSchema: Record<string, unknown>) {
+  const normalized = normalizeObjectSchema(inputSchema)
+  return normalized
+    ? toJsonSchemaCompat(normalized, {
+        strictUnions: true,
+        pipeStrategy: "input",
+      })
+    : { type: "object", properties: {} }
+}
 
-function contractInputSchema(inputSchema: Record<string, unknown>) {
-  // Discovery omits the repeated root dialect marker to keep the combined
-  // catalog compatible with bounded clients. Normalize it back for the pinned
-  // contract hash so all executable constraints remain covered.
-  const isEmptyObjectSchema =
-    inputSchema.type === "object" &&
-    Object.keys((inputSchema.properties as Record<string, unknown>) ?? {})
-      .length === 0 &&
-    Object.keys(inputSchema).length === 2
-  return isEmptyObjectSchema
-    ? inputSchema
-    : { $schema: JSON_SCHEMA_DRAFT_7, ...inputSchema }
+function discoveryInputSchema(inputSchema: Record<string, unknown>) {
+  const schema = structuredClone(executableInputSchema(inputSchema)) as Record<
+    string,
+    unknown
+  >
+  const omitUsageMetadata = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) omitUsageMetadata(item)
+      return
+    }
+    if (!value || typeof value !== "object") return
+    const record = value as Record<string, unknown>
+    delete record.description
+    delete record.default
+    for (const item of Object.values(record)) omitUsageMetadata(item)
+  }
+  delete schema.$schema
+  omitUsageMetadata(schema)
+  return schema
 }
 
 const cleanup: Array<() => Promise<void>> = []
@@ -86,10 +103,26 @@ describe("public MCP tool contract", () => {
       Object.fromEntries(
         tools.map((tool) => [
           tool.name,
-          canonicalSha256(contractInputSchema(tool.inputSchema)),
+          canonicalSha256(
+            executableInputSchema(
+              PUBLIC_MCP_TOOL_SCHEMAS[
+                tool.name as keyof typeof PUBLIC_MCP_TOOL_SCHEMAS
+              ]
+            )
+          ),
         ])
       )
     ).toEqual(contract.inputSchemaSha256)
+    expect(
+      Object.fromEntries(tools.map((tool) => [tool.name, tool.inputSchema]))
+    ).toEqual(
+      Object.fromEntries(
+        PUBLIC_MCP_TOOL_NAMES.map((name) => [
+          name,
+          discoveryInputSchema(PUBLIC_MCP_TOOL_SCHEMAS[name]),
+        ])
+      )
+    )
   })
 
   it("keeps shared semantic fixtures accepted or rejected by the canonical schemas", async () => {

@@ -4,10 +4,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { describe, expect, it } from "vitest"
 import { z } from "zod"
 
-import { installPaginatedToolList } from "../src/tool-list-pagination.js"
+import {
+  TOOL_LIST_FRAMING_RESERVE_BYTES,
+  installPaginatedToolList,
+} from "../src/tool-list-pagination.js"
 
 describe("tools/list pagination", () => {
-  it("keeps user-facing metadata while omitting annotation defaults", async () => {
+  it("preserves result contracts and safety metadata while compacting defaults", async () => {
     const server = new McpServer({ name: "metadata-test", version: "1.0.0" })
     const client = new Client({ name: "metadata-client", version: "1.0.0" })
     const [clientTransport, serverTransport] =
@@ -23,6 +26,10 @@ describe("tools/list pagination", () => {
           idempotentHint: false,
           openWorldHint: true,
         },
+        outputSchema: {
+          ok: z.boolean(),
+          data: z.unknown().optional(),
+        },
       },
       async () => ({ content: [{ type: "text", text: "ok" }] })
     )
@@ -36,8 +43,16 @@ describe("tools/list pagination", () => {
     expect(listed.tools).toEqual([
       expect.objectContaining({
         name: "read_context",
-        title: "Read context",
         description: "Read the current context.",
+        outputSchema: {
+          type: "object",
+          properties: {
+            ok: { type: "boolean" },
+            data: {},
+          },
+          required: ["ok"],
+          additionalProperties: false,
+        },
         annotations: {
           readOnlyHint: true,
           destructiveHint: false,
@@ -85,7 +100,11 @@ describe("tools/list pagination", () => {
     } while (cursor)
 
     expect(pageSizes.length).toBeGreaterThan(1)
-    expect(pageSizes.every((bytes) => bytes <= maxPageBytes)).toBe(true)
+    expect(
+      pageSizes.every(
+        (bytes) => bytes + TOOL_LIST_FRAMING_RESERVE_BYTES <= maxPageBytes
+      )
+    ).toBe(true)
     expect(names).toEqual(
       Array.from({ length: 40 }, (_, index) =>
         `tool_${index.toString().padStart(2, "0")}`

@@ -10,7 +10,10 @@ import {
 
 const CURSOR_PREFIX = "signalsurf-tools-v1:"
 export const DEFAULT_TOOL_LIST_PAGE_BYTES = 64 * 1024
+export const TOOL_LIST_FRAMING_RESERVE_BYTES = 512
 const EMPTY_OBJECT_JSON_SCHEMA = { type: "object", properties: {} } as const
+const REPEATED_WORKSPACE_GUIDANCE =
+  "Pass workspaceId when this connection can access multiple workspaces."
 
 type RegisteredTool = {
   enabled: boolean
@@ -37,6 +40,29 @@ function compactAnnotations(
   return Object.keys(compact).length > 0 ? compact : undefined
 }
 
+function omitSchemaUsageMetadata(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const item of value) omitSchemaUsageMetadata(item)
+    return
+  }
+  if (!value || typeof value !== "object") return
+  const record = value as Record<string, unknown>
+  delete record.description
+  delete record.default
+  for (const item of Object.values(record)) omitSchemaUsageMetadata(item)
+}
+
+function compactDescription(
+  description: string | undefined,
+  hasOutputSchema: boolean
+): string | undefined {
+  if (!description || !hasOutputSchema) return description
+  return description
+    .replace(` ${REPEATED_WORKSPACE_GUIDANCE}`, "")
+    .replace(REPEATED_WORKSPACE_GUIDANCE, "")
+    .trim()
+}
+
 function toolDefinition(name: string, tool: RegisteredTool): Tool {
   const input = normalizeObjectSchema(tool.inputSchema)
   const inputSchema = (input
@@ -45,16 +71,27 @@ function toolDefinition(name: string, tool: RegisteredTool): Tool {
         pipeStrategy: "input",
       })
     : EMPTY_OBJECT_JSON_SCHEMA) as Tool["inputSchema"]
-  // The root draft marker is repeated for every tool and is optional in MCP's
-  // Tool contract. The server still owns input/output validation; omitting the
-  // generic output schema and default taskSupport metadata only compacts the
-  // discovery wire representation.
+  const output = normalizeObjectSchema(tool.outputSchema)
+  const outputSchema = output
+    ? (toJsonSchemaCompat(output, {
+        strictUnions: true,
+        pipeStrategy: "input",
+      }) as Tool["outputSchema"])
+    : undefined
+  // The root draft marker and schema usage prose are repeated for every tool
+  // and do not alter validation. The server retains the registered schemas and
+  // remains the authority for input/output validation.
   delete inputSchema.$schema
+  if (outputSchema) delete outputSchema.$schema
+  omitSchemaUsageMetadata(inputSchema)
   const definition: Tool = {
     name,
-    title: tool.title,
-    description: tool.description,
+    // Product tools already carry rich descriptions; keep titles on the
+    // Project-collaboration catalog while avoiding 54 redundant display labels.
+    title: outputSchema ? undefined : tool.title,
+    description: compactDescription(tool.description, Boolean(outputSchema)),
     inputSchema,
+    outputSchema,
     annotations: compactAnnotations(tool.annotations),
     _meta: tool._meta,
   }
@@ -112,7 +149,11 @@ export function installPaginatedToolList(
           ? { nextCursor: `${CURSOR_PREFIX}${index + 1}` }
           : {}),
       }
-      if (page.length > 0 && encodedBytes(result) > maxPageBytes) break
+      if (
+        page.length > 0 &&
+        encodedBytes(result) + TOOL_LIST_FRAMING_RESERVE_BYTES > maxPageBytes
+      )
+        break
       page.push(tools[index]!)
     }
 
