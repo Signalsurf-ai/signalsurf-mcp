@@ -3,6 +3,10 @@ import { isIP } from "node:net"
 
 import express from "express"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
+import {
+  JSONRPCRequestSchema,
+  SUPPORTED_PROTOCOL_VERSIONS,
+} from "@modelcontextprotocol/sdk/types.js"
 
 import {
   canUseCapability,
@@ -33,6 +37,8 @@ export type HttpServerDependencies = {
   /** Test seam for the Surfer session relay; production uses global fetch. */
   /** SIG-2681: injected transport for the Direct Message capability relay. */
   directMessageFetch?: typeof fetch
+  /** Test seam for the bounded pre-auth compatibility probe reader. */
+  preauthDiscoveryTimeoutMs?: number
 }
 
 class McpJsonParseError extends Error {
@@ -41,6 +47,16 @@ class McpJsonParseError extends Error {
     this.name = "McpJsonParseError"
   }
 }
+
+class McpPreauthReadTimeoutError extends Error {
+  constructor() {
+    super("Timed out reading MCP discovery probe")
+    this.name = "McpPreauthReadTimeoutError"
+  }
+}
+
+const MAX_PREAUTH_DISCOVERY_BYTES = 8 * 1024
+const PREAUTH_DISCOVERY_TIMEOUT_MS = 2_000
 
 function normalizeHostHeader(value: string | undefined): string | null {
   if (!value) return null
@@ -129,17 +145,48 @@ function getInsufficientScopeHeader(
   return parts.join(", ")
 }
 
-async function readJsonBody(req: express.Request): Promise<unknown> {
-  const chunks: Buffer[] = []
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+async function readJsonBody(
+  req: express.Request,
+  maxBytes?: number,
+  timeoutMs?: number
+): Promise<unknown> {
+  const read = async () => {
+    const chunks: Buffer[] = []
+    let totalBytes = 0
+    for await (const chunk of req) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      totalBytes += buffer.byteLength
+      if (maxBytes !== undefined && totalBytes > maxBytes) {
+        throw new UserFacingError("MCP discovery probe body is too large.", {
+          code: "PAYLOAD_TOO_LARGE",
+          status: 413,
+        })
+      }
+      chunks.push(buffer)
+    }
+    const text = Buffer.concat(chunks).toString("utf8")
+    if (!text.trim()) return undefined
+    try {
+      return JSON.parse(text)
+    } catch {
+      throw new McpJsonParseError()
+    }
   }
-  const text = Buffer.concat(chunks).toString("utf8")
-  if (!text.trim()) return undefined
+
+  if (timeoutMs === undefined) return read()
+  let timeout: ReturnType<typeof setTimeout> | undefined
   try {
-    return JSON.parse(text)
-  } catch {
-    throw new McpJsonParseError()
+    return await Promise.race([
+      read(),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new McpPreauthReadTimeoutError()),
+          timeoutMs
+        )
+      }),
+    ])
+  } finally {
+    if (timeout) clearTimeout(timeout)
   }
 }
 
@@ -206,6 +253,53 @@ function requiresDirectMessageRole(body: unknown): boolean {
   )
 }
 
+function firstHeaderValue(
+  value: string | string[] | undefined
+): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
+
+function shouldReadPreauthDiscoveryProbe(req: express.Request): boolean {
+  const protocolVersion = firstHeaderValue(
+    req.headers["mcp-protocol-version"]
+  )
+  if (
+    !protocolVersion ||
+    SUPPORTED_PROTOCOL_VERSIONS.includes(protocolVersion)
+  ) {
+    return false
+  }
+  if (firstHeaderValue(req.headers["mcp-method"]) !== "server/discover") {
+    return false
+  }
+  const contentLength = Number(firstHeaderValue(req.headers["content-length"]))
+  return (
+    Number.isSafeInteger(contentLength) &&
+    contentLength > 0 &&
+    contentLength <= MAX_PREAUTH_DISCOVERY_BYTES
+  )
+}
+
+function isUnsupportedDiscoveryProbe(body: unknown): boolean {
+  const parsed = JSONRPCRequestSchema.safeParse(body)
+  return parsed.success && parsed.data.method === "server/discover"
+}
+
+function rejectUnsupportedDiscoveryProbe(
+  res: express.Response,
+  protocolVersionHeader: string | string[] | undefined
+): void {
+  const protocolVersion = firstHeaderValue(protocolVersionHeader)
+  res.status(400).json({
+    jsonrpc: "2.0",
+    error: {
+      code: -32000,
+      message: `Bad Request: Unsupported protocol version: ${protocolVersion} (supported versions: ${SUPPORTED_PROTOCOL_VERSIONS.join(", ")})`,
+    },
+    id: null,
+  })
+}
+
 export function createHttpApp(
   config: AppConfig,
   dependencies: HttpServerDependencies = {}
@@ -230,6 +324,35 @@ export function createHttpApp(
     let phase = "resolve_token"
     res.setHeader("X-SignalSurf-Request-Id", requestId)
     try {
+      // Modern clients probe legacy servers with server/discover before
+      // falling back to initialize. The legacy SDK's answer is invariant and
+      // discloses no member state, so reject it before remote token resolution.
+      // This avoids spending one full authorization round trip on a request
+      // that the transport must reject regardless of the bearer token.
+      let parsedBody: unknown
+      let preauthBodyRead = false
+      let preauthParseFailed = false
+      const protocolVersionHeader = req.headers["mcp-protocol-version"]
+      if (shouldReadPreauthDiscoveryProbe(req)) {
+        phase = "read_request"
+        preauthBodyRead = true
+        try {
+          parsedBody = await readJsonBody(
+            req,
+            MAX_PREAUTH_DISCOVERY_BYTES,
+            dependencies.preauthDiscoveryTimeoutMs ??
+              PREAUTH_DISCOVERY_TIMEOUT_MS
+          )
+        } catch (error) {
+          if (!(error instanceof McpJsonParseError)) throw error
+          preauthParseFailed = true
+        }
+        if (!preauthParseFailed && isUnsupportedDiscoveryProbe(parsedBody)) {
+          rejectUnsupportedDiscoveryProbe(res, protocolVersionHeader)
+          return
+        }
+      }
+      phase = "resolve_token"
       const accessToken = parseBearerToken(req.headers.authorization)
       const repository =
         dependencies.createRepository?.({
@@ -249,8 +372,12 @@ export function createHttpApp(
           resource: config.resourceUrl,
         }
       )
-      phase = "read_request"
-      const parsedBody = await readJsonBody(req)
+      if (!preauthBodyRead) {
+        phase = "read_request"
+        parsedBody = await readJsonBody(req)
+      } else if (preauthParseFailed) {
+        throw new McpJsonParseError()
+      }
       const insufficientScope = findInsufficientScopeRequest(
         context,
         parsedBody
@@ -319,6 +446,12 @@ export function createHttpApp(
       await server.connect(transport)
       await transport.handleRequest(req, res, parsedBody)
     } catch (error) {
+      if (error instanceof McpPreauthReadTimeoutError) {
+        res.setHeader("Connection", "close")
+        res.once("finish", () => req.destroy())
+        res.status(408).end()
+        return
+      }
       if (error instanceof McpJsonParseError) {
         res.status(400).json({
           jsonrpc: "2.0",

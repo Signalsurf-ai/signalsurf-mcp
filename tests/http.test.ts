@@ -56,13 +56,15 @@ function makeRepository() {
 
 async function listen(
   config = makeConfig(),
-  createRepository = makeRepository
+  createRepository = makeRepository,
+  preauthDiscoveryTimeoutMs?: number
 ): Promise<{
   server: Server
   url: string
 }> {
   const app = createHttpApp(config, {
     createRepository,
+    preauthDiscoveryTimeoutMs,
     directMessageFetch: (async () =>
       new Response(JSON.stringify({ ok: true, workspaces: [] }), {
         status: 200,
@@ -196,6 +198,131 @@ afterEach(async () => {
 })
 
 describe("HTTP transport", () => {
+  it("rejects an unsupported discovery probe before remote token resolution", async () => {
+    const createRepository = vi.fn(() => {
+      throw new Error("remote token resolution must not run")
+    })
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] }),
+      createRepository
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        "Content-Type": "application/json",
+        "MCP-Method": "server/discover",
+        "MCP-Protocol-Version": "2026-07-28",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "modern-discovery-probe",
+        method: "server/discover",
+        params: {},
+      }),
+    })
+
+    expect(response.status).toBe(400)
+    expect(response.headers.get("x-signalsurf-request-id")).toMatch(
+      /^[0-9a-f-]{36}$/
+    )
+    await expect(response.json()).resolves.toMatchObject({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: expect.stringContaining(
+          "Unsupported protocol version: 2026-07-28"
+        ),
+      },
+      id: null,
+    })
+    expect(createRepository).not.toHaveBeenCalled()
+  })
+
+  it("keeps malformed and batch discovery shapes behind bearer auth", async () => {
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] })
+    )
+    listeners.push(server)
+    const bodies = [
+      "{",
+      JSON.stringify([
+        {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "server/discover",
+          params: {},
+        },
+      ]),
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: {},
+        method: "server/discover",
+        params: {},
+      }),
+    ]
+
+    for (const body of bodies) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json, text/event-stream",
+          "Content-Type": "application/json",
+          "MCP-Method": "server/discover",
+          "MCP-Protocol-Version": "2026-07-28",
+        },
+        body,
+      })
+      expect(response.status).toBe(401)
+      expect(response.headers.get("www-authenticate")).toContain("Bearer")
+    }
+  })
+
+  it("closes a stalled pre-auth discovery body on a short deadline", async () => {
+    const createRepository = vi.fn(() => {
+      throw new Error("remote token resolution must not run")
+    })
+    const { server, url } = await listen(
+      makeConfig({ authMode: "database", tokenEntries: [] }),
+      createRepository,
+      25
+    )
+    listeners.push(server)
+
+    const parsed = new URL(url)
+    const startedAt = Date.now()
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = http.request(
+        {
+          hostname: parsed.hostname,
+          port: Number(parsed.port),
+          path: parsed.pathname,
+          method: "POST",
+          headers: {
+            Host: parsed.host,
+            Accept: "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "Content-Length": "8192",
+            "MCP-Method": "server/discover",
+            "MCP-Protocol-Version": "2026-07-28",
+          },
+        },
+        (response) => {
+          response.resume()
+          response.on("end", () => resolve(response.statusCode ?? 0))
+        }
+      )
+      req.on("error", reject)
+      req.write("{")
+    })
+
+    expect(status).toBe(408)
+    expect(Date.now() - startedAt).toBeLessThan(1_000)
+    expect(createRepository).not.toHaveBeenCalled()
+  })
+
   it("serves stateless MCP initialize requests with bearer auth", async () => {
     const { server, url } = await listen()
     listeners.push(server)
