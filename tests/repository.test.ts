@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import { sha256Hex } from "../src/auth.js"
 import { SignalSurfRepository } from "../src/repository.js"
@@ -1810,6 +1810,110 @@ describe("SignalSurfRepository", () => {
       role: "viewer",
       tokenName: "OAuth: Typeless",
     })
+  })
+
+  it("rejects an invalid OAuth client without waiting on concurrent membership", async () => {
+    const accessToken = "ssmcp_at_revoked_client"
+    const db = new FakeSupabase({
+      mcp_oauth_tokens: [
+        {
+          id: "00000000-0000-4000-8000-000000000604",
+          client_id: "ssmcp_client_revoked",
+          user_id: context.userId,
+          workspace_id: context.workspaceId,
+          workspace_ids: [context.workspaceId],
+          scope: "mcp:dm offline_access",
+          resource: "https://mcp.signalsurf.ai/mcp",
+          access_token_sha256: sha256Hex(accessToken),
+          access_token_expires_at: "2999-01-01T00:00:00Z",
+          revoked_at: null,
+        },
+      ],
+      mcp_oauth_clients: [
+        {
+          client_id: "ssmcp_client_revoked",
+          client_name: "Revoked",
+          revoked_at: "2026-09-25T00:00:00Z",
+        },
+      ],
+    })
+    let membershipStarted = false
+    const stalledDb = {
+      from(table: string) {
+        if (table !== "workspaces") return db.from(table)
+        membershipStarted = true
+        return {
+          select: () => ({
+            in: () => new Promise<never>(() => {}),
+          }),
+        }
+      },
+    }
+    const repo = new SignalSurfRepository(stalledDb as any)
+
+    const outcome = await Promise.race([
+      repo.resolveMcpToken(accessToken, {
+        resource: "https://mcp.signalsurf.ai/mcp",
+      }),
+      new Promise<"timed-out">((resolve) =>
+        setTimeout(() => resolve("timed-out"), 100)
+      ),
+    ])
+
+    expect(membershipStarted).toBe(true)
+    expect(outcome).toBeNull()
+  })
+
+  it("rejects unsupported OAuth scopes before loading workspace context", async () => {
+    const accessToken = "ssmcp_at_unsupported_scope"
+    const db = new FakeSupabase({
+      mcp_oauth_tokens: [
+        {
+          id: "00000000-0000-4000-8000-000000000605",
+          client_id: "ssmcp_client_valid",
+          user_id: context.userId,
+          workspace_id: context.workspaceId,
+          workspace_ids: [context.workspaceId],
+          scope: "openid offline_access",
+          resource: "https://mcp.signalsurf.ai/mcp",
+          access_token_sha256: sha256Hex(accessToken),
+          access_token_expires_at: "2999-01-01T00:00:00Z",
+          revoked_at: null,
+        },
+      ],
+      mcp_oauth_clients: [
+        {
+          client_id: "ssmcp_client_valid",
+          client_name: "Valid",
+          revoked_at: null,
+        },
+      ],
+      workspaces: [
+        {
+          id: context.workspaceId,
+          name: "Primary Workspace",
+          organization_id: org1,
+        },
+      ],
+      workspace_members: [
+        {
+          workspace_id: context.workspaceId,
+          user_id: context.userId,
+          role: "member",
+        },
+      ],
+    })
+    const from = vi.spyOn(db, "from")
+    const repo = new SignalSurfRepository(db as any)
+
+    await expect(
+      repo.resolveMcpToken(accessToken, {
+        resource: "https://mcp.signalsurf.ai/mcp",
+      })
+    ).resolves.toBeNull()
+    expect(from.mock.calls.map(([table]) => table)).toEqual([
+      "mcp_oauth_tokens",
+    ])
   })
 
   it.each([

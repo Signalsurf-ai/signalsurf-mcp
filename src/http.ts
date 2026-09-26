@@ -251,6 +251,10 @@ function requiresDirectMessageTools(body: unknown): boolean {
   })
 }
 
+function isInitializeRequest(body: unknown): boolean {
+  return isRecord(body) && body.method === "initialize"
+}
+
 function firstHeaderValue(
   value: string | string[] | undefined
 ): string | undefined {
@@ -478,6 +482,7 @@ export function createHttpApp(
         context,
         repository,
         includeDirectMessageTools: requiresDirectMessageTools(parsedBody),
+        initializeOnly: isInitializeRequest(parsedBody),
         iconUrl:
           !authorizationIconUrl ||
           authorizationIconUrl.origin === new URL(config.resourceUrl).origin ||

@@ -104,6 +104,8 @@ export type CreateServerOptions = {
   iconUrl?: string
   /** Skip the dynamic collaboration catalog for requests that cannot consume it. */
   includeDirectMessageTools?: boolean
+  /** Serve only the initialize handshake; later stateless requests build handlers. */
+  initializeOnly?: boolean
 }
 
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
@@ -176,10 +178,13 @@ export async function createSignalSurfMcpServer(
   const directMessageClient = hasDirectMessageScope
     ? new DirectMessageClient(options.surferSession ?? {})
     : null
+  // Initialize only needs declared protocol capabilities and instructions.
+  // Stateless follow-up requests build the authorized handlers they consume.
+  const initializeOnly = options.initializeOnly === true
   // OAuth/database tokens resolve workspace names during token resolution; static
   // env tokens do not. Resolve them once here so every response (get_context and
   // the signalsurf://context resource) reports real names instead of raw UUIDs.
-  if (!context.workspaces?.length) {
+  if (!initializeOnly && !context.workspaces?.length) {
     try {
       const resolved = await repository.resolveWorkspaceContexts(
         authorizedWorkspaceIds(context)
@@ -194,10 +199,19 @@ export async function createSignalSurfMcpServer(
   // their remote reads. Initialize deliberately uses the complete static role
   // contract above instead of making an optional publisher round trip.
   const [directMessageSurface, workspaceCapabilities] = await Promise.all([
-    hasDirectMessageScope && options.includeDirectMessageTools !== false
+    !initializeOnly &&
+    hasDirectMessageScope &&
+    options.includeDirectMessageTools !== false
       ? loadDirectMessageSurface(directMessageClient!)
       : Promise.resolve(null),
-    loadRepositoryCapabilities(repository, authorizedWorkspaceIds(context)),
+    initializeOnly
+      ? Promise.resolve(context.workspaceCapabilitiesByWorkspaceId ?? {})
+      : context.workspaceCapabilitiesByWorkspaceId
+        ? Promise.resolve(context.workspaceCapabilitiesByWorkspaceId)
+        : loadRepositoryCapabilities(
+            repository,
+            authorizedWorkspaceIds(context)
+          ),
   ])
   context.workspaceCapabilitiesByWorkspaceId = workspaceCapabilities
   const directMessageInstructions = directMessageSurface?.instructions ??
@@ -230,6 +244,8 @@ export async function createSignalSurfMcpServer(
         : workspaceProjectedServerInstructions(context),
     }
   )
+
+  if (initializeOnly) return server
 
   registerResources(server, repository, context)
   registerTools(
