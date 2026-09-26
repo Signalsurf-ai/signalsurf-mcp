@@ -1551,6 +1551,16 @@ export class SignalSurfRepository {
     if (new Date(row.access_token_expires_at).getTime() <= Date.now()) {
       return null
     }
+    const storedScopes = parseStoredScopes(row.scope)
+    const scopes = storedScopes.filter(
+      (scope) => scope === MCP_DM_SCOPE || isSupportedMcpScope(scope)
+    )
+    if (
+      !scopes.includes(MCP_DM_SCOPE) &&
+      grantedCapabilitiesForScopes(scopes).length === 0
+    ) {
+      return null
+    }
 
     const workspaceResultPromise = this.currentWorkspaceIdsForUser(
       row.user_id,
@@ -1591,16 +1601,6 @@ export class SignalSurfRepository {
     const tokenName = client.client_name
       ? `OAuth: ${client.client_name}`
       : "OAuth MCP client"
-    const storedScopes = parseStoredScopes(row.scope)
-    const scopes = storedScopes.filter(
-      (scope) => scope === MCP_DM_SCOPE || isSupportedMcpScope(scope)
-    )
-    if (
-      !scopes.includes(MCP_DM_SCOPE) &&
-      grantedCapabilitiesForScopes(scopes).length === 0
-    ) {
-      return null
-    }
     return {
       workspaceId: workspaceIds[0]!,
       workspaceIds,
