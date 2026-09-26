@@ -88,9 +88,10 @@ async function readMcpJson(response: Response) {
 function signalSurfStub() {
   return vi.fn(async (_url: unknown, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body ?? "{}"))
-    if (body.action === "catalog") {
+    if (body.action === "surface") {
       return jsonResponse(200, {
         ok: true,
+        workspaces: [{ workspaceId: workspaceId, available: true }],
         tools: CATALOG,
         role: "You act as the member who authorized this connection.",
       })
@@ -99,12 +100,6 @@ function signalSurfStub() {
       return jsonResponse(200, {
         ok: true,
         workspaces: [{ workspaceId: workspaceId, available: true }],
-      })
-    }
-    if (body.action === "role") {
-      return jsonResponse(200, {
-        ok: true,
-        role: "Publisher-owned role instructions.",
       })
     }
     return jsonResponse(200, { ok: true, data: { echoed: body } })
@@ -335,11 +330,11 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
     )
   })
 
-  it("merges the catalogues of every available granted workspace", async () => {
+  it("loads one shared catalog for every available granted workspace", async () => {
     const unavailableWorkspaceId = "00000000-0000-4000-8000-000000000003"
     const stub = vi.fn(async (_url: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body ?? "{}"))
-      if (body.action === "workspaces") {
+      if (body.action === "surface") {
         return jsonResponse(200, {
           ok: true,
           workspaces: [
@@ -347,22 +342,14 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
             { workspaceId: otherWorkspaceId, available: true },
             { workspaceId: unavailableWorkspaceId, available: false },
           ],
-        })
-      }
-      if (body.action === "catalog") {
-        return jsonResponse(200, {
-          ok: true,
-          tools:
-            body.workspaceId === otherWorkspaceId
-              ? [
-                  CATALOG[0],
-                  {
-                    name: "list_projects",
-                    description: "List Projects.",
-                    inputSchema: { type: "object", properties: {} },
-                  },
-                ]
-              : CATALOG,
+          tools: [
+            ...CATALOG,
+            {
+              name: "list_projects",
+              description: "List Projects.",
+              inputSchema: { type: "object", properties: {} },
+            },
+          ],
           role: "You act as the member who authorized this connection.",
         })
       }
@@ -375,24 +362,15 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
       expect.arrayContaining(["start_thread", "read_thread", "list_projects"])
     )
     expect(
-      stub.mock.calls
-        .map((call) => JSON.parse(String((call[1] as RequestInit).body)))
-        .filter((body) => body.action === "catalog")
-        .map((body) => body.workspaceId)
-        .filter((id, index, ids) => ids.indexOf(id) === index)
-        .sort()
-    ).toEqual([otherWorkspaceId, workspaceId].sort())
+      stub.mock.calls.map((call) =>
+        JSON.parse(String((call[1] as RequestInit).body)).action
+      )
+    ).toEqual(["surface"])
   })
 
   it("fails discovery when an available workspace catalogue cannot load", async () => {
     const stub = vi.fn(async (_url: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body ?? "{}"))
-      if (body.action === "workspaces") {
-        return jsonResponse(200, {
-          ok: true,
-          workspaces: [{ workspaceId: workspaceId, available: true }],
-        })
-      }
       return jsonResponse(503, {
         ok: false,
         error: "Catalogue unavailable",
@@ -479,15 +457,10 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
     ]
     const stub = vi.fn(async (_url: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body ?? "{}"))
-      if (body.action === "workspaces") {
+      if (body.action === "surface") {
         return jsonResponse(200, {
           ok: true,
           workspaces: [{ workspaceId, available: true }],
-        })
-      }
-      if (body.action === "catalog") {
-        return jsonResponse(200, {
-          ok: true,
           tools: composedTools,
           role: "member",
         })
@@ -644,22 +617,17 @@ describe("SignalSurf MCP capability composition over HTTP", () => {
       stub.mock.calls.map((call) =>
         JSON.parse(String((call[1] as RequestInit).body)).action
       )
-    ).toEqual(["workspaces", "catalog"])
+    ).toEqual(["surface"])
   })
 
   it("fails closed when a published member tool collides with a product tool", async () => {
     const stub = signalSurfStub()
     stub.mockImplementation(async (_url: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body ?? "{}"))
-      if (body.action === "workspaces") {
+      if (body.action === "surface") {
         return jsonResponse(200, {
           ok: true,
           workspaces: [{ workspaceId, available: true }],
-        })
-      }
-      if (body.action === "catalog") {
-        return jsonResponse(200, {
-          ok: true,
           tools: [{ ...CATALOG[0], name: "get_context" }],
           role: "member",
         })

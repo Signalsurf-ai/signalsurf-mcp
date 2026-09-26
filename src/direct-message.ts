@@ -54,6 +54,17 @@ type DirectMessageWorkspace = JsonRecord & {
   available?: boolean
 }
 
+function readWorkspaces(result: JsonRecord): DirectMessageWorkspace[] {
+  if (!Array.isArray(result.workspaces)) return []
+  return result.workspaces.filter(
+    (workspace): workspace is DirectMessageWorkspace =>
+      !!workspace &&
+      typeof workspace === "object" &&
+      !Array.isArray(workspace) &&
+      typeof (workspace as JsonRecord).workspaceId === "string"
+  )
+}
+
 function unavailable(message: string, details?: JsonRecord): UserFacingError {
   return new UserFacingError(message, {
     code: DIRECT_MESSAGE_UNAVAILABLE,
@@ -141,21 +152,17 @@ export class DirectMessageClient {
 
   async workspaces(): Promise<DirectMessageWorkspace[]> {
     const result = await this.call({ action: "workspaces" })
-    if (!Array.isArray(result.workspaces)) return []
-    return result.workspaces.filter(
-      (workspace): workspace is DirectMessageWorkspace =>
-        !!workspace &&
-        typeof workspace === "object" &&
-        !Array.isArray(workspace) &&
-        typeof (workspace as JsonRecord).workspaceId === "string"
-    )
+    return readWorkspaces(result)
   }
 
-  async catalog(
-    workspaceId?: string | null
-  ): Promise<{ tools: DirectMessageTool[]; role: string | null }> {
-    const result = await this.call({ action: "catalog", workspaceId })
+  async surface(): Promise<{
+    workspaces: DirectMessageWorkspace[]
+    tools: DirectMessageTool[]
+    role: string | null
+  }> {
+    const result = await this.call({ action: "surface" })
     return {
+      workspaces: readWorkspaces(result),
       tools: Array.isArray(result.tools)
         ? (result.tools as DirectMessageTool[])
         : [],
@@ -505,32 +512,6 @@ function publishedSchemaToZod(input: unknown): ZodTypeAny {
   return described(result, schema)
 }
 
-function mergePublishedTools(
-  catalogs: Array<{ tools: DirectMessageTool[]; role: string | null }>
-): { tools: DirectMessageTool[]; roles: string[] } {
-  const tools = new Map<string, DirectMessageTool>()
-  const roles = new Set<string>()
-  for (const catalog of catalogs) {
-    if (catalog.role) roles.add(catalog.role)
-    for (const tool of catalog.tools) {
-      const existing = tools.get(tool.name)
-      if (
-        existing &&
-        (existing.description !== tool.description ||
-          JSON.stringify(existing.inputSchema) !==
-            JSON.stringify(tool.inputSchema))
-      ) {
-        throw unavailable(
-          `SignalSurf published conflicting definitions for ${tool.name}.`,
-          { tool: tool.name }
-        )
-      }
-      tools.set(tool.name, tool)
-    }
-  }
-  return { tools: [...tools.values()], roles: [...roles] }
-}
-
 /**
  * SignalSurf publishes the member's capabilities and the role they act in, so
  * the connection states both rather than restating a list here.
@@ -538,15 +519,11 @@ function mergePublishedTools(
 export async function loadDirectMessageSurface(
   client: DirectMessageClient
 ): Promise<DirectMessageSurface> {
-  const workspaces = await client.workspaces()
-  const workspaceIds = workspaces
-    .filter((workspace) => workspace.available !== false)
-    .map((workspace) => workspace.workspaceId)
-  const { tools: published, roles } = mergePublishedTools(
-    await Promise.all(
-      workspaceIds.map((workspaceId) => client.catalog(workspaceId))
-    )
+  const surface = await client.surface()
+  const hasAvailableWorkspace = surface.workspaces.some(
+    (workspace) => workspace.available !== false
   )
+  const published = hasAvailableWorkspace ? surface.tools : []
   const tools = [
     LIST_WORKSPACES,
     ...published.map((tool) => ({
@@ -556,8 +533,8 @@ export async function loadDirectMessageSurface(
   ]
 
   return {
-    instructions: roles.length
-      ? `${DIRECT_MESSAGE_INSTRUCTIONS}\n\n${roles.join("\n\n")}`
+    instructions: hasAvailableWorkspace && surface.role
+      ? `${DIRECT_MESSAGE_INSTRUCTIONS}\n\n${surface.role}`
       : DIRECT_MESSAGE_INSTRUCTIONS,
     capabilities: tools.map((tool) => ({
       name: tool.name,
