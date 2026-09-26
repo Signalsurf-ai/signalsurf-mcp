@@ -20,12 +20,15 @@ review and manage delegated work, create and update Projects, manage Project
 members and triggers, and drive Thread Tasks. Real work and its record live in
 the Projects those capabilities touch.
 
-SignalSurf publishes this catalogue per member and workspace:
+SignalSurf publishes the authorized collaboration surface for the member in one
+request:
 
 - `POST {authorization server}/api/mcp/direct-message`
+  - `{"action":"surface"}` — granted workspaces plus the shared member
+    capability catalogue, role instructions, descriptions, and argument
+    schemas. When no granted workspace is currently available, the response
+    omits the catalogue and role.
   - `{"action":"workspaces"}` — granted workspaces, access, and Surfer names.
-  - `{"action":"catalog","workspaceId":…}` — member capabilities with the
-    product's descriptions and argument schemas.
   - `{"action":"call","workspaceId":…,"tool":…,"arguments":{…}}` — run one
     after SignalSurf re-validates membership in that workspace.
 
@@ -56,10 +59,11 @@ workspace on every call.
 
 ## Several workspaces
 
-For a collaboration grant, the server loads the catalogue for every currently
-available granted workspace and merges them by tool name. A conflicting
-definition fails discovery. Workspaces the member has left remain visible from
-`list_workspaces` but do not prevent the remaining catalogues from loading.
+For a collaboration grant, the server loads the authorized workspace list and
+shared collaboration catalogue through one `surface` request. Workspaces the
+member has left remain visible from `list_workspaces` but do not make the
+catalogue available unless at least one granted workspace is currently
+available.
 
 Every published collaboration capability accepts `workspaceId`. It may be
 omitted only when the grant reaches one workspace; otherwise SignalSurf returns
@@ -82,9 +86,9 @@ relevant Thread when known; otherwise create a conclusion Thread. SignalSurf
 shows it as Project Surfer with the external client and requesting member as
 provenance, without copying the private transcript or waking Surfer.
 
-`tools/list` fails when an available collaboration workspace catalogue cannot
-load; returning a partial list could make clients cache a false capability
-surface. Retry after a transient `DIRECT_MESSAGE_UNAVAILABLE` response.
+`tools/list` fails when the collaboration surface cannot load; returning a
+partial list could make clients cache a false capability surface. Retry after a
+transient `DIRECT_MESSAGE_UNAVAILABLE` response.
 
 ## Collaboration relay contract
 
