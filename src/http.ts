@@ -434,8 +434,6 @@ export function createHttpApp(
         {
           ip: getClientIp(req, config.trustProxy),
           resource: config.resourceUrl,
-          includeWorkspaceCapabilities:
-            firstHeaderValue(req.headers["mcp-method"]) !== "initialize",
         }
       )
       if (!preauthBodyRead) {

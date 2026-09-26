@@ -1470,11 +1470,7 @@ export class SignalSurfRepository {
 
   async resolveMcpToken(
     token: string,
-    metadata: {
-      ip?: string | null
-      resource?: string | null
-      includeWorkspaceCapabilities?: boolean
-    } = {}
+    metadata: { ip?: string | null; resource?: string | null } = {}
   ): Promise<SignalSurfContext | null> {
     // Issued OAuth and manual tokens have disjoint, versioned prefixes. Route
     // directly to the owning table so every hosted request does not pay for a
@@ -1509,14 +1505,10 @@ export class SignalSurfRepository {
     }
     if (metadata.ip) update.last_used_ip = metadata.ip
 
-    const [updateResult, workspaces, workspaceCapabilitiesByWorkspaceId] =
-      await Promise.all([
-        this.db.from("mcp_tokens").update(update).eq("id", row.id),
-        this.resolveWorkspaceContexts(workspaceIds),
-        metadata.includeWorkspaceCapabilities === true
-          ? this.loadWorkspaceCapabilities(workspaceIds)
-          : Promise.resolve(undefined),
-      ])
+    const [updateResult, workspaces] = await Promise.all([
+      this.db.from("mcp_tokens").update(update).eq("id", row.id),
+      this.resolveWorkspaceContexts(workspaceIds),
+    ])
 
     if (updateResult.error) {
       console.error(
@@ -1530,9 +1522,6 @@ export class SignalSurfRepository {
         : workspaceIds[0]!,
       workspaceIds,
       workspaces,
-      ...(workspaceCapabilitiesByWorkspaceId
-        ? { workspaceCapabilitiesByWorkspaceId }
-        : {}),
       userId: row.created_by,
       role: "editor",
       tokenName: row.name ?? undefined,
@@ -1543,11 +1532,7 @@ export class SignalSurfRepository {
 
   private async resolveMcpOAuthToken(
     token: string,
-    metadata: {
-      ip?: string | null
-      resource?: string | null
-      includeWorkspaceCapabilities?: boolean
-    }
+    metadata: { ip?: string | null; resource?: string | null }
   ): Promise<SignalSurfContext | null> {
     const { data, error } = await this.db
       .from("mcp_oauth_tokens")
@@ -1587,14 +1572,10 @@ export class SignalSurfRepository {
     }
     if (metadata.ip) update.last_used_ip = metadata.ip
 
-    const [updateResult, workspaces, workspaceCapabilitiesByWorkspaceId] =
-      await Promise.all([
-        this.db.from("mcp_oauth_tokens").update(update).eq("id", row.id),
-        this.resolveWorkspaceContexts(workspaceIds),
-        metadata.includeWorkspaceCapabilities === true
-          ? this.loadWorkspaceCapabilities(workspaceIds)
-          : Promise.resolve(undefined),
-      ])
+    const [updateResult, workspaces] = await Promise.all([
+      this.db.from("mcp_oauth_tokens").update(update).eq("id", row.id),
+      this.resolveWorkspaceContexts(workspaceIds),
+    ])
 
     if (updateResult.error) {
       console.error(
@@ -1619,9 +1600,6 @@ export class SignalSurfRepository {
       workspaceIds,
       userId: row.user_id,
       workspaces,
-      ...(workspaceCapabilitiesByWorkspaceId
-        ? { workspaceCapabilitiesByWorkspaceId }
-        : {}),
       role: scopesImplyWriteAccess(scopes) ? "editor" : "viewer",
       tokenName,
       scopes,

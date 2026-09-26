@@ -63,11 +63,7 @@ function contextFromTokenEntry(entry: TokenEntry): SignalSurfContext {
 export type DatabaseTokenResolver = {
   resolveMcpToken: (
     token: string,
-    metadata?: {
-      ip?: string | null
-      resource?: string | null
-      includeWorkspaceCapabilities?: boolean
-    }
+    metadata?: { ip?: string | null; resource?: string | null }
   ) => Promise<SignalSurfContext | null>
 }
 
@@ -111,11 +107,7 @@ export async function resolveHttpTokenContext(
   >,
   token: string | undefined,
   databaseResolver: DatabaseTokenResolver,
-  metadata?: {
-    ip?: string | null
-    resource?: string | null
-    includeWorkspaceCapabilities?: boolean
-  }
+  metadata?: { ip?: string | null; resource?: string | null }
 ): Promise<SignalSurfContext> {
   if (config.authMode !== "database") {
     return resolveTokenContext(config, token)
