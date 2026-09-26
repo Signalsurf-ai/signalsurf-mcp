@@ -1552,7 +1552,7 @@ export class SignalSurfRepository {
       return null
     }
 
-    const [clientResult, workspaceIds] = await Promise.all([
+    const [clientSettlement, workspaceSettlement] = await Promise.allSettled([
       this.db
         .from("mcp_oauth_clients")
         .select("client_id, client_name, revoked_at")
@@ -1562,9 +1562,17 @@ export class SignalSurfRepository {
       this.currentWorkspaceIdsForUser(row.user_id, oauthTokenWorkspaceIds(row)),
     ])
 
+    if (clientSettlement.status === "rejected") {
+      throw clientSettlement.reason
+    }
+    const clientResult = clientSettlement.value
     requireNoDbError(clientResult.error, "Failed to resolve MCP OAuth client")
     const client = clientResult.data as McpOAuthClientRow | null
     if (!client) return null
+    if (workspaceSettlement.status === "rejected") {
+      throw workspaceSettlement.reason
+    }
+    const workspaceIds = workspaceSettlement.value
     if (workspaceIds.length === 0) return null
 
     const update: Record<string, unknown> = {
