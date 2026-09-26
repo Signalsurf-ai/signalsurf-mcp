@@ -1812,41 +1812,56 @@ describe("SignalSurfRepository", () => {
     })
   })
 
-  it("rejects an invalid OAuth client before a concurrent membership failure", async () => {
+  it("rejects an invalid OAuth client without waiting on concurrent membership", async () => {
     const accessToken = "ssmcp_at_revoked_client"
-    const db = new FakeSupabase(
-      {
-        mcp_oauth_tokens: [
-          {
-            id: "00000000-0000-4000-8000-000000000604",
-            client_id: "ssmcp_client_revoked",
-            user_id: context.userId,
-            workspace_id: context.workspaceId,
-            workspace_ids: [context.workspaceId],
-            scope: "mcp:dm offline_access",
-            resource: "https://mcp.signalsurf.ai/mcp",
-            access_token_sha256: sha256Hex(accessToken),
-            access_token_expires_at: "2999-01-01T00:00:00Z",
-            revoked_at: null,
-          },
-        ],
-        mcp_oauth_clients: [
-          {
-            client_id: "ssmcp_client_revoked",
-            client_name: "Revoked",
-            revoked_at: "2026-09-25T00:00:00Z",
-          },
-        ],
+    const db = new FakeSupabase({
+      mcp_oauth_tokens: [
+        {
+          id: "00000000-0000-4000-8000-000000000604",
+          client_id: "ssmcp_client_revoked",
+          user_id: context.userId,
+          workspace_id: context.workspaceId,
+          workspace_ids: [context.workspaceId],
+          scope: "mcp:dm offline_access",
+          resource: "https://mcp.signalsurf.ai/mcp",
+          access_token_sha256: sha256Hex(accessToken),
+          access_token_expires_at: "2999-01-01T00:00:00Z",
+          revoked_at: null,
+        },
+      ],
+      mcp_oauth_clients: [
+        {
+          client_id: "ssmcp_client_revoked",
+          client_name: "Revoked",
+          revoked_at: "2026-09-25T00:00:00Z",
+        },
+      ],
+    })
+    let membershipStarted = false
+    const stalledDb = {
+      from(table: string) {
+        if (table !== "workspaces") return db.from(table)
+        membershipStarted = true
+        return {
+          select: () => ({
+            in: () => new Promise<never>(() => {}),
+          }),
+        }
       },
-      { tableErrors: { workspaces: { message: "membership unavailable" } } }
-    )
-    const repo = new SignalSurfRepository(db as any)
+    }
+    const repo = new SignalSurfRepository(stalledDb as any)
 
-    await expect(
+    const outcome = await Promise.race([
       repo.resolveMcpToken(accessToken, {
         resource: "https://mcp.signalsurf.ai/mcp",
-      })
-    ).resolves.toBeNull()
+      }),
+      new Promise<"timed-out">((resolve) =>
+        setTimeout(() => resolve("timed-out"), 100)
+      ),
+    ])
+
+    expect(membershipStarted).toBe(true)
+    expect(outcome).toBeNull()
   })
 
   it.each([
