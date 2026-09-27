@@ -1,0 +1,33 @@
+{
+  "name": "@signalsurf/mcp-contract",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./access-token": {
+      "types": "./dist/access-token.d.ts",
+      "import": "./dist/access-token.js"
+    },
+    "./project-tools": {
+      "types": "./dist/project-tools.d.ts",
+      "import": "./dist/project-tools.js"
+    },
+    "./scopes": {
+      "types": "./dist/scopes.d.ts",
+      "import": "./dist/scopes.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "5.3.3"
+  }
+}

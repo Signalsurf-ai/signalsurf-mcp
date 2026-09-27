@@ -79,9 +79,7 @@ describe("Enrich column enrichment", () => {
     expect(result.reused).toBe(false)
     expect(result.workflowId).toBeTruthy()
 
-    const workflow = db.tables.workflows.find(
-      (p) => p.id === result.workflowId
-    )
+    const workflow = db.tables.workflows.find((p) => p.id === result.workflowId)
     expect(workflow?.workspace_id).toBe(context.workspaceId)
     expect(workflow?.surf_prompt).toContain("work email")
     expect(workflow?.relevance_threshold).toBe(0)

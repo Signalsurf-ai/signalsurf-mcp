@@ -30,7 +30,7 @@
     "enable_enrich",
     "find_capabilities",
     "get_brand_context",
-    "get_context",
+    "get_workspace_context",
     "get_enrichment_context",
     "get_node_upstream_context",
     "get_surf_job",

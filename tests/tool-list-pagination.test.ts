@@ -124,9 +124,10 @@ describe("tools/list pagination", () => {
       },
       required: ["description", "nested"],
     })
-    expect(
-      listed.tools[0]?.inputSchema.properties?.description
-    ).toHaveProperty("description", "Member-provided description")
+    expect(listed.tools[0]?.inputSchema.properties?.description).toHaveProperty(
+      "description",
+      "Member-provided description"
+    )
     const safetyDescription = listed.tools.find(
       (tool) => tool.name === "run_enrich"
     )?.description
@@ -206,8 +207,9 @@ describe("tools/list pagination", () => {
       )
     ).toBe(true)
     expect(names).toEqual(
-      Array.from({ length: 40 }, (_, index) =>
-        `tool_${index.toString().padStart(2, "0")}`
+      Array.from(
+        { length: 40 },
+        (_, index) => `tool_${index.toString().padStart(2, "0")}`
       )
     )
 

@@ -1,4 +1,9 @@
 import { createHash, timingSafeEqual } from "node:crypto"
+import {
+  mcpServiceDelegationAudience,
+  signMcpAccessToken,
+  verifyMcpAccessToken,
+} from "@signalsurf/mcp-contract"
 
 import {
   grantedCapabilitiesForScopes,
@@ -60,13 +65,6 @@ function contextFromTokenEntry(entry: TokenEntry): SignalSurfContext {
   return context
 }
 
-export type DatabaseTokenResolver = {
-  resolveMcpToken: (
-    token: string,
-    metadata?: { ip?: string | null; resource?: string | null }
-  ) => Promise<SignalSurfContext | null>
-}
-
 export function resolveTokenContext(
   config: Pick<AppConfig, "authDisabled" | "directContext" | "tokenEntries">,
   token: string | undefined
@@ -103,10 +101,15 @@ export function resolveTokenContext(
 export async function resolveHttpTokenContext(
   config: Pick<
     AppConfig,
-    "authDisabled" | "directContext" | "tokenEntries" | "authMode"
+    | "authDisabled"
+    | "directContext"
+    | "tokenEntries"
+    | "authMode"
+    | "accessTokenSecret"
+    | "authorizationServerUrl"
+    | "resourceUrl"
   >,
   token: string | undefined,
-  databaseResolver: DatabaseTokenResolver,
   metadata?: { ip?: string | null; resource?: string | null }
 ): Promise<SignalSurfContext> {
   if (config.authMode !== "database") {
@@ -124,14 +127,70 @@ export async function resolveHttpTokenContext(
     })
   }
 
-  const context = await databaseResolver.resolveMcpToken(token, metadata)
-  if (!context) {
+  const claims =
+    config.accessTokenSecret && config.authorizationServerUrl
+      ? await verifyMcpAccessToken({
+          token,
+          secret: config.accessTokenSecret,
+          issuer: config.authorizationServerUrl,
+          audience: metadata?.resource ?? config.resourceUrl,
+        })
+      : null
+  if (!claims) {
     throw new UserFacingError("Invalid MCP bearer token", {
       code: "UNAUTHORIZED",
       status: 401,
     })
   }
-  return context
+  return {
+    workspaceId: claims.workspaceIds[0]!,
+    workspaceIds: claims.workspaceIds,
+    userId: claims.sub,
+    role: claims.role,
+    tokenName: `OAuth: ${claims.clientId}`,
+    scopes: claims.scopes,
+    authKind: "oauth",
+    oauthTokenId: claims.jti,
+    oauthGrantId: claims.grantId,
+    oauthClientId: claims.clientId,
+    oauthAccessTokenExpiresAt: claims.exp,
+  }
+}
+
+export async function issueMcpServiceDelegation(
+  config: Pick<AppConfig, "accessTokenSecret" | "authorizationServerUrl">,
+  context: SignalSurfContext,
+  now = Math.floor(Date.now() / 1000)
+): Promise<string | undefined> {
+  if (
+    context.authKind !== "oauth" ||
+    !config.accessTokenSecret ||
+    !config.authorizationServerUrl ||
+    !context.userId ||
+    !context.oauthTokenId ||
+    !context.oauthGrantId ||
+    !context.oauthClientId ||
+    !context.oauthAccessTokenExpiresAt ||
+    context.oauthAccessTokenExpiresAt <= now
+  ) {
+    return undefined
+  }
+  return signMcpAccessToken({
+    secret: config.accessTokenSecret,
+    claims: {
+      iss: config.authorizationServerUrl,
+      aud: mcpServiceDelegationAudience(config.authorizationServerUrl),
+      sub: context.userId,
+      iat: now,
+      exp: Math.min(context.oauthAccessTokenExpiresAt, now + 60),
+      jti: context.oauthTokenId,
+      clientId: context.oauthClientId,
+      grantId: context.oauthGrantId,
+      workspaceIds: context.workspaceIds ?? [context.workspaceId],
+      scopes: context.scopes ?? [],
+      role: context.role,
+    },
+  })
 }
 
 export function resolveStdioContext(config: AppConfig): SignalSurfContext {
@@ -271,7 +330,10 @@ export function authorizedWorkspaces(
 ): SignalSurfWorkspaceContext[] {
   const workspaceIds = authorizedWorkspaceIds(context)
   const workspacesById = new Map(
-    (context.workspaces ?? []).map((workspace) => [workspace.workspaceId, workspace])
+    (context.workspaces ?? []).map((workspace) => [
+      workspace.workspaceId,
+      workspace,
+    ])
   )
 
   return workspaceIds.map((workspaceId) => {
@@ -298,7 +360,12 @@ export function resolveWorkspaceContext(
         { code: "BAD_REQUEST", status: 400 }
       )
     }
-    return { ...context, workspaceId: workspaceIds[0]!, workspaceIds, workspaces }
+    return {
+      ...context,
+      workspaceId: workspaceIds[0]!,
+      workspaceIds,
+      workspaces,
+    }
   }
 
   if (!workspaceIds.includes(requestedWorkspaceId)) {
@@ -308,5 +375,10 @@ export function resolveWorkspaceContext(
     )
   }
 
-  return { ...context, workspaceId: requestedWorkspaceId, workspaceIds, workspaces }
+  return {
+    ...context,
+    workspaceId: requestedWorkspaceId,
+    workspaceIds,
+    workspaces,
+  }
 }

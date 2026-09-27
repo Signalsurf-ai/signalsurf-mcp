@@ -1,4 +1,9 @@
 import http, { type Server } from "node:http"
+import {
+  mcpServiceDelegationAudience,
+  signMcpAccessToken,
+  verifyMcpAccessToken,
+} from "@signalsurf/mcp-contract"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { sha256Hex } from "../src/auth.js"
@@ -14,6 +19,34 @@ import { FakeSupabase } from "./fake-supabase.js"
 
 const workspaceId = "00000000-0000-4000-8000-000000000001"
 const token = "ssmcp_test_token"
+const accessTokenSecret = "test-mcp-access-token-secret-at-least-32-bytes"
+const webServiceToken = "test-web-service-token-at-least-32-bytes"
+
+function signOAuthToken(input: {
+  userId: string
+  workspaceIds?: string[]
+  scopes: string[]
+  resourceUrl: string
+  issuer?: string
+}) {
+  const now = Math.floor(Date.now() / 1000)
+  return signMcpAccessToken({
+    secret: accessTokenSecret,
+    claims: {
+      iss: input.issuer ?? "https://app.signalsurf.test",
+      aud: input.resourceUrl,
+      sub: input.userId,
+      iat: now,
+      exp: now + 600,
+      jti: "00000000-0000-4000-8000-000000000201",
+      clientId: "ssmcp_client_test",
+      grantId: "00000000-0000-4000-8000-000000000202",
+      workspaceIds: input.workspaceIds ?? [workspaceId],
+      scopes: input.scopes,
+      role: "editor",
+    },
+  })
+}
 
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -27,6 +60,8 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     path: "/mcp",
     resourceUrl: "http://127.0.0.1:3333/mcp",
     authorizationServerUrl: "https://app.signalsurf.test",
+    accessTokenSecret,
+    webServiceToken,
     allowedHosts: ["127.0.0.1", "localhost", "::1"],
     authDisabled: false,
     tokenEntries: [
@@ -57,7 +92,12 @@ function makeRepository() {
 async function listen(
   config = makeConfig(),
   createRepository = makeRepository,
-  preauthDiscoveryTimeoutMs?: number
+  preauthDiscoveryTimeoutMs?: number,
+  projectExecutionFetch: typeof fetch = (async () =>
+    new Response(JSON.stringify({ ok: true, workspaces: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })) as typeof fetch
 ): Promise<{
   server: Server
   url: string
@@ -65,11 +105,7 @@ async function listen(
   const app = createHttpApp(config, {
     createRepository,
     preauthDiscoveryTimeoutMs,
-    directMessageFetch: (async () =>
-      new Response(JSON.stringify({ ok: true, workspaces: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      })) as typeof fetch,
+    projectExecutionFetch,
   })
   const server = await new Promise<Server>((resolve) => {
     const listener = app.listen(0, "127.0.0.1", () => resolve(listener))
@@ -485,10 +521,22 @@ describe("HTTP transport", () => {
     })
   })
 
-  it("passes the existing MCP grant to the provider-neutral Web control plane", async () => {
+  it("passes an audience-bound signed delegation to owned Web control planes", async () => {
     const createRepository = vi.fn(() => makeRepository())
+    const authorizationServerUrl = "https://app.signalsurf.ai"
+    const resourceUrl = "https://mcp.signalsurf.ai/mcp"
+    const oauthToken = await signOAuthToken({
+      userId: "00000000-0000-4000-8000-000000000102",
+      scopes: ["mcp:projects.read"],
+      resourceUrl,
+      issuer: authorizationServerUrl,
+    })
     const { server, url } = await listen(
-      makeConfig({ authorizationServerUrl: "https://app.signalsurf.ai" }),
+      makeConfig({
+        authMode: "database",
+        authorizationServerUrl,
+        resourceUrl,
+      }),
       createRepository
     )
     listeners.push(server)
@@ -497,7 +545,7 @@ describe("HTTP transport", () => {
       method: "POST",
       headers: {
         Accept: "application/json, text/event-stream",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${oauthToken}`,
         "Content-Type": "application/json",
       },
       body: initializeBody(),
@@ -505,12 +553,105 @@ describe("HTTP transport", () => {
 
     expect(response.status).toBe(200)
     expect(createRepository).toHaveBeenCalledWith({
-      authorizationServerUrl: "https://app.signalsurf.ai",
-      accessToken: token,
+      authorizationServerUrl,
+      serviceToken: webServiceToken,
+      delegationToken: expect.any(String),
+    })
+    const delegationToken = createRepository.mock.calls[0]?.[0].delegationToken
+    expect(delegationToken).not.toBe(oauthToken)
+    await expect(
+      verifyMcpAccessToken({
+        token: delegationToken!,
+        secret: accessTokenSecret,
+        issuer: authorizationServerUrl,
+        audience: mcpServiceDelegationAudience(authorizationServerUrl),
+      })
+    ).resolves.toMatchObject({
+      sub: "00000000-0000-4000-8000-000000000102",
+      workspaceIds: [workspaceId],
+      scopes: ["mcp:projects.read"],
     })
   })
 
-  it("resolves hosted database tokens for HTTP auth", async () => {
+  it("executes a scoped Project context call with only the service credential and delegation", async () => {
+    const authorizationServerUrl = "https://app.signalsurf.ai"
+    const resourceUrl = "https://mcp.signalsurf.ai/mcp"
+    const userId = "00000000-0000-4000-8000-000000000102"
+    const projectId = "00000000-0000-4000-8000-000000000103"
+    const projectExecutionFetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: { project: { id: projectId, name: "Validate CFO ICP" } },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    ) as unknown as typeof fetch
+    const oauthToken = await signOAuthToken({
+      userId,
+      scopes: ["mcp:projects.read", "mcp:conversations.read"],
+      resourceUrl,
+      issuer: authorizationServerUrl,
+    })
+    const { server, url } = await listen(
+      makeConfig({
+        authMode: "database",
+        authorizationServerUrl,
+        resourceUrl,
+      }),
+      makeRepository,
+      undefined,
+      projectExecutionFetch
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${oauthToken}`,
+        "Content-Type": "application/json",
+      },
+      body: callToolBody("get_project_context", { workspaceId, projectId }),
+    })
+
+    expect(response.status).toBe(200)
+    const body = await readMcpJson(response)
+    expect(JSON.parse(body.result.content[0].text)).toMatchObject({
+      project: { id: projectId, name: "Validate CFO ICP" },
+    })
+    expect(projectExecutionFetch).toHaveBeenCalledTimes(1)
+    const [, init] = projectExecutionFetch.mock.calls[0]!
+    expect(init?.headers).toMatchObject({
+      Authorization: `Bearer ${webServiceToken}`,
+    })
+    expect(String(init?.headers)).not.toContain(oauthToken)
+    const forwarded = JSON.parse(String(init?.body)) as {
+      delegationToken: string
+    } & Record<string, unknown>
+    expect(forwarded).toMatchObject({
+      action: "call",
+      tool: "get_project_context",
+      workspaceId,
+      arguments: { projectId },
+    })
+    expect(forwarded.delegationToken).not.toBe(oauthToken)
+    await expect(
+      verifyMcpAccessToken({
+        token: forwarded.delegationToken,
+        secret: accessTokenSecret,
+        issuer: authorizationServerUrl,
+        audience: mcpServiceDelegationAudience(authorizationServerUrl),
+      })
+    ).resolves.toMatchObject({
+      sub: userId,
+      workspaceIds: [workspaceId],
+      scopes: ["mcp:projects.read", "mcp:conversations.read"],
+    })
+  })
+
+  it("rejects legacy opaque tokens in hosted OAuth mode", async () => {
     const userId = "00000000-0000-4000-8000-000000000102"
     const db = new FakeSupabase({
       workspaces: [{ id: workspaceId, organization_id: null }],
@@ -554,9 +695,9 @@ describe("HTTP transport", () => {
       body: initializeBody(),
     })
 
-    expect(response.status).toBe(200)
-    expect(db.tables.mcp_tokens[0].last_used_at).toEqual(expect.any(String))
-    expect(db.tables.mcp_tokens[0].last_used_ip).toEqual(expect.any(String))
+    expect(response.status).toBe(401)
+    expect(db.tables.mcp_tokens[0].last_used_at).toBeNull()
+    expect(db.tables.mcp_tokens[0].last_used_ip).toBeNull()
   })
 
   it("rejects revoked hosted database tokens", async () => {
@@ -598,7 +739,7 @@ describe("HTTP transport", () => {
     expect(response.status).toBe(401)
   })
 
-  it("does not trust spoofed forwarded IPs unless proxy trust is enabled", async () => {
+  it("does not accept a spoofed client IP as authentication", async () => {
     const userId = "00000000-0000-4000-8000-000000000102"
     const db = new FakeSupabase({
       workspaces: [{ id: workspaceId, organization_id: null }],
@@ -642,8 +783,8 @@ describe("HTTP transport", () => {
       body: initializeBody(),
     })
 
-    expect(response.status).toBe(200)
-    expect(db.tables.mcp_tokens[0].last_used_ip).not.toBe("203.0.113.9")
+    expect(response.status).toBe(401)
+    expect(db.tables.mcp_tokens[0].last_used_ip).toBeNull()
   })
 
   it("rejects missing and invalid bearer tokens", async () => {
@@ -702,7 +843,7 @@ describe("HTTP transport", () => {
       'resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"'
     )
     expect(response.headers.get("www-authenticate")).toContain(
-      `scope="${["mcp:dm", ...MCP_DEFAULT_RESOURCE_SCOPES].join(" ")}"`
+      `scope="${MCP_DEFAULT_RESOURCE_SCOPES.join(" ")}"`
     )
     expect(response.headers.get("www-authenticate")).not.toContain(
       MCP_OFFLINE_ACCESS_SCOPE
@@ -735,7 +876,7 @@ describe("HTTP transport", () => {
     expect(body).toMatchObject({
       resource: "https://mcp.example.com/mcp",
       authorization_servers: ["https://app.example.com"],
-      scopes_supported: ["mcp:dm", ...MCP_RESOURCE_SCOPES],
+      scopes_supported: MCP_RESOURCE_SCOPES,
     })
     expect(body.scopes_supported).not.toContain(MCP_OFFLINE_ACCESS_SCOPE)
     expect(body.scopes_supported).toEqual(
@@ -750,8 +891,20 @@ describe("HTTP transport", () => {
 
   it("resolves OAuth access tokens with harmless additive scopes", async () => {
     const resourceUrl = "https://mcp.example.com/mcp"
-    const oauthToken = "ssmcp_at_additive_scopes"
     const userId = "00000000-0000-4000-8000-000000000202"
+    const signedToken = await signOAuthToken({
+      userId,
+      resourceUrl,
+      scopes: [
+        "mcp:projects.read",
+        "mcp:projects.write",
+        "mcp:read",
+        "mcp:write",
+        "offline_access",
+        "openid",
+        "profile",
+      ],
+    })
     const db = new FakeSupabase({
       workspaces: [{ id: workspaceId, organization_id: null }],
       workspace_members: [
@@ -765,9 +918,10 @@ describe("HTTP transport", () => {
           client_id: "ssmcp_client_test",
           user_id: userId,
           workspace_id: workspaceId,
-          scope: "mcp:dm mcp:read mcp:write offline_access openid profile",
+          scope:
+            "mcp:projects.read mcp:projects.write mcp:read mcp:write offline_access openid profile",
           resource: resourceUrl,
-          access_token_sha256: sha256Hex(oauthToken),
+          access_token_sha256: sha256Hex(signedToken),
           access_token_expires_at: "2999-01-01T00:00:00.000Z",
           revoked_at: null,
           last_used_at: null,
@@ -803,7 +957,7 @@ describe("HTTP transport", () => {
       method: "POST",
       headers: {
         Accept: "application/json, text/event-stream",
-        Authorization: `Bearer ${oauthToken}`,
+        Authorization: `Bearer ${signedToken}`,
         "Content-Type": "application/json",
         "MCP-Method": "initialize",
       },
@@ -811,10 +965,9 @@ describe("HTTP transport", () => {
     })
 
     expect(response.status).toBe(200)
-    expect(db.tables.mcp_oauth_tokens[0].last_used_at).toEqual(
-      expect.any(String)
-    )
+    expect(db.tables.mcp_oauth_tokens[0].last_used_at).toBeNull()
     const queriedTables = from.mock.calls.map(([table]) => table)
+    expect(queriedTables).not.toContain("mcp_oauth_tokens")
     expect(queriedTables).not.toContain("mcp_tokens")
     expect(queriedTables).not.toContain("workspace_capability_overrides")
     expect(queriedTables).not.toContain("workspace_subscriptions")
@@ -823,6 +976,12 @@ describe("HTTP transport", () => {
   it("returns an OAuth insufficient-scope challenge for scoped HTTP tool calls", async () => {
     const resourceUrl = "https://mcp.example.com/mcp"
     const userId = "00000000-0000-4000-8000-000000000202"
+    const signedToken = await signOAuthToken({
+      userId,
+      resourceUrl,
+      issuer: "https://app.example.com",
+      scopes: ["mcp:projects.read", "mcp:tables.read", "mcp:tables.write"],
+    })
     const db = new FakeSupabase({
       workspaces: [{ id: workspaceId, organization_id: null }],
       workspace_members: [
@@ -836,7 +995,7 @@ describe("HTTP transport", () => {
           client_id: "ssmcp_client_test",
           user_id: userId,
           workspace_id: workspaceId,
-          scope: "mcp:dm mcp:tables.read mcp:tables.write",
+          scope: "mcp:projects.read mcp:tables.read mcp:tables.write",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
           access_token_expires_at: "2999-01-01T00:00:00.000Z",
@@ -872,7 +1031,7 @@ describe("HTTP transport", () => {
       method: "POST",
       headers: {
         Accept: "application/json, text/event-stream",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${signedToken}`,
         "Content-Type": "application/json",
       },
       body: callToolBody("create_workflow", { name: "Denied" }),
@@ -900,10 +1059,80 @@ describe("HTTP transport", () => {
     expect(db.tables.workflows).toHaveLength(0)
   })
 
+  it("returns the OAuth insufficient-scope challenge for Project tools", async () => {
+    const resourceUrl = "https://mcp.example.com/mcp"
+    const userId = "00000000-0000-4000-8000-000000000202"
+    const signedToken = await signOAuthToken({
+      userId,
+      resourceUrl,
+      issuer: "https://app.example.com",
+      scopes: ["mcp:tables.read"],
+    })
+    const db = new FakeSupabase({
+      workspaces: [{ id: workspaceId, organization_id: null }],
+      workspace_members: [
+        { workspace_id: workspaceId, user_id: userId, role: "member" },
+      ],
+      organization_members: [],
+      workflows: [],
+      databases: [],
+      entries: [],
+      surf_jobs: [],
+      user_preferences: [],
+      sources: [],
+    })
+    const projectExecutionFetch = vi.fn<typeof fetch>()
+    const { server, url } = await listen(
+      makeConfig({
+        authMode: "database",
+        authorizationServerUrl: "https://app.example.com",
+        resourceUrl,
+        tokenEntries: [],
+      }),
+      () => new SignalSurfRepository(db as any),
+      undefined,
+      projectExecutionFetch
+    )
+    listeners.push(server)
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        Authorization: `Bearer ${signedToken}`,
+        "Content-Type": "application/json",
+      },
+      body: callToolBody("list_projects", {}),
+    })
+
+    expect(response.status).toBe(403)
+    expect(response.headers.get("www-authenticate")).toContain(
+      'error="insufficient_scope"'
+    )
+    expect(response.headers.get("www-authenticate")).toContain(
+      'scope="mcp:projects.read"'
+    )
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      code: "INSUFFICIENT_SCOPE",
+      details: {
+        requiredScopes: ["mcp:projects.read"],
+        toolName: "list_projects",
+      },
+    })
+    expect(projectExecutionFetch).not.toHaveBeenCalled()
+  })
+
   it("requires explicit workspaceId for multi-workspace OAuth HTTP tool calls", async () => {
     const resourceUrl = "https://mcp.example.com/mcp"
     const secondWorkspaceId = "00000000-0000-4000-8000-000000000002"
     const userId = "00000000-0000-4000-8000-000000000202"
+    const signedToken = await signOAuthToken({
+      userId,
+      resourceUrl,
+      workspaceIds: [workspaceId, secondWorkspaceId],
+      scopes: ["mcp:projects.read", "mcp:read"],
+    })
     const db = new FakeSupabase({
       mcp_tokens: [],
       mcp_oauth_tokens: [
@@ -913,7 +1142,7 @@ describe("HTTP transport", () => {
           user_id: userId,
           workspace_id: workspaceId,
           workspace_ids: [workspaceId, secondWorkspaceId],
-          scope: "mcp:dm mcp:read",
+          scope: "mcp:projects.read mcp:read",
           resource: resourceUrl,
           access_token_sha256: sha256Hex(token),
           access_token_expires_at: "2999-01-01T00:00:00.000Z",
@@ -1000,10 +1229,10 @@ describe("HTTP transport", () => {
       method: "POST",
       headers: {
         Accept: "application/json, text/event-stream",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${signedToken}`,
         "Content-Type": "application/json",
       },
-      body: callToolBody("get_context"),
+      body: callToolBody("get_workspace_context"),
     })
 
     expect(contextResponse.status).toBe(200)
@@ -1026,7 +1255,7 @@ describe("HTTP transport", () => {
       method: "POST",
       headers: {
         Accept: "application/json, text/event-stream",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${signedToken}`,
         "Content-Type": "application/json",
       },
       body: callToolBody("list_workflows"),
@@ -1043,7 +1272,7 @@ describe("HTTP transport", () => {
       method: "POST",
       headers: {
         Accept: "application/json, text/event-stream",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${signedToken}`,
         "Content-Type": "application/json",
       },
       body: callToolBody("list_workflows", { workspaceId: secondWorkspaceId }),
@@ -1227,9 +1456,7 @@ describe("HTTP transport", () => {
       expect(response.headers.get("location")).toBe(
         "https://www.signalsurf.ai/apple-touch-icon.png"
       )
-      expect(response.headers.get("cache-control")).toBe(
-        "public, max-age=3600"
-      )
+      expect(response.headers.get("cache-control")).toBe("public, max-age=3600")
     }
   })
 
@@ -1325,15 +1552,15 @@ describe("HTTP transport", () => {
 
     const initializeResponse = await requestWithHost(url, "app.example.com")
     expect(initializeResponse.status).toBe(200)
-    expect(parseMcpText(initializeResponse.body).result.serverInfo.icons).toEqual(
-      [
-        {
-          src: "https://app.example.com/apple-touch-icon.png",
-          mimeType: "image/png",
-          sizes: ["180x180"],
-        },
-      ]
-    )
+    expect(
+      parseMcpText(initializeResponse.body).result.serverInfo.icons
+    ).toEqual([
+      {
+        src: "https://app.example.com/apple-touch-icon.png",
+        mimeType: "image/png",
+        sizes: ["180x180"],
+      },
+    ])
   })
 
   it("does not advertise an icon that the same-origin server cannot serve", async () => {
@@ -1415,8 +1642,38 @@ describe("HTTP transport", () => {
         SIGNALSURF_MCP_AUTH_MODE: "database",
         SIGNALSURF_MCP_RESOURCE_URL: "https://mcp.example.com/mcp",
         SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL: "https://app.example.com",
+        SIGNALSURF_MCP_ACCESS_TOKEN_SECRET: accessTokenSecret,
+        SIGNALSURF_MCP_WEB_SERVICE_TOKEN: webServiceToken,
       })
     ).toThrow("SIGNALSURF_MCP_ALLOWED_HOSTS is required")
+  })
+
+  it("rejects missing, short, or blank hosted service secrets", () => {
+    const hosted = {
+      SIGNALSURF_SUPABASE_URL: "https://example.supabase.co",
+      SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      SIGNALSURF_MCP_TRANSPORT: "http",
+      SIGNALSURF_MCP_AUTH_MODE: "database",
+      SIGNALSURF_MCP_RESOURCE_URL: "https://mcp.example.com/mcp",
+      SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL: "https://app.example.com",
+      SIGNALSURF_MCP_ALLOWED_HOSTS: "mcp.example.com",
+    }
+    expect(() => loadConfig(hosted)).toThrow(
+      "SIGNALSURF_MCP_ACCESS_TOKEN_SECRET"
+    )
+    expect(() =>
+      loadConfig({
+        ...hosted,
+        SIGNALSURF_MCP_ACCESS_TOKEN_SECRET: "too-short",
+      })
+    ).toThrow("SIGNALSURF_MCP_ACCESS_TOKEN_SECRET")
+    expect(() =>
+      loadConfig({
+        ...hosted,
+        SIGNALSURF_MCP_ACCESS_TOKEN_SECRET: accessTokenSecret,
+        SIGNALSURF_MCP_WEB_SERVICE_TOKEN: "   ",
+      })
+    ).toThrow("SIGNALSURF_MCP_WEB_SERVICE_TOKEN")
   })
 
   it("uses platform PORT defaults for hosted HTTP deployments", () => {

@@ -81,8 +81,10 @@ function scalarEquals(left: unknown, right: unknown): boolean {
 
 function compareEquals(cell: unknown, value: unknown): boolean {
   if (value === null || value === undefined) return false
-  if (Array.isArray(value)) return value.some((entry) => scalarEquals(cell, entry))
-  if (Array.isArray(cell)) return cell.some((entry) => scalarEquals(entry, value))
+  if (Array.isArray(value))
+    return value.some((entry) => scalarEquals(cell, entry))
+  if (Array.isArray(cell))
+    return cell.some((entry) => scalarEquals(entry, value))
   return scalarEquals(cell, value)
 }
 
@@ -119,8 +121,8 @@ function compareIn(cell: unknown, value: unknown): boolean {
     value === null || value === undefined
       ? []
       : Array.isArray(value)
-      ? value
-      : [value]
+        ? value
+        : [value]
   if (list.length === 0) return false
   if (Array.isArray(cell)) {
     return cell.some((entry) =>

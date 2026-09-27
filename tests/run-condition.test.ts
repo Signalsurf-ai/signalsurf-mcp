@@ -23,18 +23,14 @@ describe("evaluateRunCondition", () => {
       column: "industry",
       predicate: "has_value",
     }
-    expect(evaluateRunCondition(hasValue, row({ industry: "SaaS" }))).toBe(
-      true
-    )
+    expect(evaluateRunCondition(hasValue, row({ industry: "SaaS" }))).toBe(true)
     expect(evaluateRunCondition(hasValue, row({ industry: "" }))).toBe(false)
     expect(evaluateRunCondition(hasValue, row({ industry: null }))).toBe(false)
     expect(evaluateRunCondition(hasValue, row({ industry: [] }))).toBe(false)
     expect(evaluateRunCondition(hasValue, row({}))).toBe(false)
 
     const isEmpty: RunCondition = { column: "industry", predicate: "is_empty" }
-    expect(evaluateRunCondition(isEmpty, row({ industry: "SaaS" }))).toBe(
-      false
-    )
+    expect(evaluateRunCondition(isEmpty, row({ industry: "SaaS" }))).toBe(false)
     expect(evaluateRunCondition(isEmpty, row({ industry: "" }))).toBe(true)
     expect(evaluateRunCondition(isEmpty, row({}))).toBe(true)
   })

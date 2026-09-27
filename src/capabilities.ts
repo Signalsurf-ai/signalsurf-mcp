@@ -3,6 +3,8 @@ export const MCP_LEGACY_WRITE_SCOPE = "mcp:write"
 export const MCP_OFFLINE_ACCESS_SCOPE = "offline_access"
 
 export const MCP_GRANULAR_SCOPES = [
+  "mcp:projects.read",
+  "mcp:projects.write",
   "mcp:workflows.read",
   "mcp:workflows.write",
   "mcp:workflows.execute",
@@ -61,11 +63,6 @@ export const MCP_RESOURCE_SCOPES = [
   ...MCP_GRANULAR_SCOPES,
 ] as const
 
-// This scope grants the member/Project collaboration surface. It is advertised
-// first in the default request; granular scopes independently grant product
-// operations on the same connection.
-export const MCP_DM_SCOPE = "mcp:dm"
-
 export const MCP_DEFAULT_RESOURCE_SCOPES = MCP_GRANULAR_SCOPES.filter(
   (scope) =>
     scope !== "mcp:campaigns.start" &&
@@ -98,7 +95,7 @@ export type McpCapability =
   | "sender_infrastructure.read"
 
 export type PublicMcpToolName =
-  | "get_context"
+  | "get_workspace_context"
   | "get_brand_context"
   | "get_enrichment_context"
   | "find_capabilities"
@@ -207,10 +204,10 @@ const DELETE_ANNOTATIONS = {
 } as const
 
 export const PUBLIC_MCP_TOOLS = {
-  get_context: {
-    title: "Get SignalSurf MCP Context",
+  get_workspace_context: {
+    title: "Get Workspace Context",
     description:
-      "Return authorized workspace ids and names, user, role, scopes, and capability context bound to this MCP connection.",
+      "Load the canonical Agent identity, authorized Workspaces, member authority, grants, effective domain capabilities, and bounded active-Project attention for the selected Workspace. Call this at session start and after switching Workspaces.",
     requiredCapability: "context.read",
     surferSurface: "connection context",
     publicStatus: "supported",
@@ -740,13 +737,10 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "sender_infrastructure.read",
   ],
   [MCP_OFFLINE_ACCESS_SCOPE]: [],
+  "mcp:projects.read": ["context.read"],
+  "mcp:projects.write": ["context.read"],
   "mcp:workflows.read": ["context.read", "workflows.read"],
-  "mcp:workflows.write": [
-    "context.read",
-    "workflows.read",
-    "workflows.write",
-    "campaigns.write",
-  ],
+  "mcp:workflows.write": ["context.read", "workflows.read", "workflows.write"],
   "mcp:workflows.execute": [
     "context.read",
     "workflows.read",
@@ -801,8 +795,6 @@ const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "workflows.write": ["mcp:workflows.write"],
   "workflows.execute": ["mcp:workflows.execute"],
   "workflows.delete": ["mcp:workflows.delete"],
-  // Legacy workflow grants remain accepted in SCOPE_GRANTS, but remediation
-  // advertises only the least-privilege canonical campaign scope.
   "campaigns.write": ["mcp:campaigns.write"],
   "tables.read": ["mcp:tables.read"],
   "tables.write": ["mcp:tables.write"],

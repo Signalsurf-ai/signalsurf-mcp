@@ -1,42 +1,29 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import {
+  PROJECT_MCP_TOOL_CATALOG,
+  PROJECT_MCP_TOOL_SCOPES,
+  SIGNALSURF_MCP_INSTRUCTIONS,
+  type ProjectMcpToolName,
+} from "@signalsurf/mcp-contract"
 import { z, type ZodTypeAny } from "zod"
 
 import { UserFacingError } from "./errors.js"
 import { jsonErrorResult, jsonResult } from "./mcp-results.js"
+import type { AccessRole } from "./types.js"
 
-/**
- * SIG-2681/SIG-2815: The member's conversation lives in their own
- * client; SignalSurf keeps no second conversation and no relayed transcript.
- * The `mcp:dm` scope includes bounded member and Project capabilities
- * published by SignalSurf itself. Product scopes independently grant product
- * tools. Every call stays
- * within the approving member's authority in one granted workspace.
- */
+export const PROJECT_EXECUTION_UNAVAILABLE = "PROJECT_EXECUTION_UNAVAILABLE"
 
-export const DIRECT_MESSAGE_INSTRUCTIONS = `SignalSurf MCP connection.
-
-You act with the authority of the SignalSurf member who authorized this connection, and nothing more. SignalSurf keeps no copy of this external conversation and runs no second assistant for it.
-
-- Call list_workspaces first when the member reaches more than one workspace, and pass workspaceId on every later call.
-- Read Activity to see what is new and what waits on the member; read a Thread before claiming anything happened there.
-- Work happens in Projects. Start a Thread or reply in one, and that Project's Surfer does the work under its own confirmations. Read the Thread afterwards to see what it actually did.
-- Before proposing or delegating work that depends on a Project's data or automation, call list_project_files and read the relevant Files. Do not guess their contents from names alone.
-- When a write returns waiting_for_surfer, immediately call wait_for_thread_response with its eventSequence as both inputSequence and afterSequence. Keep inputSequence fixed; while still_working, inspect member-safe activity and call again with afterSequence advanced to latestSequence. Inspect and report the settled response. Never ask the member whether you should wait or present a delivery receipt as the result.
-- When product scopes are granted, use the product-operation tools on this same connection for direct Table, Workflow, Signal, enrichment, and other supported work. Routine atomic edits do not need a Thread just for logging.
-- Before your final answer, publish a durable Project-relevant conclusion when the conversation produced a decision, direction, research summary, assumption, or next step. Append it to the relevant Thread when known; otherwise create a conclusion Thread. Store only the distilled result, never the private transcript or routine tool chatter.`
-
-export const DIRECT_MESSAGE_UNAVAILABLE = "DIRECT_MESSAGE_UNAVAILABLE"
-
-export type DirectMessageClientOptions = {
+export type ProjectExecutionClientOptions = {
   baseUrl?: string
-  accessToken?: string
+  serviceToken?: string
+  delegationToken?: string
   fetch?: typeof fetch
   timeoutMs?: number
 }
 
 type JsonRecord = Record<string, unknown>
 
-export type DirectMessageTool = {
+export type ProjectExecutionTool = {
   name: string
   title?: string
   description: string
@@ -49,44 +36,41 @@ export type DirectMessageTool = {
   }
 }
 
-type DirectMessageWorkspace = JsonRecord & {
-  workspaceId: string
-  available?: boolean
-}
-
 function unavailable(message: string, details?: JsonRecord): UserFacingError {
   return new UserFacingError(message, {
-    code: DIRECT_MESSAGE_UNAVAILABLE,
+    code: PROJECT_EXECUTION_UNAVAILABLE,
     status: 503,
     details,
   })
 }
 
-export class DirectMessageClient {
+export class ProjectExecutionClient {
   private readonly baseUrl: string | undefined
-  private readonly accessToken: string | undefined
+  private readonly serviceToken: string | undefined
+  private readonly delegationToken: string | undefined
   private readonly fetchImpl: typeof fetch
   private readonly timeoutMs: number
 
-  constructor(options: DirectMessageClientOptions) {
+  constructor(options: ProjectExecutionClientOptions) {
     this.baseUrl = options.baseUrl?.trim().replace(/\/+$/, "") || undefined
-    this.accessToken = options.accessToken?.trim() || undefined
+    this.serviceToken = options.serviceToken?.trim() || undefined
+    this.delegationToken = options.delegationToken?.trim() || undefined
     // workerd rejects a bare `fetch` invoked as a method (SIG-2679).
     this.fetchImpl = options.fetch ?? fetch.bind(globalThis)
     this.timeoutMs = options.timeoutMs ?? 65_000
   }
 
   get endpoint(): string | null {
-    return this.baseUrl ? `${this.baseUrl}/api/mcp/direct-message` : null
+    return this.baseUrl ? `${this.baseUrl}/api/mcp/execute` : null
   }
 
   async call(
     body: JsonRecord,
     requestTimeoutMs = this.timeoutMs
   ): Promise<JsonRecord> {
-    if (!this.endpoint || !this.accessToken) {
+    if (!this.endpoint || !this.serviceToken || !this.delegationToken) {
       throw unavailable(
-        "Member and Project capabilities are not configured on this hosted MCP deployment."
+        "Project execution is not configured on this hosted MCP deployment."
       )
     }
     let response: Response
@@ -95,13 +79,16 @@ export class DirectMessageClient {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${this.accessToken}`,
+          Authorization: `Bearer ${this.serviceToken}`,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          ...body,
+          delegationToken: this.delegationToken,
+        }),
         signal: AbortSignal.timeout(requestTimeoutMs),
       })
     } catch (error) {
-      console.error("Direct Message request failed", {
+      console.error("Project execution request failed", {
         action: body.action,
         endpoint: this.endpoint,
         error:
@@ -129,7 +116,7 @@ export class DirectMessageClient {
       const code =
         typeof record.code === "string"
           ? record.code
-          : DIRECT_MESSAGE_UNAVAILABLE
+          : PROJECT_EXECUTION_UNAVAILABLE
       throw new UserFacingError(message, {
         code,
         status: response.status,
@@ -139,101 +126,35 @@ export class DirectMessageClient {
     return record
   }
 
-  async workspaces(): Promise<DirectMessageWorkspace[]> {
-    const result = await this.call({ action: "workspaces" })
-    if (!Array.isArray(result.workspaces)) return []
-    return result.workspaces.filter(
-      (workspace): workspace is DirectMessageWorkspace =>
-        !!workspace &&
-        typeof workspace === "object" &&
-        !Array.isArray(workspace) &&
-        typeof (workspace as JsonRecord).workspaceId === "string"
-    )
-  }
-
-  async catalog(
-    workspaceId?: string | null
-  ): Promise<{ tools: DirectMessageTool[]; role: string | null }> {
-    const result = await this.call({ action: "catalog", workspaceId })
-    return {
-      tools: Array.isArray(result.tools)
-        ? (result.tools as DirectMessageTool[])
-        : [],
-      role: typeof result.role === "string" ? result.role : null,
-    }
-  }
-
   async run(
     tool: string,
     args: JsonRecord,
-    workspaceId?: string | null
+    workspaceId?: string | null,
+    requestTimeoutMs = this.timeoutMs
   ): Promise<unknown> {
     const { workspaceId: _omit, ...rest } = args
-    const result = await this.call({
-      action: "call",
-      tool,
-      arguments: rest,
-      workspaceId: (workspaceId ?? args.workspaceId ?? null) as string | null,
-    })
+    const result = await this.call(
+      {
+        action: "call",
+        tool,
+        arguments: rest,
+        workspaceId: (workspaceId ?? args.workspaceId ?? null) as string | null,
+      },
+      requestTimeoutMs
+    )
     return result.data
   }
 }
 
-const LIST_WORKSPACES: DirectMessageTool = {
-  name: "list_workspaces",
-  description:
-    "List the SignalSurf workspaces this connection may act in, with the member's access, the workspace's Surfer name, and its open conversation count. Call this first when the member reaches more than one workspace, then pass workspaceId on every later call.",
-  inputSchema: { type: "object", properties: {}, additionalProperties: false },
-}
-
-const WORKSPACE_ID_SCHEMA = {
-  type: ["string", "null"],
-  description:
-    "Which granted workspace to act in (see list_workspaces). Omit only when the connection reaches one workspace.",
-} as const
-
-/**
- * Add the selector to composed object branches as well as their outer schema.
- * A strict allOf/anyOf/oneOf branch would otherwise reject workspaceId before
- * the outer constraint can validate it.
- */
-function withWorkspaceId(
-  schema: JsonRecord,
-  inheritedProperties: JsonRecord = {}
-): JsonRecord {
-  const properties = {
-    workspaceId: WORKSPACE_ID_SCHEMA,
-    ...inheritedProperties,
-    ...((schema.properties as JsonRecord | undefined) ?? {}),
-  }
-  const composed = Object.fromEntries(
-    (["allOf", "anyOf", "oneOf"] as const).flatMap((key) => {
-      const branches = schema[key]
-      if (!Array.isArray(branches)) return []
-      return [
-        [
-          key,
-          branches.map((branch) =>
-            branch && typeof branch === "object" && !Array.isArray(branch)
-              ? withWorkspaceId(branch as JsonRecord, properties)
-              : branch
-          ),
-        ],
-      ]
-    })
-  )
-  return {
-    ...schema,
-    ...composed,
-    type: "object",
-    properties,
-    additionalProperties: false,
-  }
-}
-
-export type DirectMessageSurface = {
+export type ProjectExecutionSurface = {
   instructions: string
-  capabilities: Array<{ name: string; title: string; description: string }>
+  capabilities: Array<{
+    name: string
+    title: string
+    description: string
+    requiredScopes: readonly string[]
+    readOnly: boolean
+  }>
   register: (server: McpServer, reservedToolNames?: readonly string[]) => void
 }
 
@@ -366,7 +287,7 @@ function composedObjectToZod(schema: JsonRecord): ZodTypeAny {
  * schema so the member/Project tools can share one registry with static public
  * tools without weakening the authoritative Web-side validation.
  */
-function publishedSchemaToZod(input: unknown): ZodTypeAny {
+export function publishedSchemaToZod(input: unknown): ZodTypeAny {
   const schema =
     input && typeof input === "object" && !Array.isArray(input)
       ? (input as JsonRecord)
@@ -474,6 +395,10 @@ function publishedSchemaToZod(input: unknown): ZodTypeAny {
     case "string": {
       let string = z.string()
       if (schema.format === "uuid") string = string.uuid()
+      if (schema.format === "date-time")
+        string = string.datetime({ offset: true })
+      if (typeof schema.pattern === "string")
+        string = string.regex(new RegExp(schema.pattern))
       if (typeof schema.minLength === "number")
         string = string.min(schema.minLength)
       if (typeof schema.maxLength === "number")
@@ -489,6 +414,10 @@ function publishedSchemaToZod(input: unknown): ZodTypeAny {
         number = number.min(schema.minimum)
       if (typeof schema.maximum === "number")
         number = number.max(schema.maximum)
+      if (typeof schema.exclusiveMinimum === "number")
+        number = number.gt(schema.exclusiveMinimum)
+      if (typeof schema.exclusiveMaximum === "number")
+        number = number.lt(schema.exclusiveMaximum)
       result = number
       break
     }
@@ -505,60 +434,27 @@ function publishedSchemaToZod(input: unknown): ZodTypeAny {
   return described(result, schema)
 }
 
-function mergePublishedTools(
-  catalogs: Array<{ tools: DirectMessageTool[]; role: string | null }>
-): { tools: DirectMessageTool[]; roles: string[] } {
-  const tools = new Map<string, DirectMessageTool>()
-  const roles = new Set<string>()
-  for (const catalog of catalogs) {
-    if (catalog.role) roles.add(catalog.role)
-    for (const tool of catalog.tools) {
-      const existing = tools.get(tool.name)
-      if (
-        existing &&
-        (existing.description !== tool.description ||
-          JSON.stringify(existing.inputSchema) !==
-            JSON.stringify(tool.inputSchema))
-      ) {
-        throw unavailable(
-          `SignalSurf published conflicting definitions for ${tool.name}.`,
-          { tool: tool.name }
-        )
-      }
-      tools.set(tool.name, tool)
-    }
+function requiredScopes(toolName: string): readonly string[] {
+  const scopes = PROJECT_MCP_TOOL_SCOPES[toolName as ProjectMcpToolName]
+  if (!scopes) {
+    throw unavailable(
+      `SignalSurf published ${toolName} without an authorization mapping.`,
+      { tool: toolName }
+    )
   }
-  return { tools: [...tools.values()], roles: [...roles] }
+  return scopes
 }
 
-/**
- * SignalSurf publishes the member's capabilities and the role they act in, so
- * the connection states both rather than restating a list here.
- */
-export async function loadDirectMessageSurface(
-  client: DirectMessageClient
-): Promise<DirectMessageSurface> {
-  const workspaces = await client.workspaces()
-  const workspaceIds = workspaces
-    .filter((workspace) => workspace.available !== false)
-    .map((workspace) => workspace.workspaceId)
-  const { tools: published, roles } = mergePublishedTools(
-    await Promise.all(
-      workspaceIds.map((workspaceId) => client.catalog(workspaceId))
-    )
-  )
-  const tools = [
-    LIST_WORKSPACES,
-    ...published.map((tool) => ({
-      ...tool,
-      inputSchema: withWorkspaceId(tool.inputSchema ?? {}),
-    })),
-  ]
+export function createProjectExecutionSurface(input: {
+  client: ProjectExecutionClient
+  scopes: readonly string[]
+  role: AccessRole
+}): ProjectExecutionSurface {
+  const tools = PROJECT_MCP_TOOL_CATALOG as readonly ProjectExecutionTool[]
+  for (const tool of tools) requiredScopes(tool.name)
 
   return {
-    instructions: roles.length
-      ? `${DIRECT_MESSAGE_INSTRUCTIONS}\n\n${roles.join("\n\n")}`
-      : DIRECT_MESSAGE_INSTRUCTIONS,
+    instructions: SIGNALSURF_MCP_INSTRUCTIONS,
     capabilities: tools.map((tool) => ({
       name: tool.name,
       title:
@@ -568,6 +464,8 @@ export async function loadDirectMessageSurface(
           .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
           .join(" "),
       description: tool.description,
+      requiredScopes: requiredScopes(tool.name),
+      readOnly: tool.annotations?.readOnlyHint === true,
     })),
     register(server: McpServer, reservedToolNames = []) {
       const names = new Set(reservedToolNames)
@@ -589,9 +487,31 @@ export async function loadDirectMessageSurface(
           },
           async (args) => {
             try {
-              return tool.name === LIST_WORKSPACES.name
-                ? jsonResult({ workspaces: await client.workspaces() })
-                : jsonResult(await client.run(tool.name, args as JsonRecord))
+              if (
+                tool.annotations?.readOnlyHint !== true &&
+                input.role === "viewer"
+              ) {
+                throw new UserFacingError(
+                  `Viewer role does not allow SignalSurf MCP tool: ${tool.name}`,
+                  { code: "FORBIDDEN", status: 403 }
+                )
+              }
+              const missing = requiredScopes(tool.name).filter(
+                (scope) => !input.scopes.includes(scope)
+              )
+              if (missing.length > 0) {
+                throw new UserFacingError(
+                  `Token scope does not allow SignalSurf MCP tool: ${tool.name}`,
+                  {
+                    code: "INSUFFICIENT_SCOPE",
+                    status: 403,
+                    details: { requiredScopes: missing, toolName: tool.name },
+                  }
+                )
+              }
+              return jsonResult(
+                await input.client.run(tool.name, args as JsonRecord)
+              )
             } catch (error) {
               return jsonErrorResult(error)
             }

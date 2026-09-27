@@ -133,7 +133,9 @@ function columnConstants(source) {
   for (const match of source.matchAll(
     /const ([A-Z][A-Z0-9_]*) = \[([^\]]*)\]\s*\.join\(/g
   )) {
-    const columns = [...match[2].matchAll(/"([^"]+)"/g)].map((entry) => entry[1])
+    const columns = [...match[2].matchAll(/"([^"]+)"/g)].map(
+      (entry) => entry[1]
+    )
     if (columns.length > 0) constants.set(match[1], columns.join(", "))
   }
   return constants

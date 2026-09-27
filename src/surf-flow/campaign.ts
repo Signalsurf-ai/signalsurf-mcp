@@ -1,8 +1,8 @@
 import {
   FLOW_VERSION,
   stepCondition,
-  type SequenceStep,
   type FlowV2,
+  type SequenceStep,
 } from "./index.js"
 import { addNode, connectNodes } from "./mutations.js"
 

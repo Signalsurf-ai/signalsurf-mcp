@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
-  mcpActionPayloadSha256,
   SignalSurfRepository,
+  mcpActionPayloadSha256,
 } from "../src/repository.js"
 import type { SignalSurfContext } from "../src/types.js"
 import { FakeSupabase } from "./fake-supabase.js"

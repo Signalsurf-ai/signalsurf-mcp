@@ -1,8 +1,9 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { afterEach, describe, expect, it } from "vitest"
-import { searchCapabilities } from "../src/tool-search.js"
+
 import { createSignalSurfMcpServer } from "../src/server.js"
+import { searchCapabilities } from "../src/tool-search.js"
 import type { SignalSurfContext } from "../src/types.js"
 
 const catalog = {
@@ -102,5 +103,42 @@ describe("find_capabilities tool over MCP", () => {
     expect(toolNames).toContain("get_enrichment_context")
     // run_enrich needs workflows.execute — a viewer token must not see it.
     expect(toolNames).not.toContain("run_enrich")
+  })
+
+  it("does not recommend Project tools outside the token grant", async () => {
+    const context: SignalSurfContext = {
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+      role: "editor",
+      scopes: ["mcp:tables.read"],
+    }
+    const server = await createSignalSurfMcpServer({
+      context,
+      repository: {} as any,
+    })
+    const client = new Client({ name: "test-client", version: "0.0.0" })
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
+    cleanup.push(async () => client.close())
+    cleanup.push(async () => server.close())
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    const result = await client.callTool({
+      name: "find_capabilities",
+      arguments: { query: "project thread" },
+    })
+    expect(result.isError).toBeFalsy()
+    const toolNames = (result.structuredContent as any).data.tools.map(
+      (tool: any) => tool.name
+    )
+    expect(toolNames).not.toContain("list_projects")
+    expect(toolNames).not.toContain("start_thread")
+
+    // Discovery remains stable even when execution/search is grant-filtered.
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toContain(
+      "start_thread"
+    )
   })
 })

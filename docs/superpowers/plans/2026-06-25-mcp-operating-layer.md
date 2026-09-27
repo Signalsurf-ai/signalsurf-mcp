@@ -4,7 +4,7 @@
 
 **Goal:** Give external MCP agents the operating guidance and context they need to drive SignalSurf like the internal Surfer — without moving any reasoning off the server brain.
 
-**Architecture:** Three additive, read-only layers on the existing 44-tool MCP server: (0) an upgraded always-on `instructions` operating manual, (1) a `get_enrichment_context` tool that bundles brand + schema + relations + field conventions + popular values, and (2) the first MCP **Prompt** (`enrich_table`) that scripts the Quick Surf enrichment flow. The brain and existing tools are untouched.
+**Architecture:** Three additive, read-only layers on the existing 44-tool MCP server: (0) an upgraded always-on `instructions` operating manual, (1) a `get_enrichment_context` tool that bundles brand + schema + relations + field conventions + popular values, and (2) the first MCP **Prompt** (`enrich_table`) that scripts the Enrich flow. The brain and existing tools are untouched.
 
 **Tech Stack:** TypeScript (ESM, NodeNext), `@modelcontextprotocol/sdk` ^1.29, `zod` ^3.25, Supabase JS (service role), `vitest` ^4.
 
@@ -23,11 +23,13 @@
 ### Task 1: Field conventions constant + popular-values aggregator
 
 **Files:**
+
 - Create: `src/conventions.ts`
 - Create: `src/popular-values.ts`
 - Test: `tests/popular-values.test.ts`
 
 **Interfaces:**
+
 - Produces: `FIELD_CONVENTIONS: string` (exported from `src/conventions.ts`).
 - Produces: `aggregatePopularValues(entries: Array<{ data: unknown }>, fieldKeys: string[], topN: number): Record<string, Array<{ value: string; count: number }>>` (exported from `src/popular-values.ts`). Only fields whose values appear as string arrays are included; fields with no array values are omitted from the result.
 
@@ -36,6 +38,7 @@
 ```typescript
 // tests/popular-values.test.ts
 import { describe, expect, it } from "vitest"
+
 import { aggregatePopularValues } from "../src/popular-values.js"
 
 describe("aggregatePopularValues", () => {
@@ -152,10 +155,12 @@ git commit -m "feat: field conventions constant + popular-values aggregator"
 ### Task 2: `getEnrichmentContext` repository method
 
 **Files:**
+
 - Modify: `src/repository.ts` (add method on `SignalSurfRepository`; reuse `getDatabaseAndValidateProduct`, `asRecord`, `schemaFields`, `formatBrandContext`)
 - Test: `tests/enrichment-context.test.ts`
 
 **Interfaces:**
+
 - Consumes: `FIELD_CONVENTIONS` (Task 1), `aggregatePopularValues` (Task 1).
 - Produces: `SignalSurfRepository.getEnrichmentContext(context: SignalSurfContext, input: { databaseId: string; fieldKey?: string }): Promise<{ databaseId: string; brand: unknown; table: { fields: unknown[]; relations: unknown[] }; relations: unknown[]; conventions: string; popularValues: Record<string, Array<{ value: string; count: number }>> }>`. Throws `UserFacingError` 400 (with valid field keys listed) when `fieldKey` is given but absent from the schema. Product-scope errors propagate from `getDatabaseAndValidateProduct`.
 - Produces: exported const `POPULAR_VALUES_SCAN_LIMIT = 1000` and `POPULAR_VALUES_TOP_N = 30` from `src/repository.ts`.
@@ -165,11 +170,14 @@ git commit -m "feat: field conventions constant + popular-values aggregator"
 ```typescript
 // tests/enrichment-context.test.ts
 import { describe, expect, it, vi } from "vitest"
-import { SignalSurfRepository } from "../src/repository.js"
+
 import { UserFacingError } from "../src/errors.js"
+import { SignalSurfRepository } from "../src/repository.js"
 
 function makeRepo(overrides: Partial<Record<string, unknown>> = {}) {
-  const repo = Object.create(SignalSurfRepository.prototype) as SignalSurfRepository
+  const repo = Object.create(
+    SignalSurfRepository.prototype
+  ) as SignalSurfRepository
   ;(repo as any).getDatabaseAndValidateProduct = vi.fn(async () => ({
     id: "db-1",
     schema: {
@@ -204,7 +212,7 @@ function makeRepo(overrides: Partial<Record<string, unknown>> = {}) {
   return repo
 }
 
-const ctx = { productId: "p1", role: "viewer" } as any
+const ctx = { workspaceId: "w1", role: "viewer" } as any
 
 describe("getEnrichmentContext", () => {
   it("bundles brand, schema, relations, conventions, and popular values", async () => {
@@ -333,12 +341,14 @@ git commit -m "feat: getEnrichmentContext repository method (brand + schema + re
 ### Task 3: `get_enrichment_context` MCP tool
 
 **Files:**
+
 - Modify: `src/schemas.ts` (add `getEnrichmentContextSchema`)
 - Modify: `src/capabilities.ts` (add `get_enrichment_context` to `PUBLIC_MCP_TOOLS`)
 - Modify: `src/server.ts` (register the tool; import the schema)
 - Test: `tests/enrichment-context-tool.test.ts`
 
 **Interfaces:**
+
 - Consumes: `SignalSurfRepository.getEnrichmentContext` (Task 2).
 - Produces: public MCP tool `get_enrichment_context` with `requiredCapability: "tables.read"`.
 
@@ -348,7 +358,7 @@ In `src/schemas.ts`, next to `listDatabaseFieldsSchema`:
 
 ```typescript
 export const getEnrichmentContextSchema = {
-  ...productTargetSchema,
+  ...workspaceTargetSchema,
   databaseId: uuidSchema,
   fieldKey: z.string().min(1).max(100).optional(),
 }
@@ -362,7 +372,7 @@ In `src/capabilities.ts`, add to the `PUBLIC_MCP_TOOLS` object (after `get_brand
   get_enrichment_context: {
     title: "Get Enrichment Context",
     description:
-      "Bundle everything an agent needs before filling or enriching a table column: brand/positioning context, the table schema (fields, types, options, entry key, relations), the most popular existing values per tag/array field, and SignalSurf field conventions. Call this before writing whatToDo for enable_quick_surf or before manual row edits. Pass productId when this connection can access multiple products; pass fieldKey to scope popular values to one column.",
+      "Bundle everything an agent needs before filling or enriching a table column: brand/positioning context, the table schema (fields, types, options, entry key, relations), the most popular existing values per tag/array field, and SignalSurf field conventions. Call this before writing whatToDo for enable_enrich or before manual row edits. Pass workspaceId when this connection can access multiple workspaces; pass fieldKey to scope popular values to one column.",
     requiredCapability: "tables.read",
     surferSurface: "enrichment context",
     publicStatus: "supported",
@@ -375,18 +385,18 @@ In `src/capabilities.ts`, add to the `PUBLIC_MCP_TOOLS` object (after `get_brand
 Add `getEnrichmentContextSchema` to the schema import block, then add this registration alongside the other `registerPublicTool` calls (e.g. after `get_brand_context` / near `list_database_fields`):
 
 ```typescript
-  registerPublicTool(
-    "get_enrichment_context",
-    getEnrichmentContextSchema,
-    async (args: any) =>
-      runJsonTool(async () => {
-        assertToolAllowed("get_enrichment_context")
-        return repository.getEnrichmentContext(toolContext(args), {
-          databaseId: args.databaseId,
-          fieldKey: args.fieldKey,
-        })
+registerPublicTool(
+  "get_enrichment_context",
+  getEnrichmentContextSchema,
+  async (args: any) =>
+    runJsonTool(async () => {
+      assertToolAllowed("get_enrichment_context")
+      return repository.getEnrichmentContext(toolContext(args), {
+        databaseId: args.databaseId,
+        fieldKey: args.fieldKey,
       })
-  )
+    })
+)
 ```
 
 - [ ] **Step 4: Write the test**
@@ -394,12 +404,13 @@ Add `getEnrichmentContextSchema` to the schema import block, then add this regis
 ```typescript
 // tests/enrichment-context-tool.test.ts
 import { describe, expect, it, vi } from "vitest"
+
 import { createSignalSurfMcpServer } from "../src/server.js"
 
 const context = {
-  productId: "p1",
-  productIds: ["p1"],
-  products: [{ productId: "p1", name: "Acme" }],
+  workspaceId: "w1",
+  workspaceIds: ["w1"],
+  workspaces: [{ workspaceId: "w1", name: "Acme" }],
   role: "editor",
   scopes: undefined,
 } as any
@@ -442,19 +453,22 @@ git commit -m "feat: get_enrichment_context MCP tool"
 ### Task 4: `enrich_table` MCP prompt
 
 **Files:**
+
 - Create: `src/prompts.ts`
 - Modify: `src/server.ts` (call `registerPrompts(server)` from `createSignalSurfMcpServer`, after `registerTools`)
 - Test: `tests/prompts.test.ts`
 
 **Interfaces:**
-- Produces: `registerPrompts(server: McpServer): void` exported from `src/prompts.ts`, registering an `enrich_table` prompt with optional args `{ databaseId?, productId? }`.
-- Produces: `buildEnrichTablePrompt(args: { databaseId?: string; productId?: string }): string` (pure, exported for testing).
+
+- Produces: `registerPrompts(server: McpServer): void` exported from `src/prompts.ts`, registering an `enrich_table` prompt with optional args `{ databaseId?, workspaceId? }`.
+- Produces: `buildEnrichTablePrompt(args: { databaseId?: string; workspaceId?: string }): string` (pure, exported for testing).
 
 - [ ] **Step 1: Write the failing test**
 
 ```typescript
 // tests/prompts.test.ts
 import { describe, expect, it } from "vitest"
+
 import { buildEnrichTablePrompt } from "../src/prompts.js"
 
 describe("buildEnrichTablePrompt", () => {
@@ -462,8 +476,8 @@ describe("buildEnrichTablePrompt", () => {
     const text = buildEnrichTablePrompt({})
     expect(text).toMatch(/list_tables/)
     expect(text).toMatch(/get_enrichment_context/)
-    expect(text).toMatch(/enable_quick_surf/)
-    expect(text).toMatch(/run_quick_surf/)
+    expect(text).toMatch(/enable_enrich/)
+    expect(text).toMatch(/run_enrich/)
     expect(text).toMatch(/wait_for_surf_job/)
   })
 
@@ -487,25 +501,25 @@ import { z } from "zod"
 
 export function buildEnrichTablePrompt(args: {
   databaseId?: string
-  productId?: string
+  workspaceId?: string
 }): string {
   const dbLine = args.databaseId
     ? `Target databaseId: ${args.databaseId} (already resolved — skip discovery).`
     : "No databaseId given yet — resolve it first."
-  const productLine = args.productId
-    ? `Use productId ${args.productId} on every product-scoped call.`
-    : "If get_context reports multiple products, pass the chosen productId on every call."
+  const workspaceLine = args.workspaceId
+    ? `Use workspaceId ${args.workspaceId} on every workspace-scoped call.`
+    : "If get_workspace_context reports multiple workspaces, pass the chosen workspaceId on every call."
 
   return `You are operating SignalSurf to enrich a whole table. The SignalSurf brain fills each cell server-side; your job is to set up, trigger, and poll — not to fill cells by hand.
 
 ${dbLine}
-${productLine}
+${workspaceLine}
 
 Follow these steps in order:
-1. Call get_context. ${args.productId ? "" : "Pick the productId if multiple are returned. "}${args.databaseId ? "" : "Then call list_tables and choose the target table's databaseId."}
+1. Call get_workspace_context. ${args.workspaceId ? "" : "Pick the workspaceId if multiple are returned. "}${args.databaseId ? "" : "Then call list_tables and choose the target table's databaseId."}
 2. Call get_enrichment_context(databaseId${args.databaseId ? `="${args.databaseId}"` : ""}) to load brand context, the table schema, popular existing values, and field conventions.
-3. For each column you want to enrich: call enable_quick_surf(databaseId, fieldKey, whatToDo). Write whatToDo using the brand context and schema from step 2, and follow the field conventions (e.g. reuse popular values; lowercase-dash-singular for tag arrays). Optionally set runCondition to only fill rows that meet a gate.
-4. Call run_quick_surf(databaseId, fieldKey, scope="all") for each enabled column to backfill every row (capped at 1000).
+3. For each column you want to enrich: call enable_enrich(databaseId, fieldKey, whatToDo). Write whatToDo using the brand context and schema from step 2, and follow the field conventions (e.g. reuse popular values; lowercase-dash-singular for tag arrays). Optionally set runCondition to only fill rows that meet a gate.
+4. Call run_enrich(databaseId, fieldKey, scope="all") for each enabled column to backfill every row (capped at 1000).
 5. Poll with wait_for_surf_job / list_surf_jobs until jobs finish, then report which columns were filled and any skipped rows.
 
 Never pass a null or guessed id — always resolve real ids in steps 1–2 first.`
@@ -515,19 +529,22 @@ export function registerPrompts(server: McpServer): void {
   server.registerPrompt(
     "enrich_table",
     {
-      title: "Enrich a table (Quick Surf)",
+      title: "Enrich a table",
       description:
-        "Guided workflow to enrich an entire SignalSurf table column-by-column using Quick Surf, with the server brain filling each cell.",
+        "Guided workflow to enrich an entire SignalSurf table column-by-column using Enrich, with the server brain filling each cell.",
       argsSchema: {
         databaseId: z.string().optional(),
-        productId: z.string().optional(),
+        workspaceId: z.string().optional(),
       },
     },
-    async (args: { databaseId?: string; productId?: string }) => ({
+    async (args: { databaseId?: string; workspaceId?: string }) => ({
       messages: [
         {
           role: "user" as const,
-          content: { type: "text" as const, text: buildEnrichTablePrompt(args) },
+          content: {
+            type: "text" as const,
+            text: buildEnrichTablePrompt(args),
+          },
         },
       ],
     })
@@ -556,7 +573,7 @@ Enable the prompts capability and register, inside `createSignalSurfMcpServer`. 
 And after `registerTools(server, repository, context)` add:
 
 ```typescript
-  registerPrompts(server)
+registerPrompts(server)
 ```
 
 - [ ] **Step 5: Run tests + typecheck**
@@ -576,10 +593,12 @@ git commit -m "feat: enrich_table MCP prompt (first guided playbook)"
 ### Task 5: Upgrade the `instructions` operating manual
 
 **Files:**
+
 - Modify: `src/server.ts:102-103` (the `instructions` string)
 - Test: `tests/instructions.test.ts`
 
 **Interfaces:**
+
 - Produces: exported const `SERVER_INSTRUCTIONS: string` from `src/server.ts` (so it is testable and reusable), referenced by the `McpServer` config.
 
 - [ ] **Step 1: Write the failing test**
@@ -587,11 +606,12 @@ git commit -m "feat: enrich_table MCP prompt (first guided playbook)"
 ```typescript
 // tests/instructions.test.ts
 import { describe, expect, it } from "vitest"
+
 import { SERVER_INSTRUCTIONS } from "../src/server.js"
 
 describe("SERVER_INSTRUCTIONS", () => {
   it("tells agents to resolve ids before id-typed params", () => {
-    expect(SERVER_INSTRUCTIONS).toMatch(/get_context/)
+    expect(SERVER_INSTRUCTIONS).toMatch(/get_workspace_context/)
     expect(SERVER_INSTRUCTIONS).toMatch(/list_tables/)
     expect(SERVER_INSTRUCTIONS).toMatch(/never pass.*null/i)
   })
@@ -615,17 +635,17 @@ In `src/server.ts`, add above `createSignalSurfMcpServer`:
 ```typescript
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
 
-Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter — productId from get_context (when multiple products), databaseId from list_tables, surfPointId from list_surf_points. Never pass a null or guessed id.
+Golden rule: call get_workspace_context FIRST. Resolve real ids before any id-typed parameter — workspaceId from get_workspace_context (when multiple workspaces), databaseId from list_tables, surfPointId from list_surf_points. Never pass a null or guessed id.
 
-Execution model: enrichment runs on the SignalSurf server brain via Quick Surf and surf points. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
+Execution model: enrichment runs on the SignalSurf server brain via Enrich and surf points. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
 
 I want to… →
-- Enrich a whole table → use the enrich_table prompt; it scripts get_enrichment_context → enable_quick_surf → run_quick_surf(scope="all") → wait_for_surf_job.
+- Enrich a whole table → use the enrich_table prompt; it scripts get_enrichment_context → enable_enrich → run_enrich(scope="all") → wait_for_surf_job.
 - Decide what to write into a column → call get_enrichment_context(databaseId[, fieldKey]) for brand context, schema, popular existing values, and field conventions.
 - Run or monitor a surf point → run_surf_point, then list_surf_jobs / wait_for_surf_job.
 - Inspect data → list_tables, read_table, list_database_fields.
 
-When multiple products are authorized, pass products[].productId (from get_context) on every product-scoped call.`
+When multiple workspaces are authorized, pass workspaces[].workspaceId (from get_workspace_context) on every workspace-scoped call.`
 ```
 
 Then set the server config to use it:
@@ -651,10 +671,12 @@ git commit -m "feat: upgrade MCP instructions to a full operating manual"
 ### Task 6: Parity registration + full regression
 
 **Files:**
+
 - Modify: `docs/surfer-mcp-parity.json` (add the new tool + prompt)
 - Verify: whole suite + parity script
 
 **Interfaces:**
+
 - Consumes: everything above.
 
 - [ ] **Step 1: Inspect the parity check expectations**
@@ -664,7 +686,7 @@ Expected: it currently passes against `knownPublicMcpTools`. Read `scripts/check
 
 - [ ] **Step 2: Register `get_enrichment_context` in the parity contract**
 
-In `docs/surfer-mcp-parity.json`, add `"get_enrichment_context"` to `knownPublicMcpTools` (keep the array alphabetically sorted — it goes right after `get_context`). Add a mapping entry under `operationMappings`:
+In `docs/surfer-mcp-parity.json`, add `"get_enrichment_context"` to `knownPublicMcpTools` (keep the array alphabetically sorted — it goes right after `get_workspace_context`). Add a mapping entry under `operationMappings`:
 
 ```json
     "get_enrichment_context": ["get_enrichment_context"],
@@ -694,6 +716,7 @@ git commit -m "chore: register get_enrichment_context in surfer parity contract"
 ## Self-Review
 
 **Spec coverage:**
+
 - Layer 0 (instructions manual) → Task 5. ✓
 - Layer 1 (`get_enrichment_context`: brand, schema, relations, conventions, popularValues) → Tasks 1–3. ✓
 - Layer 2 (`enrich_table` MCP prompt) → Task 4. ✓
@@ -706,4 +729,4 @@ git commit -m "chore: register get_enrichment_context in surfer parity contract"
 
 **Type consistency:** `getEnrichmentContext(context, { databaseId, fieldKey })` signature is identical in Tasks 2 and 3. `aggregatePopularValues(entries, fieldKeys, topN)` identical in Tasks 1 and 2. `buildEnrichTablePrompt(args)` / `registerPrompts(server)` identical in Task 4. `SERVER_INSTRUCTIONS` identical in Task 5. Tool name `get_enrichment_context` consistent across Tasks 3 and 6.
 
-> **Deviation from spec, flagged:** the spec chose SQL `jsonb_array_elements` aggregation; that requires a Postgres RPC migration in the SignalsurfWeb repo. To keep this work self-contained in the MCP repo with the brain untouched, popularValues is computed by a bounded in-repo aggregation over a service-role fetch (≤1000 rows, like `runQuickSurf` already does). Same output shape and tool interface; swappable for an RPC later with no caller change.
+> **Deviation from spec, flagged:** the spec chose SQL `jsonb_array_elements` aggregation; that requires a Postgres RPC migration in the SignalsurfWeb repo. To keep this work self-contained in the MCP repo with the brain untouched, popularValues is computed by a bounded in-repo aggregation over a service-role fetch (≤1000 rows, like `runEnrich` already does). Same output shape and tool interface; swappable for an RPC later with no caller change.

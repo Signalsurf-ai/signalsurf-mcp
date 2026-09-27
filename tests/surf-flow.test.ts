@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+
 import {
   applyFlowEdits,
   buildCampaignFlow,
@@ -8,10 +9,7 @@ import {
   type FlowV2,
 } from "../src/surf-flow/index.js"
 
-function flow(
-  nodes: FlowV2["nodes"],
-  edges: FlowV2["edges"]
-): FlowV2 {
+function flow(nodes: FlowV2["nodes"], edges: FlowV2["edges"]): FlowV2 {
   return { version: 2, nodes, edges }
 }
 

@@ -50,10 +50,7 @@ export interface UpstreamContext {
  * the node itself. Cycle-safe via a visited set; ignores edges whose endpoints
  * are missing (consistent with validateFlow's liveEdges).
  */
-export function upstreamAncestors(
-  flow: FlowV2,
-  nodeId: string
-): FlowNode[] {
+export function upstreamAncestors(flow: FlowV2, nodeId: string): FlowNode[] {
   const ids = new Set(flow.nodes.map((n) => n.id))
   const incoming = new Map<string, string[]>()
   for (const e of flow.edges) {

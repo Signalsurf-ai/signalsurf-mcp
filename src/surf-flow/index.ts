@@ -363,8 +363,7 @@ export function firstNodeOfType<T extends FlowNodeType>(
   type: T
 ): Extract<FlowNode, { type: T }> | undefined {
   return flow.nodes.find((n) => n.type === type) as
-    | Extract<FlowNode, { type: T }>
-    | undefined
+    Extract<FlowNode, { type: T }> | undefined
 }
 
 /** Outbound edges of a node whose condition matches the node's branch result. */

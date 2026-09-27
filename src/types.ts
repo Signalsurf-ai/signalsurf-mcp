@@ -19,6 +19,7 @@ export type SignalSurfContext = {
   oauthTokenId?: string
   oauthGrantId?: string
   oauthClientId?: string
+  oauthAccessTokenExpiresAt?: number
   workspaceCapabilitiesByWorkspaceId?: Record<string, readonly string[]>
 }
 

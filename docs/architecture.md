@@ -9,10 +9,11 @@ raw Supabase access.
 ```text
 MCP client
   -> stdio or stateless Streamable HTTP
-  -> env-token, OAuth database token, manual database token, or direct stdio context resolution
+  -> signed OAuth token, env token, or direct stdio context resolution
   -> MCP tool/resource handler
-  -> repository workspace-scope guard
-  -> Supabase service-role client
+  -> static tool registry and per-call scope guard
+  -> private SignalSurf Web execution boundary
+  -> current membership and resource authorization
 ```
 
 The server always resolves a `SignalSurfContext` before any tool runs:
@@ -25,7 +26,7 @@ The server always resolves a `SignalSurfContext` before any tool runs:
 - `userId`: optional user context used to revalidate current Workspace access
   on every request and for user-specific cleanup
 - `role`: `viewer`, `editor`, or `owner`
-- `tokenName`: optional source label for MCP row mutations
+- `tokenName`: optional connection label for audit provenance
 - `scopes`: optional OAuth/static-token scopes that can narrow role access
 
 `viewer` can read tools and resources. `editor` and `owner` can write. `owner`
@@ -61,20 +62,18 @@ overwrites `X-Forwarded-For`; the stored IP is validated before writing.
 
 ## Auth Model
 
-The server has two token auth modes:
+The server has two authentication modes:
 
-- `SIGNALSURF_MCP_AUTH_MODE=database`: hosted production mode. The HTTP bearer
-  token is SHA-256 hashed and first looked up as a manual fallback token in
-  SignalSurf Web's `mcp_tokens` table, then as an OAuth access token in
-  `mcp_oauth_tokens`. OAuth access tokens are bound to `resource`, `client_id`,
-  `user_id`, primary `workspace_id`, optional `workspace_ids`, scopes, expiry, and
-  revocation state.
+- `SIGNALSURF_MCP_AUTH_MODE=database`: hosted production mode. Despite the
+  retained configuration name, the Worker verifies a short-lived signed OAuth
+  access token locally. The token binds `resource`, `client_id`, `user_id`,
+  `workspace_ids`, scopes, role, issuer, audience, and expiry. The Worker never
+  sends that bearer token to the Web app.
 - `SIGNALSURF_MCP_AUTH_MODE=env`: local or single-tenant mode. Tokens are read
   from `SIGNALSURF_MCP_TOKENS`.
 
-`src/auth.ts` contains bearer parsing, static-token matching, and role checks.
-`src/repository.ts` owns database-token lookup because it is already the
-service-role database boundary. Static-token comparison uses constant-time hash
+`src/auth.ts` contains bearer parsing, signed-token verification, static-token
+matching, and role checks. Static-token comparison uses constant-time hash
 comparison.
 
 Each static token entry binds one caller to exactly one workspace:
@@ -89,32 +88,30 @@ Each static token entry binds one caller to exactly one workspace:
 }
 ```
 
-Agents should call `get_context` first and verify `workspaces`, `role`, and
+Agents should call `get_workspace_context` first and verify `workspaces`, `role`, and
 `tokenName` before making writes. If `workspaceIds` contains more than one id,
 agents should choose from the human-readable workspace/organization names in
 `workspaces[]` and pass the intended `workspaceId` to workspace-scoped tools.
 
-Hosted token revocation is immediate: SignalSurf Web sets `revoked_at`, and
-database auth only resolves rows where `revoked_at IS NULL`.
-Database-backed hosted tokens retain `created_by` as `context.userId` so the
-server can revalidate current Workspace membership on every tool and resource
-call. Removing a member from a Workspace invalidates that Workspace immediately,
-even for a previously established MCP connection.
+Hosted access tokens expire after ten minutes. OAuth refresh-token revocation
+prevents new access tokens; current membership and Project access are still
+revalidated by the Web execution boundary on every call, so removing a member
+invalidates their effective access immediately.
 
-OAuth access tokens are user-consented, so the resolved MCP context includes
+OAuth access tokens are user-consented, so the verified MCP context includes
 `userId`. `mcp:read` maps to `viewer`; `mcp:write` and granular write/delete
 scopes map to `editor`. Recognized SignalSurf scopes remain on the request
 context and are enforced by each tool's required capability; additive OIDC or
 future scopes are ignored by the resource server. OAuth tokens can authorize one
 or more workspaces. Workspace-scoped tools execute against exactly one workspace; when
 multiple workspaces are authorized, omitted `workspaceId` is rejected instead of
-guessing. The server rejects OAuth access tokens whose stored `resource` does
+guessing. The server rejects OAuth access tokens whose signed `audience` does
 not match `SIGNALSURF_MCP_RESOURCE_URL`.
 
-The public scope and tool contract lives in `src/capabilities.ts` and is
-documented in `docs/capabilities.md`. Broad legacy scopes remain for client
-compatibility, while granular scopes support least-privilege access to Surf
-Points, execution, table data, schemas, and safe source controls.
+The public scope and tool contract lives in `@signalsurf/mcp-contract` and is
+documented in `docs/capabilities.md`. Granular scopes support least-privilege
+access to Projects, Surf Points, execution, table data, schemas, and safe source
+controls.
 
 Every chargeable Deepline search, enrichment, or generic execution has an
 additional per-action boundary. This server creates or reuses a redacted,
@@ -248,7 +245,7 @@ Resources are read-only JSON context surfaces:
 - `signalsurf://databases/{databaseId}/rows`
 
 `signalsurf://context` includes the same `workspaces[]` metadata as
-`get_context`, so clients that prefer resources over tools can still show
+`get_workspace_context`, so clients that prefer resources over tools can still show
 human-readable workspace and organization names.
 
 The database-row template expands current-workspace databases into concrete

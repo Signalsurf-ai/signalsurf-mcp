@@ -5,9 +5,9 @@ signatures this server actually uses. `pnpm check:schema-usage` reads it and
 fails when the code names a table, column, or RPC argument production does not
 have.
 
-SIG-2672: the SIG-2318 vocabulary renames (`product_id` -> `workspace_id`,
-`database_folders` -> `agents`, `product_capability_overrides` ->
-`workspace_capability_overrides`, `product_goals` -> the
+SIG-2672: the SIG-2318 vocabulary renames (the legacy tenant identifier became
+`workspace_id`, `database_folders` became `agents`, the legacy capability
+override table became `workspace_capability_overrides`, and `product_goals` became the
 `get_workspace_brand_profile` RPC) broke every tool-mode call while the
 FakeSupabase suite stayed green, because those fixtures answer any table or
 column name. This snapshot is the tripwire for the next rename.

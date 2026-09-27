@@ -263,7 +263,9 @@ export async function loadWorkspaceCapabilities(
     overridesByWorkspace.set(row.workspace_id, rows)
   }
 
-  const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]))
+  const workspaceById = new Map(
+    workspaces.map((workspace) => [workspace.id, workspace])
+  )
   return Object.fromEntries(
     workspaceIds.map((workspaceId) => {
       const workspace = workspaceById.get(workspaceId)

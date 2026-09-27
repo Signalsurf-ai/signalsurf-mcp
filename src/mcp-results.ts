@@ -32,7 +32,9 @@ export function jsonErrorResult(error: unknown): CallToolResult {
   }
 }
 
-export async function runJsonTool(fn: () => Promise<unknown>): Promise<CallToolResult> {
+export async function runJsonTool(
+  fn: () => Promise<unknown>
+): Promise<CallToolResult> {
   try {
     return jsonResult({ ok: true, data: await fn() })
   } catch (error) {

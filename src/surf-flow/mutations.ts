@@ -271,10 +271,7 @@ export function updateNode(
 }
 
 /** Remove a node and every edge touching it. */
-export function removeNode(
-  flow: FlowV2,
-  nodeId: string
-): FlowV2 {
+export function removeNode(flow: FlowV2, nodeId: string): FlowV2 {
   if (!nodeById(flow, nodeId)) {
     throw new FlowMutationError(
       "node_not_found",
@@ -289,10 +286,7 @@ export function removeNode(
 }
 
 /** Remove a single edge by id. */
-export function removeEdge(
-  flow: FlowV2,
-  edgeId: string
-): FlowV2 {
+export function removeEdge(flow: FlowV2, edgeId: string): FlowV2 {
   if (!flow.edges.some((e) => e.id === edgeId)) {
     throw new FlowMutationError(
       "edge_not_found",
