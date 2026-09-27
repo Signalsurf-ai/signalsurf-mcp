@@ -68,15 +68,28 @@ const STOPWORDS = new Set([
   "can",
 ])
 
+const DOMAIN_ALIASES: Record<string, readonly string[]> = {
+  crm: ["table", "row", "record", "database"],
+}
+
+function queryTerms(query: string): string[] {
+  const literalTerms = query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length >= 2 && !STOPWORDS.has(term))
+  return [
+    ...new Set(
+      literalTerms.flatMap((term) => [term, ...(DOMAIN_ALIASES[term] ?? [])])
+    ),
+  ]
+}
+
 export function searchCapabilities(
   query: string,
   catalog: CapabilityCatalog,
   limit = 8
 ): CapabilitySearchResult {
-  const terms = query
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((term) => term.length >= 2 && !STOPWORDS.has(term))
+  const terms = queryTerms(query)
 
   // Empty query: surface the guided workflows (prompts) as the entry point
   // rather than dumping every tool.

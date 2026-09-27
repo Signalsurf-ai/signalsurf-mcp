@@ -51,6 +51,11 @@ describe("searchCapabilities", () => {
     expect(result.prompts.map((p) => p.name)).toContain("build_lead_list")
   })
 
+  it("maps CRM language to Table and record capabilities", () => {
+    const result = searchCapabilities("show CRM records", catalog)
+    expect(result.tools.map((tool) => tool.name)).toContain("list_tables")
+  })
+
   it("returns prompts as the entry point for an empty query", () => {
     const result = searchCapabilities("   ", catalog)
     expect(result.tools).toHaveLength(0)
