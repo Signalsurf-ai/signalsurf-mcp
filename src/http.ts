@@ -6,11 +6,11 @@ import {
   JSONRPCRequestSchema,
   SUPPORTED_PROTOCOL_VERSIONS,
 } from "@modelcontextprotocol/sdk/types.js"
-import express from "express"
 import {
   PROJECT_MCP_TOOL_SCOPES,
   type ProjectMcpToolName,
 } from "@signalsurf/mcp-contract"
+import express from "express"
 
 import {
   canUseCapability,

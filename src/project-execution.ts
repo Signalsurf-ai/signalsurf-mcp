@@ -395,7 +395,8 @@ export function publishedSchemaToZod(input: unknown): ZodTypeAny {
     case "string": {
       let string = z.string()
       if (schema.format === "uuid") string = string.uuid()
-      if (schema.format === "date-time") string = string.datetime({ offset: true })
+      if (schema.format === "date-time")
+        string = string.datetime({ offset: true })
       if (typeof schema.pattern === "string")
         string = string.regex(new RegExp(schema.pattern))
       if (typeof schema.minLength === "number")

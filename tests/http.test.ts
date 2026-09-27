@@ -578,14 +578,15 @@ describe("HTTP transport", () => {
     const resourceUrl = "https://mcp.signalsurf.ai/mcp"
     const userId = "00000000-0000-4000-8000-000000000102"
     const projectId = "00000000-0000-4000-8000-000000000103"
-    const projectExecutionFetch = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          ok: true,
-          data: { project: { id: projectId, name: "Validate CFO ICP" } },
-        }),
-        { status: 200, headers: { "content-type": "application/json" } }
-      )
+    const projectExecutionFetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: { project: { id: projectId, name: "Validate CFO ICP" } },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
     ) as unknown as typeof fetch
     const oauthToken = await signOAuthToken({
       userId,
