@@ -32,13 +32,19 @@ function scoreEntry(entry: CapabilityEntry, terms: string[]): number {
 function rank(
   entries: CapabilityEntry[],
   terms: string[],
-  limit: number
+  limit: number,
+  preferredNames: readonly string[] = []
 ): CapabilityEntry[] {
+  const preferred = new Set(preferredNames)
   return entries
     .map((entry) => ({ entry, score: scoreEntry(entry, terms) }))
     .filter((scored) => scored.score > 0)
     .sort(
-      (a, b) => b.score - a.score || a.entry.name.localeCompare(b.entry.name)
+      (a, b) =>
+        Number(preferred.has(b.entry.name)) -
+          Number(preferred.has(a.entry.name)) ||
+        b.score - a.score ||
+        a.entry.name.localeCompare(b.entry.name)
     )
     .slice(0, limit)
     .map((scored) => scored.entry)
@@ -72,6 +78,10 @@ const DOMAIN_ALIASES: Record<string, readonly string[]> = {
   crm: ["table", "row", "record", "database"],
 }
 
+const DOMAIN_BOOTSTRAP_TOOLS: Record<string, readonly string[]> = {
+  crm: ["list_tables"],
+}
+
 function queryTerms(query: string): string[] {
   const literalTerms = query
     .toLowerCase()
@@ -89,6 +99,10 @@ export function searchCapabilities(
   catalog: CapabilityCatalog,
   limit = 8
 ): CapabilitySearchResult {
+  const domains = query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => DOMAIN_ALIASES[term])
   const terms = queryTerms(query)
 
   // Empty query: surface the guided workflows (prompts) as the entry point
@@ -102,7 +116,10 @@ export function searchCapabilities(
     }
   }
 
-  const tools = rank(catalog.tools, terms, limit)
+  const bootstrapTools = domains.flatMap(
+    (domain) => DOMAIN_BOOTSTRAP_TOOLS[domain] ?? []
+  )
+  const tools = rank(catalog.tools, terms, limit, bootstrapTools)
   const prompts = rank(catalog.prompts, terms, limit)
 
   const hint =
