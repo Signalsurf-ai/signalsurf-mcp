@@ -8,6 +8,7 @@ import { SignalSurfRepository } from "../src/repository.js"
 import { createSignalSurfMcpServer } from "../src/server.js"
 import type { SignalSurfContext } from "../src/types.js"
 import { WORKSPACE_CAPABILITIES } from "../src/workspace-capabilities.js"
+import { buildWorkspaceCapabilityDomains } from "../src/workspace-context.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 const ALL_MCP_TOOL_NAMES = [
@@ -31,6 +32,36 @@ afterEach(async () => {
 })
 
 describe("MCP server", () => {
+  it("projects granular Project grants into truthful domain access", () => {
+    const domain = (scopedContext: SignalSurfContext) =>
+      buildWorkspaceCapabilityDomains({
+        context: scopedContext,
+        workspaceId: context.workspaceId,
+        effective: ["context.read"],
+      }).find((candidate) => candidate.domain === "projects")
+
+    expect(
+      domain({
+        ...context,
+        scopes: ["mcp:conversations.read"],
+      })
+    ).toMatchObject({ enabled: true, access: ["read"] })
+    expect(
+      domain({
+        ...context,
+        role: "editor",
+        scopes: ["mcp:projects.write"],
+      })
+    ).toMatchObject({ enabled: true, access: ["write"] })
+    expect(
+      domain({
+        ...context,
+        role: "viewer",
+        scopes: ["mcp:projects.write", "mcp:conversations.control"],
+      })
+    ).toMatchObject({ enabled: false, access: [] })
+  })
+
   it("registers SignalSurf tools and executes read calls over MCP", async () => {
     const db = new FakeSupabase({
       workflows: [

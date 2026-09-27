@@ -62,15 +62,22 @@ export function buildWorkspaceCapabilityDomains(input: {
   const modules = workspaceModules(context, workspaceId)
   const moduleEnabled = (...names: string[]) =>
     names.some((name) => modules.includes(name as never))
+  const projectAccess = accessList({
+    read:
+      scopeAllowed(context, "mcp:projects.read") ||
+      scopeAllowed(context, "mcp:conversations.read"),
+    write:
+      context.role !== "viewer" &&
+      scopeAllowed(context, "mcp:projects.write"),
+    control:
+      context.role !== "viewer" &&
+      scopeAllowed(context, "mcp:conversations.control"),
+  })
   return [
     {
       domain: "projects",
-      enabled: scopeAllowed(context, "mcp:projects.read"),
-      access: accessList({
-        read: scopeAllowed(context, "mcp:projects.read"),
-        write: scopeAllowed(context, "mcp:projects.write"),
-        control: scopeAllowed(context, "mcp:conversations.control"),
-      }),
+      enabled: projectAccess.length > 0,
+      access: projectAccess,
     },
     {
       domain: "tables",

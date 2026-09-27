@@ -51,6 +51,11 @@ describe("searchCapabilities", () => {
     expect(result.prompts.map((p) => p.name)).toContain("build_lead_list")
   })
 
+  it("maps CRM language to Table and record capabilities", () => {
+    const result = searchCapabilities("show CRM records", catalog)
+    expect(result.tools.map((tool) => tool.name)).toContain("list_tables")
+  })
+
   it("returns prompts as the entry point for an empty query", () => {
     const result = searchCapabilities("   ", catalog)
     expect(result.tools).toHaveLength(0)
@@ -140,5 +145,36 @@ describe("find_capabilities tool over MCP", () => {
     expect((await client.listTools()).tools.map((tool) => tool.name)).toContain(
       "start_thread"
     )
+  })
+
+  it("keeps the CRM bootstrap tool within the full catalog result limit", async () => {
+    const context: SignalSurfContext = {
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+      role: "editor",
+    }
+    const server = await createSignalSurfMcpServer({
+      context,
+      repository: {} as any,
+    })
+    const client = new Client({ name: "test-client", version: "0.0.0" })
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
+    cleanup.push(async () => client.close())
+    cleanup.push(async () => server.close())
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    const result = await client.callTool({
+      name: "find_capabilities",
+      arguments: { query: "show CRM records" },
+    })
+    expect(result.isError).toBeFalsy()
+    const toolNames = (result.structuredContent as any).data.tools.map(
+      (tool: any) => tool.name
+    )
+    expect(toolNames).toHaveLength(8)
+    expect(toolNames).toContain("list_tables")
   })
 })
