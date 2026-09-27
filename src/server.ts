@@ -123,7 +123,7 @@ I want to… →
 - Build a contact-list email drip → use create_campaign (do not hand-wire it); pass a connected Unipile mailbox id.
 - Decide what to write into a column → call get_enrichment_context(databaseId[, fieldKey]) for brand context, schema, popular existing values, and field conventions.
 - Run or monitor a Workflow → run_workflow, then list_surf_jobs / wait_for_surf_job.
-- Inspect data → list_tables, read_table, list_database_fields.
+- Inspect data → list_tables, read_table, list_table_fields.
 - Plan or inspect sender infrastructure → inspect_sender_infrastructure, then plan_sender_capacity; use search_sender_domains for live Domain availability. Exact pricing, purchases, registrant details, and secrets stay in the secure SignalSurf app.
 
 When multiple workspaces are authorized, pass workspaces[].workspaceId (from get_workspace_context) on every workspace-scoped call.`
