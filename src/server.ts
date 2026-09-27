@@ -12,20 +12,18 @@ import {
   resolveWorkspaceContext,
 } from "./auth.js"
 import {
-  MCP_DM_SCOPE,
   PUBLIC_MCP_TOOLS,
   PUBLIC_MCP_TOOL_NAMES,
   requiredCapabilitiesForTool,
   type PublicMcpToolName,
 } from "./capabilities.js"
-import {
-  DIRECT_MESSAGE_INSTRUCTIONS,
-  DirectMessageClient,
-  loadDirectMessageSurface,
-  type DirectMessageClientOptions,
-} from "./direct-message.js"
 import { UserFacingError } from "./errors.js"
 import { jsonErrorResult, jsonResource, runJsonTool } from "./mcp-results.js"
+import {
+  ProjectExecutionClient,
+  createProjectExecutionSurface,
+  type ProjectExecutionClientOptions,
+} from "./project-execution.js"
 import { registerPrompts, workspaceVisiblePromptCatalog } from "./prompts.js"
 import { SignalSurfRepository } from "./repository.js"
 import {
@@ -57,6 +55,7 @@ import {
   getSurfJobSchema,
   getTableRowSchema,
   getWorkflowSchema,
+  getWorkspaceContextSchema,
   inspectSenderInfrastructureSchema,
   instagramContentSearchSchema,
   listDatabaseFieldsSchema,
@@ -84,8 +83,8 @@ import {
   updateWorkflowSourceSchema,
   waitForSurfJobSchema,
 } from "./schemas.js"
-import { searchCapabilities } from "./tool-search.js"
 import { installPaginatedToolList } from "./tool-list-pagination.js"
+import { searchCapabilities } from "./tool-search.js"
 import type { SignalSurfContext } from "./types.js"
 import {
   WORKSPACE_CAPABILITIES,
@@ -94,23 +93,24 @@ import {
   projectMcpCapabilitiesForWorkspace,
   workspaceCapabilityForTool,
 } from "./workspace-capabilities.js"
+import { buildWorkspaceContext } from "./workspace-context.js"
 
 export type CreateServerOptions = {
   context: SignalSurfContext
   repository: SignalSurfRepository
-  /** Member/Project capability target for connections granted `mcp:dm`. */
-  surferSession?: DirectMessageClientOptions
+  /** Authenticated Web execution boundary for Project collaboration tools. */
+  projectExecution?: ProjectExecutionClientOptions
   /** Public connector icon; omit it when the current HTTP origin cannot serve it. */
   iconUrl?: string
-  /** Skip the dynamic collaboration catalog for requests that cannot consume it. */
-  includeDirectMessageTools?: boolean
   /** Serve only the initialize handshake; later stateless requests build handlers. */
   initializeOnly?: boolean
+  /** Build deterministic discovery without loading workspace application state. */
+  discoveryOnly?: boolean
 }
 
 export const SERVER_INSTRUCTIONS = `SignalSurf MCP — operating manual.
 
-Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter — workspaceId from get_context (when multiple workspaces), databaseId from list_tables, workflowId from list_workflows. Never pass a null or guessed id.
+Golden rule: call get_workspace_context FIRST. Resolve real ids before any id-typed parameter — workspaceId from get_workspace_context (when multiple workspaces), databaseId from list_tables, workflowId from list_workflows. Never pass a null or guessed id.
 
 Execution model: enrichment runs on the SignalSurf server brain via Enrich and Workflows. Your job is to set up, trigger, and poll — not to fill cells by hand unless explicitly asked.
 
@@ -126,7 +126,7 @@ I want to… →
 - Inspect data → list_tables, read_table, list_database_fields.
 - Plan or inspect sender infrastructure → inspect_sender_infrastructure, then plan_sender_capacity; use search_sender_domains for live Domain availability. Exact pricing, purchases, registrant details, and secrets stay in the secure SignalSurf app.
 
-When multiple workspaces are authorized, pass workspaces[].workspaceId (from get_context) on every workspace-scoped call.`
+When multiple workspaces are authorized, pass workspaces[].workspaceId (from get_workspace_context) on every workspace-scoped call.`
 
 export function workspaceProjectedServerInstructions(
   context: SignalSurfContext
@@ -136,14 +136,10 @@ export function workspaceProjectedServerInstructions(
     requiredCapabilitiesForTool(name).every((capability) =>
       canUseCapability(context, capability)
     )
-  if (canUseTool("get_context")) {
+  if (canUseTool("get_workspace_context")) {
     sections.push(
-      "Golden rule: call get_context FIRST. Resolve real ids before any id-typed parameter; never pass a null or guessed id.",
+      "Golden rule: call get_workspace_context FIRST. Resolve real ids before any id-typed parameter; never pass a null or guessed id.",
       "Not sure which available capability fits → call find_capabilities(query)."
-    )
-  } else if (context.scopes?.includes(MCP_DM_SCOPE)) {
-    sections.push(
-      "Use list_workspaces to resolve workspaceId before a Project collaboration call; never pass a null or guessed id. Product tools remain discoverable, but calls require their corresponding product scopes."
     )
   }
   if (canUseTool("list_tables")) {
@@ -162,9 +158,12 @@ export function workspaceProjectedServerInstructions(
       "For available Campaign work, use create_campaign instead of hand-wiring a sending flow."
     )
   }
-  if (authorizedWorkspaceIds(context).length > 1 && canUseTool("get_context")) {
+  if (
+    authorizedWorkspaceIds(context).length > 1 &&
+    canUseTool("get_workspace_context")
+  ) {
     sections.push(
-      "When multiple workspaces are authorized, pass workspaces[].workspaceId from get_context on every workspace-scoped call."
+      "When multiple workspaces are authorized, pass workspaces[].workspaceId from get_workspace_context on every workspace-scoped call."
     )
   }
   return sections.join("\n\n")
@@ -174,17 +173,27 @@ export async function createSignalSurfMcpServer(
   options: CreateServerOptions
 ): Promise<McpServer> {
   const { context, repository } = options
-  const hasDirectMessageScope = context.scopes?.includes(MCP_DM_SCOPE) === true
-  const directMessageClient = hasDirectMessageScope
-    ? new DirectMessageClient(options.surferSession ?? {})
-    : null
+  const projectExecutionClient = new ProjectExecutionClient(
+    options.projectExecution ?? {
+      delegationToken: undefined,
+    }
+  )
+  const projectExecutionSurface = createProjectExecutionSurface({
+    client: projectExecutionClient,
+    scopes: context.scopes ?? [],
+    role: context.role,
+  })
   // Initialize only needs declared protocol capabilities and instructions.
   // Stateless follow-up requests build the authorized handlers they consume.
   const initializeOnly = options.initializeOnly === true
   // OAuth/database tokens resolve workspace names during token resolution; static
-  // env tokens do not. Resolve them once here so every response (get_context and
+  // env tokens do not. Resolve them once here so every response (get_workspace_context and
   // the signalsurf://context resource) reports real names instead of raw UUIDs.
-  if (!initializeOnly && !context.workspaces?.length) {
+  if (
+    !initializeOnly &&
+    !options.discoveryOnly &&
+    !context.workspaces?.length
+  ) {
     try {
       const resolved = await repository.resolveWorkspaceContexts(
         authorizedWorkspaceIds(context)
@@ -198,24 +207,12 @@ export async function createSignalSurfMcpServer(
   // and product capability projection are independent, so do not serialize
   // their remote reads. Initialize deliberately uses the complete static role
   // contract above instead of making an optional publisher round trip.
-  const [directMessageSurface, workspaceCapabilities] = await Promise.all([
-    !initializeOnly &&
-    hasDirectMessageScope &&
-    options.includeDirectMessageTools !== false
-      ? loadDirectMessageSurface(directMessageClient!)
-      : Promise.resolve(null),
-    initializeOnly
-      ? Promise.resolve(context.workspaceCapabilitiesByWorkspaceId ?? {})
-      : context.workspaceCapabilitiesByWorkspaceId
-        ? Promise.resolve(context.workspaceCapabilitiesByWorkspaceId)
-        : loadRepositoryCapabilities(
-            repository,
-            authorizedWorkspaceIds(context)
-          ),
-  ])
+  const workspaceCapabilities = await (initializeOnly || options.discoveryOnly
+    ? Promise.resolve(context.workspaceCapabilitiesByWorkspaceId ?? {})
+    : context.workspaceCapabilitiesByWorkspaceId
+      ? Promise.resolve(context.workspaceCapabilitiesByWorkspaceId)
+      : loadRepositoryCapabilities(repository, authorizedWorkspaceIds(context)))
   context.workspaceCapabilitiesByWorkspaceId = workspaceCapabilities
-  const directMessageInstructions = directMessageSurface?.instructions ??
-    (hasDirectMessageScope ? DIRECT_MESSAGE_INSTRUCTIONS : null)
   const server = new McpServer(
     {
       name: "signalsurf-mcp",
@@ -239,9 +236,7 @@ export async function createSignalSurfMcpServer(
         tools: {},
         prompts: {},
       },
-      instructions: directMessageInstructions
-        ? `${directMessageInstructions}\n\n${workspaceProjectedServerInstructions(context)}`
-        : workspaceProjectedServerInstructions(context),
+      instructions: `${projectExecutionSurface.instructions}\n\n${workspaceProjectedServerInstructions(context)}`,
     }
   )
 
@@ -252,12 +247,13 @@ export async function createSignalSurfMcpServer(
     server,
     repository,
     context,
-    directMessageSurface?.capabilities ?? []
+    projectExecutionClient,
+    projectExecutionSurface.capabilities
   )
-  directMessageSurface?.register(server, PUBLIC_MCP_TOOL_NAMES)
+  projectExecutionSurface.register(server, PUBLIC_MCP_TOOL_NAMES)
   registerPrompts(server, {
-    tables: isToolVisibleAcrossWorkspaces(context, "list_tables"),
-    workflows: isToolVisibleAcrossWorkspaces(context, "create_workflow"),
+    tables: true,
+    workflows: true,
   })
   installPaginatedToolList(server)
   return server
@@ -282,16 +278,17 @@ function registerTools(
   server: McpServer,
   repository: SignalSurfRepository,
   context: SignalSurfContext,
+  projectExecutionClient: ProjectExecutionClient,
   additionalCapabilities: Array<{
     name: string
     title: string
     description: string
+    requiredScopes: readonly string[]
+    readOnly: boolean
   }> = []
 ) {
   const registeredTools = new Set<PublicMcpToolName>()
-  const visibleToolNames = PUBLIC_MCP_TOOL_NAMES.filter((name) =>
-    isToolVisibleAcrossWorkspaces(context, name)
-  )
+  const visibleToolNames = [...PUBLIC_MCP_TOOL_NAMES]
   const visibleToolNameSet = new Set(visibleToolNames)
   const visiblePromptCatalog = workspaceVisiblePromptCatalog({
     tables: isToolVisibleAcrossWorkspaces(context, "list_tables"),
@@ -377,51 +374,23 @@ function registerTools(
     )
   }
 
-  registerPublicTool("get_context", undefined, async () =>
-    runJsonTool(async () => {
-      assertToolAllowed("get_context")
-      const workspaceIds = authorizedWorkspaceIds(context)
-      const workspaces = authorizedWorkspaces(context)
-      return {
-        workspaceId: context.workspaceId,
-        workspaceIds,
-        workspaces,
-        userId: context.userId ?? null,
-        role: context.role,
-        tokenName: context.tokenName ?? null,
-        scopes: context.scopes ?? null,
-        capabilities: {
-          effective: projectMcpCapabilitiesForWorkspace(
-            context,
-            listContextCapabilities(context)
-          ),
-          tools: Object.fromEntries(
-            visibleToolNames.map((toolName) => [
-              toolName,
-              requiredCapabilitiesForTool(toolName).every((capability) =>
-                canUseCapability(context, capability)
-              ),
-            ])
-          ),
-          read: canUseCapability(context, "context.read"),
-          execute:
-            canUseCapability(context, "workflows.execute") ||
-            canUseCapability(context, "deepline.execute"),
-          write:
-            canUseCapability(context, "workflows.execute") ||
-            canUseCapability(context, "workflows.write") ||
-            canUseCapability(context, "workflows.delete") ||
-            canUseCapability(context, "campaigns.write") ||
-            canUseCapability(context, "tables.write") ||
-            canUseCapability(context, "tables.delete") ||
-            canUseCapability(context, "schemas.write") ||
-            canUseCapability(context, "sources.write") ||
-            canUseCapability(context, "account_lists.write") ||
-            canUseCapability(context, "deepline.enrich") ||
-            canUseCapability(context, "deepline.execute"),
-        },
-      }
-    })
+  registerPublicTool(
+    "get_workspace_context",
+    getWorkspaceContextSchema,
+    async (args) =>
+      runJsonTool(async () => {
+        assertToolAllowed("get_workspace_context")
+        const workspaceId =
+          typeof args?.workspaceId === "string"
+            ? toolContext(args).workspaceId
+            : context.workspaceId
+        return buildWorkspaceContext({
+          context,
+          repository,
+          projectExecutionClient,
+          workspaceId,
+        })
+      })
   )
 
   registerPublicTool(
@@ -468,7 +437,19 @@ function registerTools(
               title: PUBLIC_MCP_TOOLS[name].title,
               description: PUBLIC_MCP_TOOLS[name].description,
             })),
-          ...additionalCapabilities,
+          ...additionalCapabilities
+            .filter(
+              (capability) =>
+                capability.requiredScopes.every((scope) =>
+                  context.scopes?.includes(scope)
+                ) &&
+                (capability.readOnly || context.role !== "viewer")
+            )
+            .map(({ name, title, description }) => ({
+              name,
+              title,
+              description,
+            })),
         ]
         return searchCapabilities(
           typeof args?.query === "string" ? args.query : "",

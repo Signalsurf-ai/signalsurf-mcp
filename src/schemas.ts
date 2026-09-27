@@ -138,6 +138,10 @@ export const getBrandContextSchema = {
   ...workspaceTargetSchema,
 }
 
+export const getWorkspaceContextSchema = {
+  ...workspaceTargetSchema,
+}
+
 export const listWorkflowsSchema = {
   ...workspaceTargetSchema,
   includeInactive: z.boolean().default(true).optional(),
@@ -739,7 +743,7 @@ export const archiveAccountListProfileSchema = {
  * server registration verifies it is using this exact schema at runtime.
  */
 export const PUBLIC_MCP_TOOL_SCHEMAS = {
-  get_context: undefined,
+  get_workspace_context: getWorkspaceContextSchema,
   get_brand_context: getBrandContextSchema,
   get_enrichment_context: getEnrichmentContextSchema,
   find_capabilities: findCapabilitiesSchema,

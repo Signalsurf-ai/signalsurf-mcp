@@ -8,7 +8,7 @@
 
 External agents connect to the SignalSurf MCP and receive 44 well-described tools but
 no operating guidance. They have hands, not a playbook. The concrete failure: an agent
-called `list_quick_surf` with `databaseId: null` because it never resolved the real
+called `list_enrich` with `databaseId: null` because it never resolved the real
 database id first (`MCP error -32602: invalid_type, expected string, received null,
 path: [databaseId]`). The internal Surfer agent does not have this problem because its
 dynamically-built system prompt (`SignalsurfWeb/.../pipeline/brain-analyze.ts:620-889`)
@@ -25,7 +25,7 @@ brain** (unchanged). Specifically:
    guided to resolve ids before any id-typed parameter, and id-not-found errors return
    the valid options.
 2. "Enrich the whole table" is a single guided flow (`enrich_table` prompt) that ends in
-   the server brain filling every row via Quick Surf.
+   the server brain filling every row via Enrich.
 3. The agent has access to the same contextual "material" Surfer uses, on demand, via one
    read-only tool.
 
@@ -38,8 +38,8 @@ shape.
 ## Decision: this keeps the brain on the server
 
 The external model's role is to **operate SignalSurf like Surfer does** — orchestrate and
-poll — while Quick Surf / surf points execute per-cell enrichment server-side with the
-full internal context. We are closing the *guidance + context* gap, not the *reasoning*
+poll — while Enrich / surf points execute per-cell enrichment server-side with the
+full internal context. We are closing the _guidance + context_ gap, not the _reasoning_
 gap.
 
 ## Architecture — three layers + one flagship workflow
@@ -49,11 +49,11 @@ gap.
 Replace the single sentence at `src/server.ts:102-103` with a compact (~30–40 line)
 structured manual. Content:
 
-- **Golden rule:** call `get_context` first; resolve `productId` (when multi-product) and
+- **Golden rule:** call `get_workspace_context` first; resolve `workspaceId` (when multi-workspace) and
   `databaseId` / `surfPointId` via the relevant `list_*` tool before passing any id-typed
   parameter. Never pass `null` or a guessed id.
 - **"I want to X → read prompt Y / use tools Z"** quick map.
-- **Execution model note:** enrichment is executed by the server brain (Quick Surf and
+- **Execution model note:** enrichment is executed by the server brain (Enrich and
   surf points). The agent's job is to set up, trigger, and poll — not to fill cells by
   hand unless explicitly asked.
 
@@ -63,7 +63,7 @@ Keep it short so it does not bloat every request.
 
 New public MCP tool.
 
-**Input:** `{ databaseId: uuid, fieldKey?: string, productId?: uuid }`
+**Input:** `{ databaseId: uuid, fieldKey?: string, workspaceId?: uuid }`
 **Capability required:** `context.read` + `tables.read` (reuse `assertCanUseCapability`).
 **Output (single JSON):**
 
@@ -101,16 +101,16 @@ agent gets parity-plus on this axis.
 Enable the currently-unused MCP Prompts primitive via `server.registerPrompt` (available
 in `@modelcontextprotocol/sdk` ^1.29). First and only prompt this cut:
 
-**`enrich_table({ databaseId?: uuid, productId?: uuid })`** → returns a guided, parametrized
+**`enrich_table({ databaseId?: uuid, workspaceId?: uuid })`** → returns a guided, parametrized
 message sequence. When `databaseId` is supplied, the resolved id is embedded; when omitted,
 step 1 instructs discovery instead of failing. Steps:
 
 1. (if no `databaseId`) call `list_tables`, pick the table.
 2. call `get_enrichment_context(databaseId)` to load brand / schema / conventions /
    popularValues.
-3. for each column to fill: `enable_quick_surf(databaseId, fieldKey, whatToDo)` — write
+3. for each column to fill: `enable_enrich(databaseId, fieldKey, whatToDo)` — write
    `whatToDo` using the brand + schema context; optionally set a `runCondition` gate.
-4. `run_quick_surf(databaseId, fieldKey, scope: 'all')` — the server brain fills every row.
+4. `run_enrich(databaseId, fieldKey, scope: 'all')` — the server brain fills every row.
 5. `wait_for_surf_job` / `list_surf_jobs` to poll and report.
 
 The prompt body embeds the conventions and the "the brain does the work, you orchestrate"
@@ -124,7 +124,7 @@ external agent
   → invokes enrich_table prompt
   → prompt directs it to call get_enrichment_context
         → server assembles brand + schema + conventions + popularValues from Supabase (read-only)
-  → agent calls enable_quick_surf / run_quick_surf
+  → agent calls enable_enrich / run_enrich
         → server brain executes per-cell with full internal context  ← reasoning stays here
   → agent polls jobs (wait_for_surf_job / list_surf_jobs)
 ```

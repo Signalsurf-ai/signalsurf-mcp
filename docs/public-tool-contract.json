@@ -25,7 +25,7 @@
     "enable_enrich": "c1993aecce67c2237a2c4f1b4689c2b2cb87d3349467c914c6e5a4e14c998ef9",
     "find_capabilities": "780608dd04f21ab9299af2df358deb9fb0b13178b49823e756b9e289b7d733b8",
     "get_brand_context": "40eaeb52635247f3c0521ad8b6b9b0e4a2afec9fd71e8012a805c57d2b13e009",
-    "get_context": "efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49",
+    "get_workspace_context": "40eaeb52635247f3c0521ad8b6b9b0e4a2afec9fd71e8012a805c57d2b13e009",
     "get_enrichment_context": "bbf54f76855cc2a479c38db6df4a87b9d1ad7b57be1da740bebc842c02b58d0c",
     "get_node_upstream_context": "138a69101021a91e176ae9af47a006786c66c75e63acd8981578a1feab5e071e",
     "get_surf_job": "b49c619528002bfe69488b403ff5ff3a32f4d52f506e74c0b40dfefeb024d15e",
@@ -312,9 +312,12 @@
       "valid": [{}],
       "invalid": [{ "workspaceId": "not-a-uuid" }]
     },
-    "get_context": {
-      "valid": [{}],
-      "invalid": [null]
+    "get_workspace_context": {
+      "valid": [
+        {},
+        { "workspaceId": "00000000-0000-4000-8000-000000000001" }
+      ],
+      "invalid": [{ "workspaceId": "not-a-uuid" }]
     },
     "get_enrichment_context": {
       "valid": [

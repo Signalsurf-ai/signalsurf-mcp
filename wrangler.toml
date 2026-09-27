@@ -13,6 +13,7 @@ SIGNALSURF_MCP_RESOURCE_URL = "https://mcp.signalsurf.ai/mcp"
 SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL = "https://www.signalsurf.ai"
 SIGNALSURF_MCP_ALLOWED_HOSTS = "mcp.signalsurf.ai"
 SIGNALSURF_MCP_TRUST_PROXY = "true"
+# Secrets: SIGNALSURF_MCP_ACCESS_TOKEN_SECRET and SIGNALSURF_MCP_WEB_SERVICE_TOKEN
 SIGNALSURF_SUPABASE_URL = "https://wizgibkirtzpjilgvrbm.supabase.co"
 
 [observability]

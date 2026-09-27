@@ -1,12 +1,19 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
-import { afterEach, describe, expect, it } from "vitest"
+import { PROJECT_MCP_TOOL_CATALOG } from "@signalsurf/mcp-contract"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { PUBLIC_MCP_TOOL_NAMES } from "../src/capabilities.js"
 import { SignalSurfRepository } from "../src/repository.js"
 import { createSignalSurfMcpServer } from "../src/server.js"
 import type { SignalSurfContext } from "../src/types.js"
+import { WORKSPACE_CAPABILITIES } from "../src/workspace-capabilities.js"
 import { FakeSupabase } from "./fake-supabase.js"
+
+const ALL_MCP_TOOL_NAMES = [
+  ...PUBLIC_MCP_TOOL_NAMES,
+  ...PROJECT_MCP_TOOL_CATALOG.map((tool) => tool.name),
+] as const
 
 const context: SignalSurfContext = {
   workspaceId: "00000000-0000-4000-8000-000000000001",
@@ -126,8 +133,13 @@ describe("MCP server", () => {
     ])
 
     const tools = await client.listTools()
+    const toolNames = tools.tools.map((tool) => tool.name)
+    expect(toolNames).toContain("get_workspace_context")
+    expect(toolNames).toContain("get_project_context")
+    expect(toolNames).not.toContain("get_context")
+    expect(toolNames).not.toContain("resolve_project_context")
     expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
-      [...PUBLIC_MCP_TOOL_NAMES].sort()
+      [...ALL_MCP_TOOL_NAMES].sort()
     )
 
     const result = await client.callTool({
@@ -239,6 +251,13 @@ describe("MCP server", () => {
 
   it("advertises the stable public tool contract and denies viewer writes", async () => {
     const db = new FakeSupabase({
+      workspace_capability_overrides: WORKSPACE_CAPABILITIES.map(
+        (capability) => ({
+          workspace_id: context.workspaceId,
+          capability_key: capability,
+          enabled: true,
+        })
+      ),
       workflows: [],
       databases: [],
       entries: [],
@@ -263,7 +282,7 @@ describe("MCP server", () => {
 
     const tools = await client.listTools()
     expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
-      [...PUBLIC_MCP_TOOL_NAMES].sort()
+      [...ALL_MCP_TOOL_NAMES].sort()
     )
 
     const result = await client.callTool({
@@ -281,6 +300,13 @@ describe("MCP server", () => {
 
   it("honors granular scopes when evaluating public tools", async () => {
     const db = new FakeSupabase({
+      workspace_capability_overrides: WORKSPACE_CAPABILITIES.map(
+        (capability) => ({
+          workspace_id: context.workspaceId,
+          capability_key: capability,
+          enabled: true,
+        })
+      ),
       workflows: [],
       databases: [],
       entries: [],
@@ -292,6 +318,9 @@ describe("MCP server", () => {
       workspaceId: context.workspaceId,
       role: "editor",
       scopes: ["mcp:tables.read", "mcp:tables.write"],
+      workspaceCapabilitiesByWorkspaceId: {
+        [context.workspaceId]: WORKSPACE_CAPABILITIES,
+      },
     }
     const server = await createSignalSurfMcpServer({
       context: scopedContext,
@@ -309,7 +338,7 @@ describe("MCP server", () => {
     ])
 
     const contextResult = await client.callTool({
-      name: "get_context",
+      name: "get_workspace_context",
       arguments: {},
     })
     const contextText =
@@ -317,38 +346,28 @@ describe("MCP server", () => {
         ? contextResult.content[0].text
         : ""
     const contextBody = JSON.parse(contextText).data
-    expect(contextBody.capabilities.tools).toMatchObject({
-      get_brand_context: true,
-      create_table: false,
-      update_table: false,
-      delete_table: false,
-      create_table_row: true,
-      update_table_rows: true,
-      delete_table_rows: false,
-      get_workflow: false,
-      create_workflow: false,
-      run_workflow: false,
-      cancel_surf_job: false,
-      get_surf_job: false,
-      wait_for_surf_job: false,
-      list_surf_jobs: false,
-      list_table_fields: false,
-      add_table_field: false,
-      create_relation_field: false,
-      list_signals: false,
-      create_signal: false,
-      update_signal: false,
-      delete_signal: false,
-      list_workspace_tools: false,
-      list_workflow_tools: false,
-      inspect_sender_infrastructure: false,
-      plan_sender_capacity: false,
-      search_sender_domains: false,
+    expect(contextBody.capabilities).toMatchObject({
+      discoveryTool: "find_capabilities",
+      read: true,
+      write: true,
+      execute: false,
     })
+    expect(contextBody.capabilities.domains).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: "tables",
+          access: ["read", "write"],
+        }),
+        expect.objectContaining({
+          domain: "workflows",
+          access: [],
+        }),
+      ])
+    )
 
     const tools = await client.listTools()
     expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
-      [...PUBLIC_MCP_TOOL_NAMES].sort()
+      [...ALL_MCP_TOOL_NAMES].sort()
     )
 
     const denied = await client.callTool({
@@ -405,6 +424,13 @@ describe("MCP server", () => {
 
   it("reports campaign-only grants as write-capable", async () => {
     const db = new FakeSupabase({
+      workspace_capability_overrides: WORKSPACE_CAPABILITIES.map(
+        (capability) => ({
+          workspace_id: context.workspaceId,
+          capability_key: capability,
+          enabled: true,
+        })
+      ),
       workflows: [],
       databases: [],
       entries: [],
@@ -417,6 +443,9 @@ describe("MCP server", () => {
         workspaceId: context.workspaceId,
         role: "editor",
         scopes: ["mcp:campaigns.write"],
+        workspaceCapabilitiesByWorkspaceId: {
+          [context.workspaceId]: WORKSPACE_CAPABILITIES,
+        },
       },
       repository: new SignalSurfRepository(db as any),
     })
@@ -432,14 +461,149 @@ describe("MCP server", () => {
     ])
 
     const result = await client.callTool({
-      name: "get_context",
+      name: "get_workspace_context",
       arguments: {},
     })
     const text =
       result.content?.[0]?.type === "text" ? result.content[0].text : ""
     const capabilities = JSON.parse(text).data.capabilities
     expect(capabilities.write).toBe(true)
-    expect(capabilities.tools.create_campaign).toBe(true)
+    expect(capabilities.domains).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: "campaigns",
+          access: expect.arrayContaining(["write"]),
+        }),
+      ])
+    )
+  })
+
+  it("returns bounded active Project attention for the selected Workspace", async () => {
+    const userId = "00000000-0000-4000-8000-000000000003"
+    const projectId = "00000000-0000-4000-8000-000000000004"
+    const threadId = "00000000-0000-4000-8000-000000000005"
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { tool: string }
+      const data =
+        body.tool === "list_workspaces"
+          ? {
+              workspaces: [
+                {
+                  workspaceId: context.workspaceId,
+                  name: "Acme",
+                  memberAccess: "member",
+                },
+              ],
+            }
+          : {
+              threads: [
+                {
+                  projectId,
+                  projectName: "Validate CFO ICP",
+                  threadId,
+                  title: "Review first wave",
+                  preview: "Three CFOs replied",
+                  lastActivityAt: "2026-09-27T16:00:00.000Z",
+                  taskState: "active",
+                  unread: true,
+                  waitingOnMe: true,
+                },
+              ],
+              nextCursor: null,
+            }
+      return new Response(JSON.stringify({ ok: true, data }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    }) as unknown as typeof fetch
+    const server = await createSignalSurfMcpServer({
+      context: {
+        workspaceId: context.workspaceId,
+        userId,
+        role: "editor",
+        scopes: ["mcp:projects.read", "mcp:conversations.read"],
+        workspaceCapabilitiesByWorkspaceId: {
+          [context.workspaceId]: WORKSPACE_CAPABILITIES,
+        },
+      },
+      repository: new SignalSurfRepository(
+        new FakeSupabase({
+          workspaces: [
+            {
+              id: context.workspaceId,
+              organization_id: null,
+              name: "Acme",
+            },
+          ],
+          workspace_members: [
+            {
+              workspace_id: context.workspaceId,
+              user_id: userId,
+              role: "member",
+            },
+          ],
+          workspace_capability_overrides: WORKSPACE_CAPABILITIES.map(
+            (capability) => ({
+              workspace_id: context.workspaceId,
+              capability_key: capability,
+              enabled: true,
+            })
+          ),
+          workflows: [],
+          databases: [],
+          entries: [],
+          surf_jobs: [],
+          user_preferences: [],
+          sources: [],
+        }) as any
+      ),
+      projectExecution: {
+        baseUrl: "https://app.signalsurf.test",
+        serviceToken: "service-secret",
+        delegationToken: "delegation-token",
+        fetch: fetchImpl,
+      },
+    })
+    const client = new Client({ name: "test-client", version: "0.0.0" })
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
+    cleanup.push(async () => client.close())
+    cleanup.push(async () => server.close())
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    const result = await client.callTool({
+      name: "get_workspace_context",
+      arguments: {},
+    })
+    const text =
+      result.content?.[0]?.type === "text" ? result.content[0].text : ""
+    const payload = JSON.parse(text)
+    expect(payload).toMatchObject({ ok: true })
+    expect(payload.data).toMatchObject({
+      workspaceId: context.workspaceId,
+      memberAuthority: {
+        status: "available",
+        memberAccess: "member",
+        grantRole: "editor",
+      },
+      attention: {
+        status: "available",
+        activeProjects: [
+          {
+            projectId,
+            name: "Validate CFO ICP",
+            waitingOnMe: true,
+            activeThreadCount: 1,
+          },
+        ],
+        threads: [{ projectId, threadId, title: "Review first wave" }],
+      },
+      contextVersion: { schema: 2 },
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 
   it("requires workspaceId for workspace-scoped tools when context has multiple workspaces", async () => {
@@ -532,7 +696,7 @@ describe("MCP server", () => {
     ])
 
     const contextResult = await client.callTool({
-      name: "get_context",
+      name: "get_workspace_context",
       arguments: {},
     })
     const contextText =

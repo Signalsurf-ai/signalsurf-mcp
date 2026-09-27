@@ -1,17 +1,7 @@
 import { createHash, randomUUID } from "node:crypto"
 import { setTimeout as sleep } from "node:timers/promises"
 
-import { sha256Hex } from "./auth.js"
 import { canonicalJson, canonicalSha256 } from "./canonical-json.js"
-import {
-  MCP_DM_SCOPE,
-  MCP_LEGACY_READ_SCOPE,
-  MCP_LEGACY_WRITE_SCOPE,
-  grantedCapabilitiesForScopes,
-  isSupportedMcpScope,
-  parseStoredScopes,
-  scopesImplyWriteAccess,
-} from "./capabilities.js"
 import { FIELD_CONVENTIONS } from "./conventions.js"
 import {
   buildDeeplineSearchPayload,
@@ -547,35 +537,6 @@ type WorkflowToolInput = {
   toolId: string
 }
 
-type McpTokenRow = {
-  id: string
-  workspace_id: string
-  workspace_ids?: string[] | null
-  created_by: string | null
-  name: string | null
-  revoked_at: string | null
-}
-
-type McpOAuthTokenRow = {
-  id: string
-  client_id: string
-  user_id: string
-  // SIG-2318 renamed the grant columns from workspace_id / workspace_ids.
-  workspace_id: string
-  workspace_ids?: string[] | null
-  scope: string
-  resource: string
-  access_token_expires_at: string
-  refresh_token_family_id?: string | null
-  revoked_at: string | null
-}
-
-type McpOAuthClientRow = {
-  client_id: string
-  client_name: string | null
-  revoked_at: string | null
-}
-
 type WorkspaceContextRow = {
   id: string
   name: string | null
@@ -841,14 +802,6 @@ function sameStrings(left: string[], right: string[]): boolean {
   return (
     left.length === right.length &&
     left.every((value, index) => value === right[index])
-  )
-}
-
-function oauthTokenWorkspaceIds(row: McpOAuthTokenRow): string[] {
-  return uniqueIds(
-    [row.workspace_id, ...(row.workspace_ids ?? [])].filter(
-      (id): id is string => Boolean(id)
-    )
   )
 }
 
@@ -1468,154 +1421,6 @@ export class SignalSurfRepository {
     return loadWorkspaceCapabilities(this.db, workspaceIds)
   }
 
-  async resolveMcpToken(
-    token: string,
-    metadata: { ip?: string | null; resource?: string | null } = {}
-  ): Promise<SignalSurfContext | null> {
-    // Issued OAuth and manual tokens have disjoint, versioned prefixes. Route
-    // directly to the owning table so every hosted request does not pay for a
-    // guaranteed miss first. Unknown legacy shapes keep the defensive fallback.
-    if (token.startsWith("ssmcp_at_")) {
-      return this.resolveMcpOAuthToken(token, metadata)
-    }
-    const { data, error } = await this.db
-      .from("mcp_tokens")
-      // The column is `workspace_id` since the SIG-2318 rename; alias it onto
-      // the row shape this repository still uses.
-      .select("id, workspace_id, workspace_ids, created_by, name, revoked_at")
-      .eq("token_sha256", sha256Hex(token))
-      .is("revoked_at", null)
-      .maybeSingle()
-
-    requireNoDbError(error, "Failed to resolve MCP token")
-    if (!data) {
-      return this.resolveMcpOAuthToken(token, metadata)
-    }
-
-    const row = data as McpTokenRow
-    if (!row.created_by) return null
-    const workspaceIds = await this.currentWorkspaceIdsForUser(
-      row.created_by,
-      row.workspace_ids?.length ? row.workspace_ids : [row.workspace_id]
-    )
-    if (workspaceIds.length === 0) return null
-
-    const update: Record<string, unknown> = {
-      last_used_at: new Date().toISOString(),
-    }
-    if (metadata.ip) update.last_used_ip = metadata.ip
-
-    const [updateResult, workspaces] = await Promise.all([
-      this.db.from("mcp_tokens").update(update).eq("id", row.id),
-      this.resolveWorkspaceContexts(workspaceIds),
-    ])
-
-    if (updateResult.error) {
-      console.error(
-        `Failed to update MCP token usage metadata: ${updateResult.error.message}`
-      )
-    }
-
-    return {
-      workspaceId: workspaceIds.includes(row.workspace_id)
-        ? row.workspace_id
-        : workspaceIds[0]!,
-      workspaceIds,
-      workspaces,
-      userId: row.created_by,
-      role: "editor",
-      tokenName: row.name ?? undefined,
-      authKind: "manual",
-      scopes: [MCP_DM_SCOPE, MCP_LEGACY_READ_SCOPE, MCP_LEGACY_WRITE_SCOPE],
-    }
-  }
-
-  private async resolveMcpOAuthToken(
-    token: string,
-    metadata: { ip?: string | null; resource?: string | null }
-  ): Promise<SignalSurfContext | null> {
-    const { data, error } = await this.db
-      .from("mcp_oauth_tokens")
-      .select("*")
-      .eq("access_token_sha256", sha256Hex(token))
-      .is("revoked_at", null)
-      .maybeSingle()
-
-    requireNoDbError(error, "Failed to resolve MCP OAuth token")
-    if (!data) return null
-
-    const row = data as McpOAuthTokenRow
-    if (metadata.resource && row.resource !== metadata.resource) {
-      return null
-    }
-    if (new Date(row.access_token_expires_at).getTime() <= Date.now()) {
-      return null
-    }
-    const storedScopes = parseStoredScopes(row.scope)
-    const scopes = storedScopes.filter(
-      (scope) => scope === MCP_DM_SCOPE || isSupportedMcpScope(scope)
-    )
-    if (
-      !scopes.includes(MCP_DM_SCOPE) &&
-      grantedCapabilitiesForScopes(scopes).length === 0
-    ) {
-      return null
-    }
-
-    const workspaceResultPromise = this.currentWorkspaceIdsForUser(
-      row.user_id,
-      oauthTokenWorkspaceIds(row)
-    ).then(
-      (workspaceIds) => ({ ok: true as const, workspaceIds }),
-      (error: unknown) => ({ ok: false as const, error })
-    )
-    const clientResult = await this.db
-      .from("mcp_oauth_clients")
-      .select("client_id, client_name, revoked_at")
-      .eq("client_id", row.client_id)
-      .is("revoked_at", null)
-      .maybeSingle()
-    requireNoDbError(clientResult.error, "Failed to resolve MCP OAuth client")
-    const client = clientResult.data as McpOAuthClientRow | null
-    if (!client) return null
-    const workspaceResult = await workspaceResultPromise
-    if (!workspaceResult.ok) throw workspaceResult.error
-    const { workspaceIds } = workspaceResult
-    if (workspaceIds.length === 0) return null
-
-    const update: Record<string, unknown> = {
-      last_used_at: new Date().toISOString(),
-    }
-    if (metadata.ip) update.last_used_ip = metadata.ip
-
-    const [updateResult, workspaces] = await Promise.all([
-      this.db.from("mcp_oauth_tokens").update(update).eq("id", row.id),
-      this.resolveWorkspaceContexts(workspaceIds),
-    ])
-
-    if (updateResult.error) {
-      console.error(
-        `Failed to update MCP OAuth token usage metadata: ${updateResult.error.message}`
-      )
-    }
-    const tokenName = client.client_name
-      ? `OAuth: ${client.client_name}`
-      : "OAuth MCP client"
-    return {
-      workspaceId: workspaceIds[0]!,
-      workspaceIds,
-      userId: row.user_id,
-      workspaces,
-      role: scopesImplyWriteAccess(scopes) ? "editor" : "viewer",
-      tokenName,
-      scopes,
-      authKind: "oauth",
-      oauthTokenId: row.id,
-      oauthGrantId: row.refresh_token_family_id ?? row.id,
-      oauthClientId: row.client_id,
-    }
-  }
-
   async resolveWorkspaceContexts(
     workspaceIds: string[]
   ): Promise<SignalSurfWorkspaceContext[]> {
@@ -1655,6 +1460,39 @@ export class SignalSurfRepository {
         organizationName: organization?.name ?? null,
       }
     })
+  }
+
+  async resolveAgentIdentities(workspaceIds: readonly string[]) {
+    const uniqueWorkspaceIds = uniqueIds(workspaceIds.filter(Boolean))
+    if (uniqueWorkspaceIds.length === 0) return {}
+    const { data, error } = await this.db
+      .from("agents")
+      .select("id, workspace_id, name, icon, icon_color, icon_label")
+      .eq("is_general", true)
+      .in("workspace_id", uniqueWorkspaceIds)
+    requireNoDbError(error, "Failed to resolve SignalSurf Agent identities")
+    return Object.fromEntries(
+      ((data ?? []) as Array<Record<string, unknown>>).flatMap((row) =>
+        typeof row.workspace_id === "string" &&
+        typeof row.id === "string" &&
+        typeof row.name === "string"
+          ? [
+              [
+                row.workspace_id,
+                {
+                  id: row.id,
+                  name: row.name,
+                  icon: typeof row.icon === "string" ? row.icon : null,
+                  iconColor:
+                    typeof row.icon_color === "string" ? row.icon_color : null,
+                  iconLabel:
+                    typeof row.icon_label === "string" ? row.icon_label : null,
+                },
+              ],
+            ]
+          : []
+      )
+    )
   }
 
   async revalidateContext(context: SignalSurfContext): Promise<void> {

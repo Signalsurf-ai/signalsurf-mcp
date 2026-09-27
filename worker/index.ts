@@ -7,7 +7,6 @@
 // the first request, so a missing secret answers 503 instead of failing the
 // upload's startup validation.
 import { createServer } from "node:http"
-
 import { httpServerHandler } from "cloudflare:node"
 import { env } from "cloudflare:workers"
 

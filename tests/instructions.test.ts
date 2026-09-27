@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest"
+
 import { SERVER_INSTRUCTIONS } from "../src/server.js"
 
 describe("SERVER_INSTRUCTIONS", () => {
   it("tells agents to resolve ids before id-typed params", () => {
-    expect(SERVER_INSTRUCTIONS).toMatch(/get_context/)
+    expect(SERVER_INSTRUCTIONS).toMatch(/get_workspace_context/)
+    expect(SERVER_INSTRUCTIONS).not.toMatch(/\bget_context\b/)
     expect(SERVER_INSTRUCTIONS).toMatch(/list_tables/)
     expect(SERVER_INSTRUCTIONS).toMatch(/never pass.*null/i)
   })

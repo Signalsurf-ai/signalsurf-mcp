@@ -5,24 +5,25 @@ workspace tables.
 
 This server is intentionally narrow. It gives external agents the core workspace
 operations they need without exposing arbitrary SQL or raw service-role access.
-Every workspace operation is bound to a SignalSurf workspace. OAuth tokens can grant
-one or more workspaces, while manual fallback tokens remain single-workspace scoped.
+Every workspace operation is bound to a SignalSurf Workspace. OAuth tokens can
+grant one or more Workspaces through one deterministic tool registry.
 See `docs/architecture.md` for the request lifecycle and safety model, and
 `docs/capabilities.md` for the public tool/scope contract.
 
 ## External User Setup
 
-If you are connecting an agent to SignalSurf, use the hosted MCP service. You do
-not need this repository, a Supabase key, or a local server.
+If you are connecting an agent to SignalSurf, install the official SignalSurf
+Plugin from `Signalsurf-ai/signalsurf-agent`. It bundles this hosted MCP service
+with the context and Project writeback Skill. You do not need this repository,
+a Supabase key, or a local server.
 
-1. Add SignalSurf as a remote MCP server in your MCP client:
-   `https://mcp.signalsurf.ai/mcp`.
-2. The client opens SignalSurf's OAuth authorization page.
+1. Install SignalSurf from the host's Plugin marketplace and start a new chat.
+2. The first SignalSurf tool call opens SignalSurf's OAuth authorization page.
 3. Sign in, choose the SignalSurf workspace or workspaces this client may access,
    review requested scopes, and approve.
 4. The MCP client receives OAuth tokens through its callback and can use
    SignalSurf tools. If you approve multiple workspaces, the agent should call
-   `get_context` first, choose from the returned `workspaces[].name` list, and
+   `get_workspace_context` first, choose from the returned `workspaces[].name` list, and
    pass that workspace's `workspaceId` to workspace-scoped tool calls.
 
 The hosted MCP connects only to existing Workspaces. It supports Workspace-scoped
@@ -44,31 +45,8 @@ Example:
 }
 ```
 
-Manual tokens remain available in SignalSurf Web under **Settings -> Workspace**,
-then the **MCP** section. Use them only as an advanced fallback for clients that
-do not yet support remote MCP OAuth.
-
-Example fallback bridge configuration:
-
-```json
-{
-  "mcpServers": {
-    "signalsurf": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "https://mcp.signalsurf.ai/mcp",
-        "--header",
-        "Authorization:${SIGNALSURF_MCP_AUTH_HEADER}"
-      ],
-      "env": {
-        "SIGNALSURF_MCP_AUTH_HEADER": "Bearer YOUR_SIGNALSURF_MCP_TOKEN"
-      }
-    }
-  }
-}
-```
+Raw remote MCP at `https://mcp.signalsurf.ai/mcp` is available for advanced
+clients that cannot load plugins and implement OAuth themselves.
 
 ## Hosted Service Deployment
 
@@ -92,6 +70,8 @@ SIGNALSURF_MCP_TRANSPORT=http
 SIGNALSURF_MCP_AUTH_MODE=database
 SIGNALSURF_MCP_RESOURCE_URL=https://mcp.signalsurf.ai/mcp
 SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL=https://www.signalsurf.ai
+SIGNALSURF_MCP_ACCESS_TOKEN_SECRET=shared-signing-secret-at-least-32-bytes
+SIGNALSURF_MCP_WEB_SERVICE_TOKEN=worker-to-web-service-secret
 SIGNALSURF_MCP_HOST=0.0.0.0
 SIGNALSURF_MCP_PATH=/mcp
 SIGNALSURF_MCP_ALLOWED_HOSTS=mcp.signalsurf.ai
@@ -109,12 +89,17 @@ settings are `[vars]` in `wrangler.toml`, and secrets are set once with
 - `SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY`: a Supabase secret API key dedicated
   to this Worker (`signalsurf_mcp_worker`), so it can be revoked without
   touching other services;
+- `SIGNALSURF_MCP_ACCESS_TOKEN_SECRET`: shared with SignalSurf Web for local
+  verification of short-lived access tokens;
+- `SIGNALSURF_MCP_WEB_SERVICE_TOKEN`: presented only to Web's owned Project
+  execution boundary (use Web's `INTERNAL_API_SECRET` value);
 - `BYCRAWL_API_KEY` and any optional provider keys.
 
 Deploy from a clean checkout of `main`:
 
 ```bash
-npx wrangler@4 deploy
+corepack pnpm@10.0.0 install --frozen-lockfile
+corepack pnpm@10.0.0 deploy
 ```
 
 The Worker loads its configuration on the first request, so a missing secret
@@ -132,10 +117,9 @@ corepack pnpm@10.0.0 build
 corepack pnpm@10.0.0 start
 ```
 
-In `database` auth mode, the server hashes bearer tokens and resolves OAuth
-access tokens from SignalSurf Web's `mcp_oauth_tokens` table. Manual fallback
-tokens from `mcp_tokens` are also accepted for clients that do not support
-remote MCP OAuth.
+In `database` auth mode, the server verifies short-lived signed OAuth access
+tokens locally. Refresh and revocation state stays owned by SignalSurf Web;
+connector discovery does not depend on an application-database lookup.
 
 ## Local Development Quick Start
 
@@ -195,7 +179,7 @@ corepack pnpm@10.0.0 build
 ```
 
 The server automatically loads `.env` from the repo root. After the client
-connects, call `get_context` first and confirm the returned `workspaceId`.
+connects, call `get_workspace_context` first and confirm the returned `workspaceId`.
 
 For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 `SIGNALSURF_MCP_TOKEN` from the server env, set
@@ -204,7 +188,12 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 
 ## What It Exposes
 
-- `get_context`, `get_brand_context`
+- `get_workspace_context`, `get_brand_context`
+- `list_workspaces`, `list_projects`, `get_project`, `get_project_context`
+- `list_activity`, `list_activity_threads`, `mark_activity_read`
+- `list_threads`, `read_thread`, `wait_for_thread_response`, `list_thread_decisions`
+- `list_project_members`, `list_project_files`, `read_project_file`, `list_project_triggers`
+- `start_thread`, `reply_in_thread`, `publish_project_conclusion`, `create_project`, `rename_project`
 - `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `run_workflow`, `get_surf_job`, `wait_for_surf_job`, `list_surf_jobs`, `cancel_surf_job`, `delete_workflow`
 - `list_tables`, `create_table`, `update_table`, `delete_table`, `list_table_views`, `read_table`, `read_table_view`, `get_table_row`
 - `create_table_row`, `update_table_rows`, `delete_table_rows`
@@ -216,6 +205,10 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - `deepline_search_people`, `deepline_search_companies`, `deepline_enrich_contact`, `deepline_search_catalog`, `deepline_execute_tool`
 - Resources for context; single-workspace tokens also expose Workflow, database,
   surf job, and database-row resources
+
+Project and Thread tools require hosted OAuth because their Web execution
+boundary revalidates the authorizing member and Project/File authority. Static
+env tokens remain available for local or internal product-tool access.
 
 All workspace-scoped tools execute against one `workspaceId`. A single-workspace token
 can omit `workspaceId`; a multi-workspace OAuth token must pass `workspaceId` to every
@@ -235,6 +228,10 @@ or granular scopes. The protected resource metadata advertises the registered
 granular SignalSurf resource scopes so the consent screen can name each
 capability instead of hiding them behind broad write access:
 
+- `mcp:projects.read`
+- `mcp:projects.write`
+- `mcp:conversations.read`
+- `mcp:conversations.control`
 - `mcp:workflows.read`
 - `mcp:workflows.write`
 - `mcp:workflows.execute`
@@ -261,10 +258,10 @@ a resource requirement, and it grants no tool capability by itself.
 
 ## Hosted connection
 
-A hosted grant's scopes are its complete capability contract. `mcp:dm` grants
-the member's Project collaboration capabilities, while granular scopes grant
-public workspace operations. The default request includes both, but restricted
-clients may receive either independently on the same SignalSurf MCP connection.
+A hosted grant's scopes are its complete capability contract. Project and
+conversation scopes authorize collaboration calls, while granular product
+scopes authorize Workspace operations. Every client discovers the same static
+registry; authorization is enforced when it calls a tool.
 See [docs/mcp-connection.md](docs/mcp-connection.md).
 
 ## Architecture
@@ -272,10 +269,10 @@ See [docs/mcp-connection.md](docs/mcp-connection.md).
 ```text
 MCP client
   -> stdio or Streamable HTTP transport
-  -> token auth resolves { workspaceId, workspaceIds, workspaces, userId, role, scopes }
+  -> signed token auth resolves { workspaceIds, userId, role, scopes, clientId, grantId }
   -> MCP tool/resource handlers
-  -> SignalSurf repository
-  -> Supabase service-role client with explicit workspace-scope checks
+  -> product repository or owned Web Project execution boundary
+  -> explicit Workspace, membership, Project, and File checks
 ```
 
 Key files:
@@ -283,7 +280,8 @@ Key files:
 - `src/index.ts`: process entrypoint and transport selection
 - `src/http.ts`: stateless Streamable HTTP transport
 - `src/stdio.ts`: stdio transport for local MCP clients
-- `src/auth.ts`: token hashing, bearer parsing, and role checks
+- `src/auth.ts`: access-token verification, bearer parsing, and role checks
+- `src/project-execution.ts`: static Project registry and Web service boundary
 - `src/capabilities.ts`: public scope, capability, and tool contract
 - `docs/public-tool-contract.json`: shared schema fingerprints and semantic fixtures
 - `src/repository.ts`: SignalSurf workspace-scope and mutation logic
@@ -298,7 +296,7 @@ in-memory session state and makes bearer-token workspace scoping straightforward
 
 Context:
 
-- `get_context`: returns authorized workspaces with human-readable names,
+- `get_workspace_context`: returns authorized workspaces with human-readable names,
   optional workspace names, ids, optional user, role, token name, and
   scope/capability context for the current connection. Agents should call this
   before writes. If `workspaceIds` contains more than one id, choose the intended
@@ -531,7 +529,7 @@ Each static token binds one MCP caller to one `workspaceId`. OAuth tokens from
 SignalSurf Web may grant multiple `workspaceIds`; static env tokens intentionally
 remain single-workspace for local and internal fallback use. `userId` is optional,
 but include it when you want Workflow deletion to repair that user's
-`current_workflow_id`. `tokenName` appears in `get_context` and is used as the
+`current_workflow_id`. `tokenName` appears in `get_workspace_context` and is used as the
 row-update source reference.
 
 `scopes` is optional for static tokens. When present, the server enforces both

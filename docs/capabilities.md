@@ -4,7 +4,9 @@ This package exposes the public MCP contract for external agents. It is not a
 raw mirror of every internal SignalSurf Web UI helper, but portable
 agent-facing capabilities should have a public MCP equivalent.
 
-`src/capabilities.ts` is the code source of truth for:
+`src/capabilities.ts` is the code source of truth for product tools and scopes.
+`@signalsurf/mcp-contract` is the checked-in source of truth for Project and
+Thread tools and their collaboration scopes. Together they define:
 
 - Supported SignalSurf resource scopes advertised by the hosted MCP protected
   resource.
@@ -18,6 +20,10 @@ agent-facing capabilities should have a public MCP equivalent.
 
 | Scope                            | Capability grant                                                                                 |
 | -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `mcp:projects.read`              | Reads Workspaces, Projects, members, Files, and Project context                                  |
+| `mcp:projects.write`             | Creates and renames Projects                                                                     |
+| `mcp:conversations.read`         | Reads Activity, Threads, messages, and decisions                                                  |
+| `mcp:conversations.control`      | Starts/replies to Threads, publishes conclusions, and marks Activity read                         |
 | `mcp:read`                       | `context.read`, `workflows.read`, `tables.read`, `schemas.read`, `sources.read`, `deepline.read` |
 | `mcp:write`                      | All current read, write, execute, and delete capabilities                                        |
 | `mcp:workflows.read`             | `context.read`, `workflows.read`                                                                 |
@@ -52,9 +58,16 @@ token includes a `scopes` array, both role and scopes are enforced. If it omits
 
 ## Public Tool Contract
 
+The stable registry also includes the Project and Thread tools declared by
+`@signalsurf/mcp-contract`: Workspace/Project discovery, bounded Project
+context, Activity and Thread reads, member/File/Trigger reads, durable Thread
+writes, conclusion publication, and Project creation/rename. Their execution
+is delegated to SignalSurf Web, which revalidates current membership and
+Project/File authority on every call.
+
 | Tool                            | Required capability          | Destructive | Notes                                                                                                                        |
 | ------------------------------- | ---------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `get_context`                   | `context.read`               | No          | Returns authorized workspace ids/names, organization names, user, role, scopes, and per-tool access booleans                 |
+| `get_workspace_context`         | `context.read`               | No          | Returns Agent identity, authorized Workspaces, current member access when granted, scopes, capability domains, and bounded active-Project attention |
 | `get_brand_context`             | `context.read`               | No          | Reads the active workspace's brand/positioning context from workspace memory (empty fields before brand setup)               |
 | `list_workflows`                | `workflows.read`             | No          | Lists non-deleted Workflows for one authorized workspace                                                                     |
 | `get_workflow`                  | `workflows.read`             | No          | Reads one workspace-scoped Workflow                                                                                          |
@@ -110,7 +123,7 @@ uses the same 15-day new-mailbox ramp as Campaign capacity planning. It does not
 have verified live provider usage, so the planner shows inventory but credits
 zero existing capacity rather than overstating readiness.
 
-OAuth tokens can authorize multiple workspaces. Agents should call `get_context`
+OAuth tokens can authorize multiple workspaces. Agents should call `get_workspace_context`
 first; when multiple `workspaceIds` are returned, choose from `workspaces[]` using
 the human-readable workspace and organization names, then include the intended
 `workspaceId` in every workspace-scoped tool call. Static fallback tokens remain

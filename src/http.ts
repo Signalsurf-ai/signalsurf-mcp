@@ -1,22 +1,25 @@
 import type { Server } from "node:http"
 import { isIP } from "node:net"
-
-import express from "express"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
 import {
   JSONRPCNotificationSchema,
   JSONRPCRequestSchema,
   SUPPORTED_PROTOCOL_VERSIONS,
 } from "@modelcontextprotocol/sdk/types.js"
+import express from "express"
+import {
+  PROJECT_MCP_TOOL_SCOPES,
+  type ProjectMcpToolName,
+} from "@signalsurf/mcp-contract"
 
 import {
   canUseCapability,
+  issueMcpServiceDelegation,
   parseBearerToken,
   resolveHttpTokenContext,
 } from "./auth.js"
 import {
   MCP_DEFAULT_RESOURCE_SCOPES,
-  MCP_DM_SCOPE,
   MCP_RESOURCE_SCOPES,
   PUBLIC_MCP_TOOLS,
   requiredCapabilitiesForTool,
@@ -24,7 +27,7 @@ import {
   type PublicMcpToolName,
 } from "./capabilities.js"
 import type { AppConfig } from "./config.js"
-import { errorToObject, UserFacingError } from "./errors.js"
+import { UserFacingError, errorToObject } from "./errors.js"
 import { SignalSurfRepository } from "./repository.js"
 import { createSignalSurfMcpServer } from "./server.js"
 import { createSupabaseClient } from "./supabase.js"
@@ -33,11 +36,11 @@ import type { SignalSurfContext } from "./types.js"
 export type HttpServerDependencies = {
   createRepository?: (options: {
     authorizationServerUrl?: string
-    accessToken?: string
+    serviceToken?: string
+    delegationToken?: string
   }) => SignalSurfRepository
-  /** Test seam for the Surfer session relay; production uses global fetch. */
-  /** SIG-2681: injected transport for the Direct Message capability relay. */
-  directMessageFetch?: typeof fetch
+  /** Test seam for the authenticated Project execution boundary. */
+  projectExecutionFetch?: typeof fetch
   /** Test seam for the bounded pre-auth compatibility probe reader. */
   preauthDiscoveryTimeoutMs?: number
 }
@@ -123,7 +126,7 @@ function getWwwAuthenticateHeader(config: AppConfig): string {
   if (config.authorizationServerUrl) {
     parts.push(
       `resource_metadata="${getProtectedResourceMetadataUrl(config)}"`,
-      `scope="${[MCP_DM_SCOPE, ...MCP_DEFAULT_RESOURCE_SCOPES].join(" ")}"`
+      `scope="${MCP_DEFAULT_RESOURCE_SCOPES.join(" ")}"`
     )
   }
   return parts.join(", ")
@@ -199,28 +202,41 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
-function getKnownToolName(message: unknown): PublicMcpToolName | null {
+type KnownMcpToolName = PublicMcpToolName | ProjectMcpToolName
+
+function getKnownToolName(message: unknown): KnownMcpToolName | null {
   if (!isRecord(message) || message.method !== "tools/call") return null
   const params = message.params
   if (!isRecord(params) || typeof params.name !== "string") return null
-  return params.name in PUBLIC_MCP_TOOLS
-    ? (params.name as PublicMcpToolName)
-    : null
+  if (params.name in PUBLIC_MCP_TOOLS) {
+    return params.name as PublicMcpToolName
+  }
+  if (params.name in PROJECT_MCP_TOOL_SCOPES) {
+    return params.name as ProjectMcpToolName
+  }
+  return null
 }
 
 function findInsufficientScopeRequest(
   context: SignalSurfContext,
   body: unknown
-): { toolName: PublicMcpToolName; requiredScopes: readonly string[] } | null {
+): { toolName: KnownMcpToolName; requiredScopes: readonly string[] } | null {
   const messages = Array.isArray(body) ? body : [body]
   for (const message of messages) {
     const toolName = getKnownToolName(message)
     if (!toolName) continue
-    const missingCapabilities = requiredCapabilitiesForTool(toolName).filter(
-      (capability) => !canUseCapability(context, capability)
-    )
-    if (missingCapabilities.length === 0) continue
     if (context.scopes === undefined) continue
+    if (toolName in PROJECT_MCP_TOOL_SCOPES) {
+      const requiredScopes = PROJECT_MCP_TOOL_SCOPES[
+        toolName as ProjectMcpToolName
+      ].filter((scope) => !context.scopes?.includes(scope))
+      if (requiredScopes.length > 0) return { toolName, requiredScopes }
+      continue
+    }
+    const missingCapabilities = requiredCapabilitiesForTool(
+      toolName as PublicMcpToolName
+    ).filter((capability) => !canUseCapability(context, capability))
+    if (missingCapabilities.length === 0) continue
     return {
       toolName,
       requiredScopes: [
@@ -235,24 +251,12 @@ function findInsufficientScopeRequest(
   return null
 }
 
-function requiresDirectMessageTools(body: unknown): boolean {
-  const messages = Array.isArray(body) ? body : [body]
-  return messages.some((message) => {
-    if (!isRecord(message)) return false
-    if (message.method === "tools/list") return true
-    if (message.method !== "tools/call") return false
-    const params = message.params
-    return (
-      isRecord(params) &&
-      typeof params.name === "string" &&
-      (params.name === "find_capabilities" ||
-        !(params.name in PUBLIC_MCP_TOOLS))
-    )
-  })
-}
-
 function isInitializeRequest(body: unknown): boolean {
   return isRecord(body) && body.method === "initialize"
+}
+
+function isToolListRequest(body: unknown): boolean {
+  return isRecord(body) && body.method === "tools/list"
 }
 
 function firstHeaderValue(
@@ -273,9 +277,7 @@ function hasMcpPostMediaHeaders(req: express.Request): boolean {
 
 function shouldReadPreauthDiscoveryProbe(req: express.Request): boolean {
   if (!hasMcpPostMediaHeaders(req)) return false
-  const protocolVersion = firstHeaderValue(
-    req.headers["mcp-protocol-version"]
-  )
+  const protocolVersion = firstHeaderValue(req.headers["mcp-protocol-version"])
   if (
     !protocolVersion ||
     SUPPORTED_PROTOCOL_VERSIONS.includes(protocolVersion)
@@ -295,9 +297,7 @@ function shouldReadPreauthDiscoveryProbe(req: express.Request): boolean {
 
 function shouldReadPreauthNoopNotification(req: express.Request): boolean {
   if (!hasMcpPostMediaHeaders(req)) return false
-  const protocolVersion = firstHeaderValue(
-    req.headers["mcp-protocol-version"]
-  )
+  const protocolVersion = firstHeaderValue(req.headers["mcp-protocol-version"])
   const method = firstHeaderValue(req.headers["mcp-method"])
   if (
     !protocolVersion ||
@@ -383,8 +383,7 @@ export function createHttpApp(
       let preauthParseFailed = false
       const protocolVersionHeader = req.headers["mcp-protocol-version"]
       const preauthDiscoveryProbe = shouldReadPreauthDiscoveryProbe(req)
-      const preauthNoopNotification =
-        shouldReadPreauthNoopNotification(req)
+      const preauthNoopNotification = shouldReadPreauthNoopNotification(req)
       if (preauthDiscoveryProbe || preauthNoopNotification) {
         phase = "read_request"
         preauthBodyRead = true
@@ -418,24 +417,22 @@ export function createHttpApp(
       }
       phase = "resolve_token"
       const accessToken = parseBearerToken(req.headers.authorization)
+      const context = await resolveHttpTokenContext(config, accessToken, {
+        ip: getClientIp(req, config.trustProxy),
+        resource: config.resourceUrl,
+      })
+      const delegationToken = await issueMcpServiceDelegation(config, context)
       const repository =
         dependencies.createRepository?.({
           authorizationServerUrl: config.authorizationServerUrl,
-          accessToken,
+          serviceToken: config.webServiceToken,
+          delegationToken,
         }) ??
         new SignalSurfRepository(createSupabaseClient(config), {
           authorizationServerUrl: config.authorizationServerUrl,
-          accessToken,
+          serviceToken: config.webServiceToken,
+          delegationToken,
         })
-      const context = await resolveHttpTokenContext(
-        config,
-        accessToken,
-        repository,
-        {
-          ip: getClientIp(req, config.trustProxy),
-          resource: config.resourceUrl,
-        }
-      )
       if (!preauthBodyRead) {
         phase = "read_request"
         parsedBody = await readJsonBody(req)
@@ -473,16 +470,13 @@ export function createHttpApp(
 
       phase = "compose_capabilities"
       const authorizationIconUrl = config.authorizationServerUrl
-        ? new URL(
-            "/apple-touch-icon.png",
-            config.authorizationServerUrl
-          )
+        ? new URL("/apple-touch-icon.png", config.authorizationServerUrl)
         : undefined
       const server = await createSignalSurfMcpServer({
         context,
         repository,
-        includeDirectMessageTools: requiresDirectMessageTools(parsedBody),
         initializeOnly: isInitializeRequest(parsedBody),
+        discoveryOnly: isToolListRequest(parsedBody),
         iconUrl:
           !authorizationIconUrl ||
           authorizationIconUrl.origin === new URL(config.resourceUrl).origin ||
@@ -493,10 +487,11 @@ export function createHttpApp(
           )
             ? undefined
             : authorizationIconUrl.toString(),
-        surferSession: {
+        projectExecution: {
           baseUrl: config.authorizationServerUrl,
-          accessToken,
-          fetch: dependencies.directMessageFetch,
+          serviceToken: config.webServiceToken,
+          fetch: dependencies.projectExecutionFetch,
+          delegationToken,
         },
       })
       const transport = new StreamableHTTPServerTransport({
@@ -557,7 +552,7 @@ export function createHttpApp(
       res.json({
         resource: config.resourceUrl,
         authorization_servers: [config.authorizationServerUrl],
-        scopes_supported: [MCP_DM_SCOPE, ...MCP_RESOURCE_SCOPES],
+        scopes_supported: MCP_RESOURCE_SCOPES,
         bearer_methods_supported: ["header"],
       })
     }

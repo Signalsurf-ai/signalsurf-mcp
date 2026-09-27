@@ -1,8 +1,8 @@
 import { z } from "zod"
 
 import { MCP_SUPPORTED_SCOPES } from "./capabilities.js"
-import type { AccessRole, SignalSurfContext } from "./types.js"
 import { UserFacingError } from "./errors.js"
+import type { AccessRole, SignalSurfContext } from "./types.js"
 
 const roleSchema = z.enum(["viewer", "editor", "owner"]).default("viewer")
 const mcpScopeSchema = z.enum(MCP_SUPPORTED_SCOPES)
@@ -24,9 +24,12 @@ const tokenEntrySchema = z
   .refine((entry) => !!entry.token || !!entry.tokenSha256, {
     message: "Each token entry needs token or tokenSha256",
   })
-  .refine((entry) => !!entry.workspaceId || (entry.workspaceIds?.length ?? 0) > 0, {
-    message: "Each token entry needs workspaceId or workspaceIds",
-  })
+  .refine(
+    (entry) => !!entry.workspaceId || (entry.workspaceIds?.length ?? 0) > 0,
+    {
+      message: "Each token entry needs workspaceId or workspaceIds",
+    }
+  )
 
 export type TokenEntry = z.infer<typeof tokenEntrySchema>
 
@@ -41,6 +44,8 @@ export type AppConfig = {
   path: string
   resourceUrl: string
   authorizationServerUrl?: string
+  accessTokenSecret?: string
+  webServiceToken?: string
   allowedHosts: string[]
   authDisabled: boolean
   stdioToken?: string
@@ -265,6 +270,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     path,
     resourceUrl: configuredResourceUrl ?? defaultResourceUrl,
     authorizationServerUrl: configuredAuthorizationServerUrl,
+    accessTokenSecret:
+      env.SIGNALSURF_MCP_ACCESS_TOKEN_SECRET?.trim() || undefined,
+    webServiceToken: env.SIGNALSURF_MCP_WEB_SERVICE_TOKEN?.trim() || undefined,
     allowedHosts: parseAllowedHosts(env.SIGNALSURF_MCP_ALLOWED_HOSTS, host),
     authDisabled: readBool(env.SIGNALSURF_MCP_AUTH_DISABLED),
     stdioToken: env.SIGNALSURF_MCP_TOKEN,
@@ -294,6 +302,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (!configuredAuthorizationServerUrl) {
       throw new UserFacingError(
         "SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL is required when SIGNALSURF_MCP_AUTH_MODE=database.",
+        { code: "CONFIG_ERROR", status: 500 }
+      )
+    }
+    if (!config.accessTokenSecret || config.accessTokenSecret.length < 32) {
+      throw new UserFacingError(
+        "SIGNALSURF_MCP_ACCESS_TOKEN_SECRET (at least 32 bytes) is required when SIGNALSURF_MCP_AUTH_MODE=database.",
+        { code: "CONFIG_ERROR", status: 500 }
+      )
+    }
+    if (!config.webServiceToken) {
+      throw new UserFacingError(
+        "SIGNALSURF_MCP_WEB_SERVICE_TOKEN is required when SIGNALSURF_MCP_AUTH_MODE=database.",
         { code: "CONFIG_ERROR", status: 500 }
       )
     }

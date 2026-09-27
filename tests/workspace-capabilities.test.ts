@@ -135,14 +135,20 @@ describe("hosted MCP Workspace capability projection", () => {
       }
     )
 
-    const capabilities = await loadWorkspaceCapabilities(db as any, [workspaceId])
+    const capabilities = await loadWorkspaceCapabilities(db as any, [
+      workspaceId,
+    ])
     expect(capabilities[workspaceId]).toContain("listening")
     expect(capabilities[workspaceId]).not.toContain("workflows")
   })
 
   it("keeps Listening independent from ordinary Workflows", async () => {
     const db = policyDb([
-      { workspace_id: workspaceId, capability_key: "workflows", enabled: false },
+      {
+        workspace_id: workspaceId,
+        capability_key: "workflows",
+        enabled: false,
+      },
     ])
     db.tables.workflows.push(
       {
@@ -205,7 +211,7 @@ describe("hosted MCP Workspace capability projection", () => {
       "set_up_workflow"
     )
     const contextResult = await client.callTool({
-      name: "get_context",
+      name: "get_workspace_context",
       arguments: {},
     })
     const contextText =
@@ -221,8 +227,16 @@ describe("hosted MCP Workspace capability projection", () => {
     const db = policyDb([
       { workspace_id: workspaceId, capability_key: "tables", enabled: false },
       { workspace_id: workspaceId, capability_key: "objects", enabled: false },
-      { workspace_id: workspaceId, capability_key: "listening", enabled: false },
-      { workspace_id: workspaceId, capability_key: "workflows", enabled: false },
+      {
+        workspace_id: workspaceId,
+        capability_key: "listening",
+        enabled: false,
+      },
+      {
+        workspace_id: workspaceId,
+        capability_key: "workflows",
+        enabled: false,
+      },
     ])
     const client = await connect(db)
 
@@ -270,7 +284,7 @@ describe("hosted MCP Workspace capability projection", () => {
       ])
     )
     const result = await client.callTool({
-      name: "get_context",
+      name: "get_workspace_context",
       arguments: {},
     })
     const text =
@@ -298,7 +312,7 @@ describe("hosted MCP Workspace capability projection", () => {
     expect(tools).toContain("search_sender_domains")
 
     const result = await client.callTool({
-      name: "get_context",
+      name: "get_workspace_context",
       arguments: {},
     })
     const text =

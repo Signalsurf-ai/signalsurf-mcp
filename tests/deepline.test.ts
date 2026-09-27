@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { executeDeeplineTool } from "../src/deepline.js"
 import { buildDeeplineSearchPayload } from "../src/deepline-search.js"
+import { executeDeeplineTool } from "../src/deepline.js"
 import {
-  mcpActionPayloadSha256,
   SignalSurfRepository,
+  mcpActionPayloadSha256,
 } from "../src/repository.js"
 import type { SignalSurfContext } from "../src/types.js"
 import { FakeSupabase } from "./fake-supabase.js"
@@ -107,7 +107,7 @@ describe("Deepline capabilities", () => {
       .calls[0]
     const [url, reqInit] = call as [
       string,
-      { body: string; headers: Record<string, string> }
+      { body: string; headers: Record<string, string> },
     ]
     expect(String(url)).toContain("/api/v2/integrations/")
     expect(JSON.parse(reqInit.body).payload).toEqual({
@@ -278,7 +278,7 @@ describe("Deepline capabilities", () => {
       fetchMock as unknown as { mock: { calls: unknown[][] } }
     ).mock.calls[0] as [
       string,
-      { method: string; headers: Record<string, string> }
+      { method: string; headers: Record<string, string> },
     ]
     expect(String(url)).toContain("/api/v2/tools")
     expect(reqInit.method).toBe("GET")

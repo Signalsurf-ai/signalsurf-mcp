@@ -1,20 +1,134 @@
+import {
+  mcpServiceDelegationAudience,
+  signMcpAccessToken,
+  verifyMcpAccessToken,
+} from "@signalsurf/mcp-contract"
 import { describe, expect, it } from "vitest"
 
 import {
   assertCanUseCapability,
   assertCanWrite,
   authorizedWorkspaces,
+  issueMcpServiceDelegation,
   listContextCapabilities,
+  resolveHttpTokenContext,
   resolveStdioContext,
   resolveTokenContext,
   resolveWorkspaceContext,
   sha256Hex,
 } from "../src/auth.js"
-import { requiredScopesForCapability } from "../src/capabilities.js"
+import {
+  grantedCapabilitiesForScopes,
+  requiredScopesForCapability,
+} from "../src/capabilities.js"
 import { loadConfig, type AppConfig } from "../src/config.js"
 import { UserFacingError } from "../src/errors.js"
 
 describe("auth", () => {
+  it("mints a short-lived service delegation from verified OAuth claims", async () => {
+    const secret = "test-mcp-access-token-secret-at-least-32-bytes"
+    const issuer = "https://app.signalsurf.test"
+    const resourceUrl = "https://mcp.signalsurf.test/mcp"
+    const now = Math.floor(Date.now() / 1000)
+    const claims = {
+      iss: issuer,
+      aud: resourceUrl,
+      sub: "00000000-0000-4000-8000-000000000002",
+      iat: now,
+      exp: now + 300,
+      jti: "00000000-0000-4000-8000-000000000003",
+      clientId: "client-test",
+      grantId: "00000000-0000-4000-8000-000000000004",
+      workspaceIds: ["00000000-0000-4000-8000-000000000001"],
+      scopes: ["mcp:projects.read"],
+      role: "viewer" as const,
+    }
+    const oauthToken = await signMcpAccessToken({ secret, claims })
+    const config = {
+      authDisabled: false,
+      directContext: undefined,
+      tokenEntries: [],
+      authMode: "database" as const,
+      accessTokenSecret: secret,
+      authorizationServerUrl: issuer,
+      resourceUrl,
+    }
+    const context = await resolveHttpTokenContext(config, oauthToken, {
+      resource: resourceUrl,
+    })
+    const delegation = await issueMcpServiceDelegation(config, context, now)
+
+    expect(context.oauthAccessTokenExpiresAt).toBe(claims.exp)
+    expect(delegation).not.toBe(oauthToken)
+    await expect(
+      verifyMcpAccessToken({
+        token: delegation!,
+        secret,
+        issuer,
+        audience: mcpServiceDelegationAudience(issuer),
+        now: now + 30,
+      })
+    ).resolves.toEqual({
+      ...claims,
+      aud: mcpServiceDelegationAudience(issuer),
+      exp: now + 60,
+    })
+    await expect(
+      verifyMcpAccessToken({
+        token: delegation!,
+        secret,
+        issuer,
+        audience: resourceUrl,
+        now: now + 30,
+      })
+    ).resolves.toBeNull()
+  })
+
+  it("verifies bounded signed OAuth claims and rejects tampering or expiry", async () => {
+    const secret = "test-mcp-access-token-secret-at-least-32-bytes"
+    const issuer = "https://app.signalsurf.test"
+    const audience = "https://mcp.signalsurf.test/mcp"
+    const claims = {
+      iss: issuer,
+      aud: audience,
+      sub: "00000000-0000-4000-8000-000000000002",
+      iat: 1_000,
+      exp: 1_600,
+      jti: "00000000-0000-4000-8000-000000000003",
+      clientId: "client-test",
+      grantId: "00000000-0000-4000-8000-000000000004",
+      workspaceIds: ["00000000-0000-4000-8000-000000000001"],
+      scopes: ["mcp:projects.read"],
+      role: "viewer" as const,
+    }
+    const token = await signMcpAccessToken({ secret, claims })
+
+    await expect(
+      verifyMcpAccessToken({ token, secret, issuer, audience, now: 1_200 })
+    ).resolves.toEqual(claims)
+    await expect(
+      verifyMcpAccessToken({
+        token: `${token.slice(0, -1)}${token.endsWith("a") ? "b" : "a"}`,
+        secret,
+        issuer,
+        audience,
+        now: 1_200,
+      })
+    ).resolves.toBeNull()
+    await expect(
+      verifyMcpAccessToken({ token, secret, issuer, audience, now: 1_600 })
+    ).resolves.toBeNull()
+    await expect(
+      verifyMcpAccessToken({
+        token,
+        secret,
+        issuer: "https://attacker.example",
+        audience,
+        now: 1_200,
+      })
+    ).resolves.toBeNull()
+  })
+
   it("resolves hashed bearer tokens to a workspace context", () => {
     const context = resolveTokenContext(
       {
@@ -268,6 +382,9 @@ describe("auth", () => {
     expect(requiredScopesForCapability("campaigns.write")).toEqual([
       "mcp:campaigns.write",
     ])
+    expect(grantedCapabilitiesForScopes(["mcp:workflows.write"])).not.toContain(
+      "campaigns.write"
+    )
   })
 
   it("treats explicit empty scopes as no capability grant", () => {

@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
+
 import { DEEPLINE_TOOL_IDS } from "./deepline.js"
 
 type PromptArgs = { databaseId?: string; workspaceId?: string }
@@ -7,7 +8,7 @@ type PromptArgs = { databaseId?: string; workspaceId?: string }
 function workspaceLine(args: PromptArgs): string {
   return args.workspaceId
     ? `Use workspaceId ${args.workspaceId} on every workspace-scoped call.`
-    : "If get_context reports multiple workspaces, pass the chosen workspaceId on every call."
+    : "If get_workspace_context reports multiple workspaces, pass the chosen workspaceId on every call."
 }
 
 export function buildEnrichTablePrompt(args: PromptArgs): string {
@@ -21,7 +22,7 @@ ${dbLine}
 ${workspaceLine(args)}
 
 Follow these steps in order:
-1. Call get_context. ${
+1. Call get_workspace_context. ${
     args.workspaceId ? "" : "Pick the workspaceId if multiple are returned. "
   }${
     args.databaseId
@@ -46,7 +47,7 @@ ${workspaceLine(args)}
 A Workflow is a node graph (Flow V2): trigger → rule/agent/action/wait nodes, with branching edges. Simple ones can stay as a scoring rubric + surf prompt; multi-step or branching ones use the flow graph.
 
 Follow these steps in order:
-1. Call get_context${
+1. Call get_workspace_context${
     args.workspaceId ? "" : " and pick the workspaceId if multiple are returned"
   }.
 2. Decide the target table(s): call list_tables and pick the databaseId(s) this Workflow should write into (use create_table first if the table does not exist yet).
@@ -70,7 +71,7 @@ ${dbLine}
 ${workspaceLine(args)}
 
 Follow these steps in order:
-1. Call get_context${
+1. Call get_workspace_context${
     args.workspaceId ? "" : " and pick the workspaceId if multiple are returned"
   }. Confirm the workspace has a Deepline integration key (the deepline_* tools fail without one).
 2. Route the source before searching. If the request names a concrete URL, directory, portfolio, ecosystem, customer list, or other bounded corpus, use the client's web research capability first and preserve source URLs. If it asks for a broad TAM or provider-filterable company segment, call deepline_search_companies. If it explicitly asks for people or titles, qualify the account set first, then call deepline_search_people only for those companies.

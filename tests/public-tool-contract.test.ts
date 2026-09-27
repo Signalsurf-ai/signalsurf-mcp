@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises"
-
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { normalizeObjectSchema } from "@modelcontextprotocol/sdk/server/zod-compat.js"
@@ -101,15 +100,17 @@ describe("public MCP tool contract", () => {
 
     const contract = await readContract()
     const tools = (await client.listTools()).tools
-    expect(tools.map((tool) => tool.name).sort()).toEqual(
-      [...PUBLIC_MCP_TOOL_NAMES].sort()
+    const publicTools = tools.filter((tool) =>
+      PUBLIC_MCP_TOOL_NAMES.includes(
+        tool.name as (typeof PUBLIC_MCP_TOOL_NAMES)[number]
+      )
     )
     expect(Object.keys(PUBLIC_MCP_TOOL_SCHEMAS).sort()).toEqual(
       [...PUBLIC_MCP_TOOL_NAMES].sort()
     )
     expect(
       Object.fromEntries(
-        tools.map((tool) => [
+        publicTools.map((tool) => [
           tool.name,
           canonicalSha256(
             executableInputSchema(
@@ -122,7 +123,9 @@ describe("public MCP tool contract", () => {
       )
     ).toEqual(contract.inputSchemaSha256)
     expect(
-      Object.fromEntries(tools.map((tool) => [tool.name, tool.inputSchema]))
+      Object.fromEntries(
+        publicTools.map((tool) => [tool.name, tool.inputSchema])
+      )
     ).toEqual(
       Object.fromEntries(
         PUBLIC_MCP_TOOL_NAMES.map((name) => [
@@ -131,7 +134,7 @@ describe("public MCP tool contract", () => {
         ])
       )
     )
-    for (const tool of tools) {
+    for (const tool of publicTools) {
       const source = executableInputSchema(
         PUBLIC_MCP_TOOL_SCHEMAS[
           tool.name as keyof typeof PUBLIC_MCP_TOOL_SCHEMAS

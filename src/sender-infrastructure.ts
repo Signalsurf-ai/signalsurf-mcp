@@ -1,5 +1,5 @@
-import type { SignalSurfContext, SupabaseLike } from "./types.js"
 import { UserFacingError } from "./errors.js"
+import type { SignalSurfContext, SupabaseLike } from "./types.js"
 
 export type InfrastructureInput = {
   workspaceId?: string
@@ -29,7 +29,8 @@ export type DomainSearchInput = {
 export type SenderDomainControlPlaneOptions = {
   workspaceId: string
   authorizationServerUrl?: string
-  accessToken?: string
+  serviceToken?: string
+  delegationToken?: string
   fetchImpl?: typeof fetch
 }
 
@@ -412,8 +413,7 @@ function projectNewMailboxCapacityByDay(
             Math.min(
               dailyLimit,
               Math.round(
-                start +
-                  (dailyLimit - start) * (dayIndex / (WARMUP_DAYS - 1))
+                start + (dailyLimit - start) * (dayIndex / (WARMUP_DAYS - 1))
               )
             )
           )
@@ -590,8 +590,13 @@ export async function searchSenderDomains(
     /\/+$/,
     ""
   )
-  const accessToken = options?.accessToken?.trim()
-  if (!authorizationServerUrl || !accessToken || !options?.workspaceId) {
+  const serviceToken = options?.serviceToken?.trim()
+  if (
+    !authorizationServerUrl ||
+    !serviceToken ||
+    !options?.workspaceId ||
+    !options.delegationToken
+  ) {
     throw new UserFacingError(
       "Live managed Domain availability is not configured on this hosted MCP deployment.",
       { code: "DOMAIN_AVAILABILITY_UNAVAILABLE", status: 503 }
@@ -606,9 +611,10 @@ export async function searchSenderDomains(
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${serviceToken}`,
         },
         body: JSON.stringify({
+          delegationToken: options.delegationToken,
           workspaceId: options.workspaceId,
           domains: input.domains ?? [],
           count: input.count ?? 5,

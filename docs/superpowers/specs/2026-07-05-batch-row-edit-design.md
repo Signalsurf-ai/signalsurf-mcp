@@ -40,7 +40,7 @@ against).
 
 ### New tool: `update_table_rows`
 
-- **Input:** `{ productId?, edits: [{ rowId, data? | dataPatch? }], }`, 1–100
+- **Input:** `{ workspaceId?, edits: [{ rowId, data? | dataPatch? }], }`, 1–100
   edits (same cap as `delete_table_rows`). Exactly one of `data`/`dataPatch` per
   edit, and no duplicate `rowId`s — validated in the repository method, matching
   the existing convention where `updateTableRow` enforces the `data`/`dataPatch`
@@ -58,7 +58,7 @@ against).
    write**, so one bad `item_ref` value anywhere rejects the whole batch with
    nothing written.
 3. Node calls one new Postgres RPC, `update_entries_with_source_batch(p_entries
-   jsonb, p_source text, p_source_ref text)` — a sibling to
+jsonb, p_source text, p_source_ref text)` — a sibling to
    `update_entry_with_source` (`SignalsurfWeb/supabase/schemas/50_functions.sql:2368`)
    that does the same audit `set_config` calls once, then a **single** set-based
    `UPDATE ... FROM jsonb_to_recordset(p_entries) ... WHERE entries.id = v.entry_id`.

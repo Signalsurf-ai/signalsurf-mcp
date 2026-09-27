@@ -1,96 +1,68 @@
 # SignalSurf MCP connection
 
-The hosted MCP exposes one connection. Its OAuth scopes determine the tool
-catalogue: `mcp:dm` grants bounded member and Project collaboration
-capabilities, while granular product scopes grant their corresponding public
-workspace operations. Manual tokens delegate both surfaces. There is no
-connection-mode field or parallel DM/Tools connection type.
+SignalSurf exposes one remote MCP endpoint and one deterministic tool registry.
+Project collaboration and product operations are not connection modes: OAuth
+scopes authorize individual calls while `tools/list` stays stable, so clients do
+not cache a partial product surface.
 
-Every operation acts as the authorizing member and remains bounded by that
-member's workspace role, current membership, granted scope, confirmation rules,
-and product availability.
+## Agent and context model
 
-## Member and Project capabilities
+The external host is a runtime for the Workspace's canonical SignalSurf Agent.
+Claude, Codex, and other clients are not separate Project members and do not
+author Project messages under the approving user's identity. Project messages
+written through MCP use Agent authorship; the OAuth client, grant, and
+authorizing user remain bounded audit provenance.
 
-The member's conversation lives in their own client. SignalSurf keeps no
-second conversation, server-side assistant, or transcript of what the member
-said to their client. With `mcp:dm`, the client may use the same bounded
-collaboration capabilities as the member: start or continue Project Threads,
-review and manage delegated work, create and update Projects, manage Project
-members and triggers, and drive Thread Tasks. Real work and its record live in
-the Projects those capabilities touch.
+At session start, call `get_workspace_context`. It returns the Agent identity, authorized
+Workspaces, member authority, grants, and effective product capabilities. When
+entering or switching a Project, call `get_project_context`; pass `threadId`
+when focusing a Thread. Reuse that bounded result for ordinary turns and refresh
+it after a relevant write or scope change.
 
-SignalSurf publishes this catalogue per member and workspace:
+Workspace-wide CRM, Table, Workflow, and Campaign operations do not require a
+Project. When work is Project-scoped, Project visibility and File permissions
+still apply. Routine record edits keep their native object history and need no
+Thread created merely as a log. Durable decisions, research findings,
+assumptions, and next steps belong in a relevant Project Thread through
+`publish_project_conclusion`.
 
-- `POST {authorization server}/api/mcp/direct-message`
-  - `{"action":"workspaces"}` — granted workspaces, access, and Surfer names.
-  - `{"action":"catalog","workspaceId":…}` — member capabilities with the
-    product's descriptions and argument schemas.
-  - `{"action":"call","workspaceId":…,"tool":…,"arguments":{…}}` — run one
-    after SignalSurf re-validates membership in that workspace.
+## OAuth and execution boundary
 
-When `mcp:dm` is granted, the server registers `list_workspaces` plus every
-published collaboration capability and adds `workspaceId` to each schema. The
-stable public product-tool catalogue remains discoverable on the connection;
-each call enforces its granular scope, and `find_capabilities` returns only
-tools the token may use. A name collision fails discovery rather than silently
-overriding either definition.
+The Web authorization server issues a ten-minute signed access token plus an
+opaque rotating refresh token. The MCP Worker validates the access-token
+signature, issuer, audience, expiry, Workspace grants, scopes, and role locally;
+it does not query SignalSurf application tables during connector discovery.
 
-## Connecting
+Project tools are declared from the checked-in shared contract. On execution,
+the Worker calls `POST {authorization server}/api/mcp/execute` with its own
+service credential and a short-lived, audience-bound signed delegation. It
+never forwards the user's
+bearer token. SignalSurf Web verifies the service credential, confirms the
+selected Workspace is granted, revalidates current membership, then applies the
+normal Project and File authorization rules.
 
-```bash
-claude mcp add --transport http signalsurf https://mcp.signalsurf.ai/mcp
-```
+Product tools execute in the MCP Worker's repository layer with the same
+Workspace and capability checks. A missing scope returns
+`INSUFFICIENT_SCOPE`; leaving a Workspace prevents subsequent Project calls even
+while a short-lived access token remains cryptographically valid.
 
-The protected-resource challenge advertises `mcp:dm` together with the default
-granular product scopes, so normal authorization receives both surfaces. A
-least-privilege client may request only the capabilities it needs.
+## Several Workspaces
 
-## Manual token fallback
+`get_workspace_context` and `list_workspaces` expose every Workspace in the signed grant.
+Every Workspace-scoped call must pass one returned `workspaceId` when the grant
+contains more than one Workspace. The caller cannot target an id outside the
+signed grant, and Project execution checks current membership again.
 
-For clients without OAuth, an administrator can create a manual MCP token in
-SignalSurf Settings. It is bound to its creator and selected workspaces and
-delegates the standard collaboration and product capabilities. Revocation ends
-access immediately, and SignalSurf re-validates membership in the target
-workspace on every call.
+## Plugin and raw MCP
 
-## Several workspaces
+The official SignalSurf Plugin is the primary user experience. It bundles the
+remote endpoint with the routing instructions above and guides the host through
+OAuth, context loading, Project switching, and conclusion writeback. Raw MCP at
+`https://mcp.signalsurf.ai/mcp` remains an advanced integration surface; it
+uses the same registry and OAuth contract, without a second compatibility mode.
 
-For a collaboration grant, the server loads the catalogue for every currently
-available granted workspace and merges them by tool name. A conflicting
-definition fails discovery. Workspaces the member has left remain visible from
-`list_workspaces` but do not prevent the remaining catalogues from loading.
-
-Every published collaboration capability accepts `workspaceId`. It may be
-omitted only when the grant reaches one workspace; otherwise SignalSurf returns
-`WORKSPACE_REQUIRED`. Availability is checked again in the selected workspace
-when a capability is called.
-
-## Execution and records
-
-The external client is the assistant for the conversation. Calls read or write
-the same Project resources the member can use in SignalSurf; there is no hidden
-Surfer conversation behind the MCP connection. Project Threads are the durable
-record of messages, decisions, delegated work, and results. Project Surfer work
-keeps its normal confirmation boundary.
-
-A routine lookup or atomic File/CRM mutation keeps normal record-level history
-and does not create Thread chatter. If the external conversation reaches a
-durable Project-relevant conclusion, call `publish_project_conclusion` before
-the final answer. Append the distilled decision, evidence, and next steps to a
-relevant Thread when known; otherwise create a conclusion Thread. SignalSurf
-shows it as Project Surfer with the external client and requesting member as
-provenance, without copying the private transcript or waking Surfer.
-
-`tools/list` fails when an available collaboration workspace catalogue cannot
-load; returning a partial list could make clients cache a false capability
-surface. Retry after a transient `DIRECT_MESSAGE_UNAVAILABLE` response.
-
-## Collaboration relay contract
-
-Every collaboration-capability request posts `{ action, ...fields }` to
-`POST {SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL}/api/mcp/direct-message` with
-the caller's bearer token. Success bodies are `{ ok: true, ... }`; failures are
-`{ ok: false, error, code }` and preserve the HTTP status and product error
-code. Network and upstream 5xx failures surface as
-`DIRECT_MESSAGE_UNAVAILABLE` (503).
+The versioned public package and per-host installation instructions live in
+`Signalsurf-ai/signalsurf-agent`. Claude and Codex can install it from that
+GitHub marketplace; ChatGPT web uses the reviewed or custom MCP connector path;
+Cursor uses the same package through its reviewed marketplace or local-plugin
+development path.

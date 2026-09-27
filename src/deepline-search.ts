@@ -230,7 +230,7 @@ function rangeFilter(
     .map((range) => group("and", rangeConditions(field, range)))
     .filter((value): value is ConditionGroup => Boolean(value))
   if (groups.length === 0) return null
-  return groups.length === 1 ? groups[0] : group("or", groups) ?? null
+  return groups.length === 1 ? groups[0] : (group("or", groups) ?? null)
 }
 
 const COMPANY_FILTER_KEYS = new Set([
@@ -393,22 +393,22 @@ function crustdataCompanyPayload(filters: JsonRecord, limit: number) {
 
   const filtersGroup = group("and", [
     keywords.length
-      ? group(
+      ? (group(
           "or",
           keywords.flatMap((keyword) => [
             condition("taxonomy.professional_network_industry", "(.)", keyword),
             condition("taxonomy.categories", "(.)", keyword),
           ])
-        ) ?? null
+        ) ?? null)
       : null,
     industries.length
       ? condition("taxonomy.professional_network_industry", "in", industries)
       : null,
     companyNames.length
-      ? group(
+      ? (group(
           "or",
           companyNames.map((name) => condition("basic_info.name", "(.)", name))
-        ) ?? null
+        ) ?? null)
       : null,
     locations.length ? condition("locations.country", "in", locations) : null,
     excludeLocations.length
@@ -491,7 +491,7 @@ function crustdataPeoplePayload(filters: JsonRecord, limit: number) {
   const filtersGroup = group("and", [
     titleFilter ?? null,
     keywords.length
-      ? group(
+      ? (group(
           "or",
           keywords.flatMap((keyword) => [
             condition(
@@ -505,7 +505,7 @@ function crustdataPeoplePayload(filters: JsonRecord, limit: number) {
               keyword
             ),
           ])
-        ) ?? null
+        ) ?? null)
       : null,
     seniorities.length
       ? condition(
@@ -522,12 +522,12 @@ function crustdataPeoplePayload(filters: JsonRecord, limit: number) {
         )
       : null,
     locations.length
-      ? group(
+      ? (group(
           "or",
           locations.map((location) =>
             condition("basic_profile.location.full_location", "(.)", location)
           )
-        ) ?? null
+        ) ?? null)
       : null,
     employerLocations.length
       ? condition(

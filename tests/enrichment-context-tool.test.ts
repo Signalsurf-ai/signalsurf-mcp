@@ -78,7 +78,8 @@ async function connect(db: FakeSupabase) {
     repository: new SignalSurfRepository(db as any),
   })
   const client = new Client({ name: "test-client", version: "0.0.0" })
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair()
   cleanup.push(async () => client.close())
   cleanup.push(async () => server.close())
   await Promise.all([

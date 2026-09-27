@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
+
 import { SignalSurfRepository } from "../src/repository.js"
 
 function makeRepo() {

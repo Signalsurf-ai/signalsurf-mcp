@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import { searchSenderDomainsSchema } from "../src/schemas.js"
 import {
   inspectSenderInfrastructure,
   planSenderCapacity,
   searchSenderDomains,
 } from "../src/sender-infrastructure.js"
-import { searchSenderDomainsSchema } from "../src/schemas.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001"
@@ -119,7 +119,8 @@ function controlPlane(fetchImpl: typeof fetch = vi.fn()) {
   return {
     workspaceId: WORKSPACE_ID,
     authorizationServerUrl: "https://app.signalsurf.ai",
-    accessToken: "ssmcp_at_test",
+    serviceToken: "internal-service-secret",
+    delegationToken: "signed-service-delegation",
     fetchImpl,
   }
 }
@@ -129,16 +130,20 @@ describe("hosted sender infrastructure", () => {
     const domain = "goacme.com"
 
     expect(
-      searchSenderDomainsSchema.domains.safeParse(Array(50).fill(domain)).success
+      searchSenderDomainsSchema.domains.safeParse(Array(50).fill(domain))
+        .success
     ).toBe(true)
     expect(
-      searchSenderDomainsSchema.domains.safeParse(Array(51).fill(domain)).success
+      searchSenderDomainsSchema.domains.safeParse(Array(51).fill(domain))
+        .success
     ).toBe(false)
     expect(
-      searchSenderDomainsSchema.exclude.safeParse(Array(50).fill(domain)).success
+      searchSenderDomainsSchema.exclude.safeParse(Array(50).fill(domain))
+        .success
     ).toBe(true)
     expect(
-      searchSenderDomainsSchema.exclude.safeParse(Array(51).fill(domain)).success
+      searchSenderDomainsSchema.exclude.safeParse(Array(51).fill(domain))
+        .success
     ).toBe(false)
   })
 
@@ -390,9 +395,10 @@ describe("hosted sender infrastructure", () => {
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
-          Authorization: "Bearer ssmcp_at_test",
+          Authorization: "Bearer internal-service-secret",
         }),
         body: JSON.stringify({
+          delegationToken: "signed-service-delegation",
           workspaceId: WORKSPACE_ID,
           domains: ["goacme.com"],
           count: 5,

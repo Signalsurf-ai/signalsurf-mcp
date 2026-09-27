@@ -38,16 +38,34 @@ function rank(
     .map((entry) => ({ entry, score: scoreEntry(entry, terms) }))
     .filter((scored) => scored.score > 0)
     .sort(
-      (a, b) =>
-        b.score - a.score || a.entry.name.localeCompare(b.entry.name)
+      (a, b) => b.score - a.score || a.entry.name.localeCompare(b.entry.name)
     )
     .slice(0, limit)
     .map((scored) => scored.entry)
 }
 
 const STOPWORDS = new Set([
-  "a", "an", "the", "to", "with", "for", "of", "and", "or", "my", "me", "i",
-  "in", "on", "is", "it", "this", "that", "how", "do", "can",
+  "a",
+  "an",
+  "the",
+  "to",
+  "with",
+  "for",
+  "of",
+  "and",
+  "or",
+  "my",
+  "me",
+  "i",
+  "in",
+  "on",
+  "is",
+  "it",
+  "this",
+  "that",
+  "how",
+  "do",
+  "can",
 ])
 
 export function searchCapabilities(
@@ -67,7 +85,7 @@ export function searchCapabilities(
       query,
       tools: [],
       prompts: catalog.prompts,
-      hint: "Describe what you want to do (e.g. \"enrich a table\", \"find leads\", \"set up a Workflow\") to get the matching tools and prompts.",
+      hint: 'Describe what you want to do (e.g. "enrich a table", "find leads", "set up a Workflow") to get the matching tools and prompts.',
     }
   }
 
@@ -76,8 +94,8 @@ export function searchCapabilities(
 
   const hint =
     tools.length === 0 && prompts.length === 0
-      ? "No capability matched. Try a broader query, or call get_context and list_tables to explore."
-      : "Prefer a prompt for a guided multi-step workflow (fetch it via prompts/get); call a tool directly for a single action. Resolve real ids with get_context / list_tables before calling id-typed tools."
+      ? "No capability matched. Try a broader query, or call get_workspace_context and list_tables to explore."
+      : "Prefer a prompt for a guided multi-step workflow (fetch it via prompts/get); call a tool directly for a single action. Resolve real ids with get_workspace_context / list_tables before calling id-typed tools."
 
   return { query, tools, prompts, hint }
 }
