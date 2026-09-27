@@ -7,6 +7,8 @@ describe("SERVER_INSTRUCTIONS", () => {
     expect(SERVER_INSTRUCTIONS).toMatch(/get_workspace_context/)
     expect(SERVER_INSTRUCTIONS).not.toMatch(/\bget_context\b/)
     expect(SERVER_INSTRUCTIONS).toMatch(/list_tables/)
+    expect(SERVER_INSTRUCTIONS).toMatch(/list_table_fields/)
+    expect(SERVER_INSTRUCTIONS).not.toMatch(/list_database_fields/)
     expect(SERVER_INSTRUCTIONS).toMatch(/never pass.*null/i)
   })
 
