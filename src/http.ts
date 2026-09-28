@@ -6,10 +6,7 @@ import {
   JSONRPCRequestSchema,
   SUPPORTED_PROTOCOL_VERSIONS,
 } from "@modelcontextprotocol/sdk/types.js"
-import {
-  PROJECT_MCP_TOOL_SCOPES,
-  type ProjectMcpToolName,
-} from "@signalsurf/mcp-contract"
+import { signalSurfScopesGrantRequiredScope } from "@signalsurf/mcp-contract/scopes"
 import express from "express"
 
 import {
@@ -21,16 +18,13 @@ import {
 import {
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_RESOURCE_SCOPES,
-  PUBLIC_MCP_TOOLS,
-  requiredCapabilitiesForTool,
-  requiredScopesForCapability,
-  type PublicMcpToolName,
 } from "./capabilities.js"
 import type { AppConfig } from "./config.js"
 import { UserFacingError, errorToObject } from "./errors.js"
 import { SignalSurfRepository } from "./repository.js"
 import { createSignalSurfMcpServer } from "./server.js"
 import { createSupabaseClient } from "./supabase.js"
+import { signalSurfMcpRegistryTool } from "./tool-registry.js"
 import type { SignalSurfContext } from "./types.js"
 
 export type HttpServerDependencies = {
@@ -39,8 +33,8 @@ export type HttpServerDependencies = {
     serviceToken?: string
     delegationToken?: string
   }) => SignalSurfRepository
-  /** Test seam for the authenticated Project execution boundary. */
-  projectExecutionFetch?: typeof fetch
+  /** Test seam for the authenticated SignalSurf Web execution boundary. */
+  webExecutionFetch?: typeof fetch
   /** Test seam for the bounded pre-auth compatibility probe reader. */
   preauthDiscoveryTimeoutMs?: number
 }
@@ -202,19 +196,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
-type KnownMcpToolName = PublicMcpToolName | ProjectMcpToolName
+type KnownMcpToolName = string
 
 function getKnownToolName(message: unknown): KnownMcpToolName | null {
   if (!isRecord(message) || message.method !== "tools/call") return null
   const params = message.params
   if (!isRecord(params) || typeof params.name !== "string") return null
-  if (params.name in PUBLIC_MCP_TOOLS) {
-    return params.name as PublicMcpToolName
-  }
-  if (params.name in PROJECT_MCP_TOOL_SCOPES) {
-    return params.name as ProjectMcpToolName
-  }
-  return null
+  return signalSurfMcpRegistryTool(params.name)
+    ? (params.name as KnownMcpToolName)
+    : null
 }
 
 function findInsufficientScopeRequest(
@@ -226,26 +216,22 @@ function findInsufficientScopeRequest(
     const toolName = getKnownToolName(message)
     if (!toolName) continue
     if (context.scopes === undefined) continue
-    if (toolName in PROJECT_MCP_TOOL_SCOPES) {
-      const requiredScopes = PROJECT_MCP_TOOL_SCOPES[
-        toolName as ProjectMcpToolName
-      ].filter((scope) => !context.scopes?.includes(scope))
+    const registryTool = signalSurfMcpRegistryTool(toolName)!
+    if (registryTool.executionOwner === "signalsurf-web") {
+      const requiredScopes = registryTool.requiredScopes.filter(
+        (scope) =>
+          !signalSurfScopesGrantRequiredScope(context.scopes ?? [], scope)
+      )
       if (requiredScopes.length > 0) return { toolName, requiredScopes }
       continue
     }
-    const missingCapabilities = requiredCapabilitiesForTool(
-      toolName as PublicMcpToolName
-    ).filter((capability) => !canUseCapability(context, capability))
+    const missingCapabilities = registryTool.requiredCapabilities.filter(
+      (capability) => !canUseCapability(context, capability)
+    )
     if (missingCapabilities.length === 0) continue
     return {
       toolName,
-      requiredScopes: [
-        ...new Set(
-          missingCapabilities.flatMap((capability) =>
-            requiredScopesForCapability(capability)
-          )
-        ),
-      ],
+      requiredScopes: registryTool.requiredScopes,
     }
   }
   return null
@@ -487,10 +473,10 @@ export function createHttpApp(
           )
             ? undefined
             : authorizationIconUrl.toString(),
-        projectExecution: {
+        webExecution: {
           baseUrl: config.authorizationServerUrl,
           serviceToken: config.webServiceToken,
-          fetch: dependencies.projectExecutionFetch,
+          fetch: dependencies.webExecutionFetch,
           delegationToken,
         },
       })

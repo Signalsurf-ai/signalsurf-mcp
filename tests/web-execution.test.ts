@@ -1,17 +1,17 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { afterEach, describe, expect, it, vi } from "vitest"
 import {
-  PROJECT_MCP_TOOL_CATALOG,
-  PROJECT_MCP_TOOL_SCOPES,
+  SIGNALSURF_WEB_MCP_TOOL_CATALOG,
+  SIGNALSURF_WEB_MCP_TOOL_SCOPES,
 } from "@signalsurf/mcp-contract"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
-  ProjectExecutionClient,
-  createProjectExecutionSurface,
+  SignalSurfWebExecutionClient,
+  createSignalSurfWebExecutionSurface,
   publishedSchemaToZod,
-} from "../src/project-execution.js"
+} from "../src/web-execution.js"
 
 const workspaceId = "00000000-0000-4000-8000-000000000001"
 const delegationToken = "signed-service-delegation"
@@ -31,7 +31,7 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 function executionClient(fetchImpl: typeof fetch) {
-  return new ProjectExecutionClient({
+  return new SignalSurfWebExecutionClient({
     baseUrl: "https://app.signalsurf.test",
     serviceToken: "internal-service-secret",
     delegationToken,
@@ -39,7 +39,7 @@ function executionClient(fetchImpl: typeof fetch) {
   })
 }
 
-describe("Project execution boundary", () => {
+describe("SignalSurf Web execution boundary", () => {
   it("uses only the server credential and signed service delegation", async () => {
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
       const headers = init?.headers as Record<string, string>
@@ -78,9 +78,9 @@ describe("Project execution boundary", () => {
     })
   })
 
-  it("publishes one stable Project registry and enforces scopes at execution", async () => {
+  it("publishes one stable Web registry and enforces scopes at execution", async () => {
     const server = new McpServer({ name: "test", version: "1.0.0" })
-    const surface = createProjectExecutionSurface({
+    const surface = createSignalSurfWebExecutionSurface({
       client: executionClient((async () =>
         jsonResponse(200, { ok: true, data: {} })) as typeof fetch),
       scopes: ["mcp:projects.read"],
@@ -131,7 +131,7 @@ describe("Project execution boundary", () => {
       jsonResponse(200, { ok: true, data: {} })
     ) as unknown as typeof fetch
     const server = new McpServer({ name: "test", version: "1.0.0" })
-    createProjectExecutionSurface({
+    createSignalSurfWebExecutionSurface({
       client: executionClient(fetchImpl),
       scopes: ["mcp:projects.write", "mcp:conversations.control"],
       role: "viewer",
@@ -163,10 +163,63 @@ describe("Project execution boundary", () => {
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 
-  it("keeps every published Project tool behind an explicit scope mapping", () => {
-    expect(new Set(PROJECT_MCP_TOOL_CATALOG.map((tool) => tool.name))).toEqual(
-      new Set(Object.keys(PROJECT_MCP_TOOL_SCOPES))
-    )
+  it("revalidates current Workspace Admin authority before delegated CRM writes", async () => {
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { tool: string }
+      expect(body.tool).toBe("list_workspaces")
+      return jsonResponse(200, {
+        ok: true,
+        data: { workspaces: [{ workspaceId, memberAccess: "member" }] },
+      })
+    }) as unknown as typeof fetch
+    const server = new McpServer({ name: "test", version: "1.0.0" })
+    createSignalSurfWebExecutionSurface({
+      client: executionClient(fetchImpl),
+      scopes: ["mcp:records.write"],
+      role: "editor",
+      tools: [
+        {
+          name: "admin_record_write",
+          description: "Test Admin-bound Record mutation.",
+          requiredScopes: ["mcp:records.write"],
+          requiredWorkspaceRole: "admin",
+          inputSchema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["workspaceId"],
+            properties: {
+              workspaceId: { type: "string", format: "uuid" },
+            },
+          },
+          annotations: { readOnlyHint: false },
+        },
+      ],
+    }).register(server)
+    const client = new Client({ name: "test-client", version: "1.0.0" })
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
+    cleanup.push(async () => client.close())
+    cleanup.push(async () => server.close())
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    const denied = await client.callTool({
+      name: "admin_record_write",
+      arguments: { workspaceId },
+    })
+    expect(denied.isError).toBe(true)
+    const deniedText =
+      denied.content?.[0]?.type === "text" ? denied.content[0].text : "{}"
+    expect(JSON.parse(deniedText)).toMatchObject({ code: "FORBIDDEN" })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps every published Web tool behind an explicit scope mapping", () => {
+    expect(
+      new Set(SIGNALSURF_WEB_MCP_TOOL_CATALOG.map((tool) => tool.name))
+    ).toEqual(new Set(Object.keys(SIGNALSURF_WEB_MCP_TOOL_SCOPES)))
   })
 
   it("keeps outer workspace constraints on composed schemas", () => {
@@ -208,11 +261,36 @@ describe("Project execution boundary", () => {
     expect(anyOf.safeParse({ kind: "alpha" }).success).toBe(false)
   })
 
+  it("preserves the real create_list branch requirements", () => {
+    const createList = SIGNALSURF_WEB_MCP_TOOL_CATALOG.find(
+      (tool) => tool.name === "create_list"
+    )
+    expect(createList).toBeDefined()
+    const schema = publishedSchemaToZod(createList!.inputSchema)
+    const base = {
+      workspaceId,
+      objectId: "00000000-0000-4000-8000-000000000002",
+      name: "CFO candidates",
+      description: "Qualified CFO candidates",
+    }
+
+    expect(
+      schema.safeParse({ ...base, mode: "dynamic", query: { version: 1 } })
+        .success
+    ).toBe(true)
+    expect(schema.safeParse({ ...base, mode: "dynamic" }).success).toBe(false)
+    expect(schema.safeParse({ ...base, mode: "explicit" }).success).toBe(true)
+    expect(schema.safeParse({ ...base, query: { version: 1 } }).success).toBe(
+      true
+    )
+    expect(schema.safeParse(base).success).toBe(true)
+  })
+
   it("enforces date-time, pattern, and exclusive numeric catalog constraints", () => {
-    const listActivity = PROJECT_MCP_TOOL_CATALOG.find(
+    const listActivity = SIGNALSURF_WEB_MCP_TOOL_CATALOG.find(
       (tool) => tool.name === "list_activity"
     )
-    const waitForThread = PROJECT_MCP_TOOL_CATALOG.find(
+    const waitForThread = SIGNALSURF_WEB_MCP_TOOL_CATALOG.find(
       (tool) => tool.name === "wait_for_thread_response"
     )
     expect(listActivity).toBeDefined()

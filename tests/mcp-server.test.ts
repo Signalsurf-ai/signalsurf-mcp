@@ -1,20 +1,16 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
-import { PROJECT_MCP_TOOL_CATALOG } from "@signalsurf/mcp-contract"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { PUBLIC_MCP_TOOL_NAMES } from "../src/capabilities.js"
 import { SignalSurfRepository } from "../src/repository.js"
 import { createSignalSurfMcpServer } from "../src/server.js"
+import { SIGNALSURF_MCP_TOOL_REGISTRY } from "../src/tool-registry.js"
 import type { SignalSurfContext } from "../src/types.js"
 import { WORKSPACE_CAPABILITIES } from "../src/workspace-capabilities.js"
 import { buildWorkspaceCapabilityDomains } from "../src/workspace-context.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
-const ALL_MCP_TOOL_NAMES = [
-  ...PUBLIC_MCP_TOOL_NAMES,
-  ...PROJECT_MCP_TOOL_CATALOG.map((tool) => tool.name),
-] as const
+const ALL_MCP_TOOL_NAMES = SIGNALSURF_MCP_TOOL_REGISTRY.map((tool) => tool.name)
 
 const context: SignalSurfContext = {
   workspaceId: "00000000-0000-4000-8000-000000000001",
@@ -25,6 +21,17 @@ const databaseId = "00000000-0000-4000-8000-000000000201"
 const workflowId = "00000000-0000-4000-8000-000000000101"
 
 let cleanup: Array<() => Promise<void>> = []
+
+async function listAllTools(client: Client) {
+  const tools = []
+  let cursor: string | undefined
+  do {
+    const page = await client.listTools(cursor ? { cursor } : undefined)
+    tools.push(...page.tools)
+    cursor = page.nextCursor
+  } while (cursor)
+  return tools
+}
 
 afterEach(async () => {
   await Promise.all(cleanup.map((fn) => fn()))
@@ -38,6 +45,7 @@ describe("MCP server", () => {
         context: scopedContext,
         workspaceId: context.workspaceId,
         effective: ["context.read"],
+        memberAccess: "member",
       }).find((candidate) => candidate.domain === "projects")
 
     expect(
@@ -59,8 +67,152 @@ describe("MCP server", () => {
         role: "viewer",
         scopes: ["mcp:projects.write", "mcp:conversations.control"],
       })
-    ).toMatchObject({ enabled: false, access: [] })
+    ).toMatchObject({ enabled: true, access: [] })
   })
+
+  it("does not turn an OAuth write grant into CRM Admin authority", () => {
+    const effective = [
+      "objects.read",
+      "objects.write",
+      "records.write",
+      "lists.write",
+    ] as const
+    const domains = (memberAccess: "member" | "admin") =>
+      buildWorkspaceCapabilityDomains({
+        context: {
+          ...context,
+          role: "editor",
+          scopes: [
+            "mcp:objects.read",
+            "mcp:objects.write",
+            "mcp:records.write",
+            "mcp:lists.write",
+          ],
+        },
+        workspaceId: context.workspaceId,
+        effective,
+        memberAccess,
+      })
+    expect(
+      domains("member")
+        .filter((domain) =>
+          ["objects", "records", "lists"].includes(domain.domain)
+        )
+        .every((domain) => !domain.access.includes("write"))
+    ).toBe(true)
+    expect(
+      domains("admin")
+        .filter((domain) =>
+          ["objects", "records", "lists"].includes(domain.domain)
+        )
+        .every((domain) => domain.access.includes("write"))
+    ).toBe(true)
+  })
+
+  it.each([
+    { memberAccess: "admin", expectedWrite: true },
+    { memberAccess: "member", expectedWrite: false },
+  ] as const)(
+    "resolves $memberAccess Workspace authority for CRM-only context",
+    async ({ memberAccess, expectedWrite }) => {
+      const userId = "00000000-0000-4000-8000-000000000003"
+      const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { tool: string }
+        expect(body.tool).toBe("list_workspaces")
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              workspaces: [
+                {
+                  workspaceId: context.workspaceId,
+                  name: "Acme",
+                  memberAccess,
+                },
+              ],
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      }) as unknown as typeof fetch
+      const server = await createSignalSurfMcpServer({
+        context: {
+          workspaceId: context.workspaceId,
+          userId,
+          role: "editor",
+          scopes: ["mcp:objects.read", "mcp:records.write"],
+          workspaceCapabilitiesByWorkspaceId: {
+            [context.workspaceId]: WORKSPACE_CAPABILITIES,
+          },
+        },
+        repository: new SignalSurfRepository(
+          new FakeSupabase({
+            workspaces: [
+              {
+                id: context.workspaceId,
+                organization_id: null,
+                name: "Acme",
+              },
+            ],
+            workspace_members: [
+              {
+                workspace_id: context.workspaceId,
+                user_id: userId,
+                role: memberAccess,
+              },
+            ],
+            workspace_capability_overrides: WORKSPACE_CAPABILITIES.map(
+              (capability) => ({
+                workspace_id: context.workspaceId,
+                capability_key: capability,
+                enabled: true,
+              })
+            ),
+            workflows: [],
+            databases: [],
+            entries: [],
+            surf_jobs: [],
+            user_preferences: [],
+            sources: [],
+          }) as any
+        ),
+        webExecution: {
+          baseUrl: "https://app.signalsurf.test",
+          serviceToken: "service-secret",
+          delegationToken: "delegation-token",
+          fetch: fetchImpl,
+        },
+      })
+      const client = new Client({ name: "test-client", version: "0.0.0" })
+      const [clientTransport, serverTransport] =
+        InMemoryTransport.createLinkedPair()
+      cleanup.push(async () => client.close())
+      cleanup.push(async () => server.close())
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport),
+      ])
+
+      const result = await client.callTool({
+        name: "get_workspace_context",
+        arguments: {},
+      })
+      const text =
+        result.content?.[0]?.type === "text" ? result.content[0].text : ""
+      const payload = JSON.parse(text)
+      const recordsDomain = payload.data.capabilities.domains.find(
+        (domain: { domain: string }) => domain.domain === "records"
+      )
+
+      expect(payload.data.memberAuthority).toMatchObject({
+        status: "available",
+        memberAccess,
+        grantRole: "editor",
+      })
+      expect(recordsDomain.access.includes("write")).toBe(expectedWrite)
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+    }
+  )
 
   it("registers SignalSurf tools and executes read calls over MCP", async () => {
     const db = new FakeSupabase({
@@ -163,13 +315,13 @@ describe("MCP server", () => {
       client.connect(clientTransport),
     ])
 
-    const tools = await client.listTools()
-    const toolNames = tools.tools.map((tool) => tool.name)
+    const tools = await listAllTools(client)
+    const toolNames = tools.map((tool) => tool.name)
     expect(toolNames).toContain("get_workspace_context")
     expect(toolNames).toContain("get_project_context")
     expect(toolNames).not.toContain("get_context")
     expect(toolNames).not.toContain("resolve_project_context")
-    expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
+    expect(tools.map((tool) => tool.name).sort()).toEqual(
       [...ALL_MCP_TOOL_NAMES].sort()
     )
 
@@ -311,8 +463,8 @@ describe("MCP server", () => {
       client.connect(clientTransport),
     ])
 
-    const tools = await client.listTools()
-    expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
+    const tools = await listAllTools(client)
+    expect(tools.map((tool) => tool.name).sort()).toEqual(
       [...ALL_MCP_TOOL_NAMES].sort()
     )
 
@@ -396,8 +548,8 @@ describe("MCP server", () => {
       ])
     )
 
-    const tools = await client.listTools()
-    expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
+    const tools = await listAllTools(client)
+    expect(tools.map((tool) => tool.name).sort()).toEqual(
       [...ALL_MCP_TOOL_NAMES].sort()
     )
 
@@ -588,7 +740,7 @@ describe("MCP server", () => {
           sources: [],
         }) as any
       ),
-      projectExecution: {
+      webExecution: {
         baseUrl: "https://app.signalsurf.test",
         serviceToken: "service-secret",
         delegationToken: "delegation-token",

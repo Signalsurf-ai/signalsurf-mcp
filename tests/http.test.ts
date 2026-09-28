@@ -93,7 +93,7 @@ async function listen(
   config = makeConfig(),
   createRepository = makeRepository,
   preauthDiscoveryTimeoutMs?: number,
-  projectExecutionFetch: typeof fetch = (async () =>
+  webExecutionFetch: typeof fetch = (async () =>
     new Response(JSON.stringify({ ok: true, workspaces: [] }), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -105,7 +105,7 @@ async function listen(
   const app = createHttpApp(config, {
     createRepository,
     preauthDiscoveryTimeoutMs,
-    projectExecutionFetch,
+    webExecutionFetch,
   })
   const server = await new Promise<Server>((resolve) => {
     const listener = app.listen(0, "127.0.0.1", () => resolve(listener))
@@ -573,12 +573,12 @@ describe("HTTP transport", () => {
     })
   })
 
-  it("executes a scoped Project context call with only the service credential and delegation", async () => {
+  it("executes a Web-owned Project context call through the legacy broad read scope", async () => {
     const authorizationServerUrl = "https://app.signalsurf.ai"
     const resourceUrl = "https://mcp.signalsurf.ai/mcp"
     const userId = "00000000-0000-4000-8000-000000000102"
     const projectId = "00000000-0000-4000-8000-000000000103"
-    const projectExecutionFetch = vi.fn(
+    const webExecutionFetch = vi.fn(
       async () =>
         new Response(
           JSON.stringify({
@@ -590,7 +590,7 @@ describe("HTTP transport", () => {
     ) as unknown as typeof fetch
     const oauthToken = await signOAuthToken({
       userId,
-      scopes: ["mcp:projects.read", "mcp:conversations.read"],
+      scopes: ["mcp:read"],
       resourceUrl,
       issuer: authorizationServerUrl,
     })
@@ -602,7 +602,7 @@ describe("HTTP transport", () => {
       }),
       makeRepository,
       undefined,
-      projectExecutionFetch
+      webExecutionFetch
     )
     listeners.push(server)
 
@@ -621,8 +621,8 @@ describe("HTTP transport", () => {
     expect(JSON.parse(body.result.content[0].text)).toMatchObject({
       project: { id: projectId, name: "Validate CFO ICP" },
     })
-    expect(projectExecutionFetch).toHaveBeenCalledTimes(1)
-    const [, init] = projectExecutionFetch.mock.calls[0]!
+    expect(webExecutionFetch).toHaveBeenCalledTimes(1)
+    const [, init] = webExecutionFetch.mock.calls[0]!
     expect(init?.headers).toMatchObject({
       Authorization: `Bearer ${webServiceToken}`,
     })
@@ -647,7 +647,7 @@ describe("HTTP transport", () => {
     ).resolves.toMatchObject({
       sub: userId,
       workspaceIds: [workspaceId],
-      scopes: ["mcp:projects.read", "mcp:conversations.read"],
+      scopes: ["mcp:read"],
     })
   })
 
@@ -1081,7 +1081,7 @@ describe("HTTP transport", () => {
       user_preferences: [],
       sources: [],
     })
-    const projectExecutionFetch = vi.fn<typeof fetch>()
+    const webExecutionFetch = vi.fn<typeof fetch>()
     const { server, url } = await listen(
       makeConfig({
         authMode: "database",
@@ -1091,7 +1091,7 @@ describe("HTTP transport", () => {
       }),
       () => new SignalSurfRepository(db as any),
       undefined,
-      projectExecutionFetch
+      webExecutionFetch
     )
     listeners.push(server)
 
@@ -1120,7 +1120,7 @@ describe("HTTP transport", () => {
         toolName: "list_projects",
       },
     })
-    expect(projectExecutionFetch).not.toHaveBeenCalled()
+    expect(webExecutionFetch).not.toHaveBeenCalled()
   })
 
   it("requires explicit workspaceId for multi-workspace OAuth HTTP tool calls", async () => {

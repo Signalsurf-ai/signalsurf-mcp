@@ -14,9 +14,13 @@
       "types": "./dist/access-token.d.ts",
       "import": "./dist/access-token.js"
     },
-    "./project-tools": {
-      "types": "./dist/project-tools.d.ts",
-      "import": "./dist/project-tools.js"
+    "./registry": {
+      "types": "./dist/registry.d.ts",
+      "import": "./dist/registry.js"
+    },
+    "./web-tools": {
+      "types": "./dist/web-tools.d.ts",
+      "import": "./dist/web-tools.js"
     },
     "./scopes": {
       "types": "./dist/scopes.d.ts",

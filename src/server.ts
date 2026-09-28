@@ -11,19 +11,9 @@ import {
   listContextCapabilities,
   resolveWorkspaceContext,
 } from "./auth.js"
-import {
-  PUBLIC_MCP_TOOLS,
-  PUBLIC_MCP_TOOL_NAMES,
-  requiredCapabilitiesForTool,
-  type PublicMcpToolName,
-} from "./capabilities.js"
+import type { PublicMcpToolName } from "./capabilities.js"
 import { UserFacingError } from "./errors.js"
 import { jsonErrorResult, jsonResource, runJsonTool } from "./mcp-results.js"
-import {
-  ProjectExecutionClient,
-  createProjectExecutionSurface,
-  type ProjectExecutionClientOptions,
-} from "./project-execution.js"
 import { registerPrompts, workspaceVisiblePromptCatalog } from "./prompts.js"
 import { SignalSurfRepository } from "./repository.js"
 import {
@@ -84,14 +74,26 @@ import {
   waitForSurfJobSchema,
 } from "./schemas.js"
 import { installPaginatedToolList } from "./tool-list-pagination.js"
+import {
+  SIGNALSURF_HOSTED_MCP_TOOL_NAMES,
+  SIGNALSURF_MCP_TOOL_REGISTRY,
+  signalSurfHostedMcpRegistryTool,
+} from "./tool-registry.js"
 import { searchCapabilities } from "./tool-search.js"
 import type { SignalSurfContext } from "./types.js"
+import {
+  SignalSurfWebExecutionClient,
+  createSignalSurfWebExecutionSurface,
+  type SignalSurfWebExecutionClientOptions,
+} from "./web-execution.js"
 import {
   WORKSPACE_CAPABILITIES,
   assertWorkspaceToolAllowed,
   isToolVisibleAcrossWorkspaces,
   projectMcpCapabilitiesForWorkspace,
+  workspaceCapabilityEnabled,
   workspaceCapabilityForTool,
+  workspaceToolAllowed,
 } from "./workspace-capabilities.js"
 import { buildWorkspaceContext } from "./workspace-context.js"
 
@@ -99,7 +101,7 @@ export type CreateServerOptions = {
   context: SignalSurfContext
   repository: SignalSurfRepository
   /** Authenticated Web execution boundary for Project collaboration tools. */
-  projectExecution?: ProjectExecutionClientOptions
+  webExecution?: SignalSurfWebExecutionClientOptions
   /** Public connector icon; omit it when the current HTTP origin cannot serve it. */
   iconUrl?: string
   /** Serve only the initialize handshake; later stateless requests build handlers. */
@@ -133,8 +135,8 @@ export function workspaceProjectedServerInstructions(
 ): string {
   const sections = ["SignalSurf MCP — operating manual."]
   const canUseTool = (name: PublicMcpToolName) =>
-    requiredCapabilitiesForTool(name).every((capability) =>
-      canUseCapability(context, capability)
+    signalSurfHostedMcpRegistryTool(name).requiredCapabilities.every(
+      (capability) => canUseCapability(context, capability)
     )
   if (canUseTool("get_workspace_context")) {
     sections.push(
@@ -173,15 +175,18 @@ export async function createSignalSurfMcpServer(
   options: CreateServerOptions
 ): Promise<McpServer> {
   const { context, repository } = options
-  const projectExecutionClient = new ProjectExecutionClient(
-    options.projectExecution ?? {
+  const webExecutionClient = new SignalSurfWebExecutionClient(
+    options.webExecution ?? {
       delegationToken: undefined,
     }
   )
-  const projectExecutionSurface = createProjectExecutionSurface({
-    client: projectExecutionClient,
-    scopes: context.scopes ?? [],
+  const webExecutionSurface = createSignalSurfWebExecutionSurface({
+    client: webExecutionClient,
+    scopes: context.scopes,
     role: context.role,
+    tools: SIGNALSURF_MCP_TOOL_REGISTRY.filter(
+      (tool) => tool.executionOwner === "signalsurf-web"
+    ),
   })
   // Initialize only needs declared protocol capabilities and instructions.
   // Stateless follow-up requests build the authorized handlers they consume.
@@ -236,7 +241,7 @@ export async function createSignalSurfMcpServer(
         tools: {},
         prompts: {},
       },
-      instructions: `${projectExecutionSurface.instructions}\n\n${workspaceProjectedServerInstructions(context)}`,
+      instructions: `${webExecutionSurface.instructions}\n\n${workspaceProjectedServerInstructions(context)}`,
     }
   )
 
@@ -247,10 +252,10 @@ export async function createSignalSurfMcpServer(
     server,
     repository,
     context,
-    projectExecutionClient,
-    projectExecutionSurface.capabilities
+    webExecutionClient,
+    webExecutionSurface.capabilities
   )
-  projectExecutionSurface.register(server, PUBLIC_MCP_TOOL_NAMES)
+  webExecutionSurface.register(server, SIGNALSURF_HOSTED_MCP_TOOL_NAMES)
   registerPrompts(server, {
     tables: true,
     workflows: true,
@@ -278,17 +283,19 @@ function registerTools(
   server: McpServer,
   repository: SignalSurfRepository,
   context: SignalSurfContext,
-  projectExecutionClient: ProjectExecutionClient,
+  webExecutionClient: SignalSurfWebExecutionClient,
   additionalCapabilities: Array<{
     name: string
     title: string
     description: string
     requiredScopes: readonly string[]
     readOnly: boolean
+    workspaceCapability?: "objects" | "lists" | "listening"
+    requiredWorkspaceRole: "member" | "admin"
   }> = []
 ) {
   const registeredTools = new Set<PublicMcpToolName>()
-  const visibleToolNames = [...PUBLIC_MCP_TOOL_NAMES]
+  const visibleToolNames = [...SIGNALSURF_HOSTED_MCP_TOOL_NAMES]
   const visibleToolNameSet = new Set(visibleToolNames)
   const visiblePromptCatalog = workspaceVisiblePromptCatalog({
     tables: isToolVisibleAcrossWorkspaces(context, "list_tables"),
@@ -296,7 +303,7 @@ function registerTools(
   })
 
   function toolConfig(name: PublicMcpToolName, inputSchema?: any) {
-    const definition = PUBLIC_MCP_TOOLS[name]
+    const definition = signalSurfHostedMcpRegistryTool(name)
     const config = {
       title: definition.title,
       description: definition.description,
@@ -307,7 +314,8 @@ function registerTools(
   }
 
   function assertToolAllowed(name: PublicMcpToolName) {
-    for (const capability of requiredCapabilitiesForTool(name)) {
+    for (const capability of signalSurfHostedMcpRegistryTool(name)
+      .requiredCapabilities) {
       assertCanUseCapability(context, capability)
     }
   }
@@ -325,7 +333,9 @@ function registerTools(
     handler: (args: any) => Promise<any>
   ) {
     if (!visibleToolNameSet.has(name)) return
-    if (inputSchema !== PUBLIC_MCP_TOOL_SCHEMAS[name]) {
+    const registryTool = signalSurfHostedMcpRegistryTool(name)
+    const schemaMatches = inputSchema === PUBLIC_MCP_TOOL_SCHEMAS[name]
+    if (!schemaMatches) {
       throw new Error(
         `Public MCP tool ${name} was registered with a non-canonical input schema.`
       )
@@ -342,16 +352,17 @@ function registerTools(
           if (typeof repository.revalidateContext === "function") {
             await repository.revalidateContext(context)
           }
-          context.workspaceCapabilitiesByWorkspaceId =
-            await loadRepositoryCapabilities(
-              repository,
-              authorizedWorkspaceIds(context)
-            )
+          if (typeof repository.loadWorkspaceCapabilities === "function") {
+            context.workspaceCapabilitiesByWorkspaceId =
+              await repository.loadWorkspaceCapabilities(
+                authorizedWorkspaceIds(context)
+              )
+          }
         } catch (error) {
           return jsonErrorResult(error)
         }
         try {
-          for (const capability of requiredCapabilitiesForTool(name)) {
+          for (const capability of registryTool.requiredCapabilities) {
             assertCanUseCapability(context, capability)
           }
         } catch (error) {
@@ -359,8 +370,8 @@ function registerTools(
         }
         if (
           workspaceCapabilityForTool(name) !== null &&
-          (!PUBLIC_MCP_TOOLS[name].annotations.readOnlyHint ||
-            PUBLIC_MCP_TOOLS[name].annotations.openWorldHint)
+          (!registryTool.annotations.readOnlyHint ||
+            registryTool.annotations.openWorldHint)
         ) {
           try {
             const selectedContext = toolContext(args)
@@ -387,7 +398,7 @@ function registerTools(
         return buildWorkspaceContext({
           context,
           repository,
-          projectExecutionClient,
+          webExecutionClient,
           workspaceId,
         })
       })
@@ -422,28 +433,49 @@ function registerTools(
     async (args: any) =>
       runJsonTool(async () => {
         assertToolAllowed("find_capabilities")
+        const selectedContext = toolContext(args)
+        const memberAccess = await webExecutionClient.getWorkspaceMemberAccess(
+          selectedContext.workspaceId
+        )
         const tools = [
           ...visibleToolNames
-            .filter(
-              (name) =>
+            .filter((name) => {
+              const definition = signalSurfHostedMcpRegistryTool(name)
+              return (
                 name !== "find_capabilities" &&
-                canUseCapability(
-                  context,
-                  PUBLIC_MCP_TOOLS[name].requiredCapability
-                )
-            )
-            .map((name) => ({
-              name,
-              title: PUBLIC_MCP_TOOLS[name].title,
-              description: PUBLIC_MCP_TOOLS[name].description,
-            })),
+                definition.requiredCapabilities.every((capability) =>
+                  canUseCapability(context, capability)
+                ) &&
+                (definition.annotations.readOnlyHint &&
+                !definition.annotations.openWorldHint
+                  ? true
+                  : workspaceToolAllowed(selectedContext, name))
+              )
+            })
+            .map((name) => {
+              const definition = signalSurfHostedMcpRegistryTool(name)
+              return {
+                name,
+                title: definition.title,
+                description: definition.description,
+              }
+            }),
           ...additionalCapabilities
             .filter(
               (capability) =>
-                capability.requiredScopes.every((scope) =>
-                  context.scopes?.includes(scope)
-                ) &&
-                (capability.readOnly || context.role !== "viewer")
+                (context.scopes === undefined ||
+                  capability.requiredScopes.every((scope) =>
+                    context.scopes?.includes(scope)
+                  )) &&
+                (capability.readOnly || context.role !== "viewer") &&
+                (memberAccess === "member" || memberAccess === "admin") &&
+                (capability.requiredWorkspaceRole !== "admin" ||
+                  memberAccess === "admin") &&
+                (!capability.workspaceCapability ||
+                  workspaceCapabilityEnabled(
+                    selectedContext,
+                    capability.workspaceCapability
+                  ))
             )
             .map(({ name, title, description }) => ({
               name,

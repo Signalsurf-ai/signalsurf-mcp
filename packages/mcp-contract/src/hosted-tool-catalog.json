@@ -1,0 +1,3369 @@
+[
+  {
+    "name": "get_workspace_context",
+    "title": "Get Workspace Context",
+    "description": "Load the canonical Agent identity, authorized Workspaces, member authority, grants, effective domain capabilities, and bounded active-Project attention for the selected Workspace. Call this at session start and after switching Workspaces.",
+    "domain": "workspace",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "context.read"
+    ],
+    "requiredScopes": [
+      "mcp:read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_brand_context",
+    "title": "Get Brand Context",
+    "description": "Read the active workspace's brand and positioning context: brand name, brand description, product description, product categories, selling points, target audience, competitors, and official website. Pass workspaceId when this connection can access multiple workspaces. Returns empty fields when the workspace has not completed brand setup.",
+    "domain": "workspace",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "context.read"
+    ],
+    "requiredScopes": [
+      "mcp:read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_enrichment_context",
+    "title": "Get Enrichment Context",
+    "description": "Bundle everything an agent needs before filling or enriching a table column: brand/positioning context, the table schema (fields, types, options, entry key, relations), the most popular existing values per tag/array field, and SignalSurf field conventions. Call this before writing whatToDo for enable_enrich or before manual row edits. Pass workspaceId when this connection can access multiple workspaces; pass fieldKey to scope popular values to one column.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "tables.read"
+    ],
+    "requiredScopes": [
+      "mcp:tables.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "fieldKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "required": [
+        "databaseId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "find_capabilities",
+    "title": "Find Capabilities",
+    "description": "Search this MCP's tools and guided prompts by intent (e.g. \"enrich a table\", \"find leads\", \"set up a Workflow\") instead of scanning the whole tool list. Returns the best-matching tools and prompts (filtered to what your token can use) plus a hint on how to proceed. Start here when you are unsure which tool or prompt fits the task. Pass an empty query to see the available guided workflows.",
+    "domain": "workspace",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "context.read"
+    ],
+    "requiredScopes": [
+      "mcp:read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_workflows",
+    "title": "List Workflows",
+    "description": "List SignalSurf Workflows for an authorized workspace. Pass workspaceId when this connection can access multiple workspaces. Soft-deleted rows are never returned; pass includeInactive=false to hide paused Workflows.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.read"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "includeInactive": {
+          "type": "boolean",
+          "default": true
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 100
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_workflow",
+    "title": "Get Workflow",
+    "description": "Read one SignalSurf Workflow after verifying it belongs to an authorized workspace.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.read"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "workflowId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "required": [
+        "workflowId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_workflow",
+    "title": "Create Workflow",
+    "description": "Create a Workflow in an authorized workspace. Pass workspaceId when this connection can access multiple workspaces, projectId to place it in an existing Project, and databaseIds when the workspace has multiple databases.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.write"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 20,
+          "default": "#5599FF"
+        },
+        "icon": {
+          "type": "string",
+          "maxLength": 50,
+          "default": "folder.fill"
+        },
+        "projectId": {
+          "anyOf": [
+            {
+              "$ref": "#/properties/workspaceId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "databaseIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/properties/workspaceId"
+          }
+        },
+        "promptTemplate": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "scoringRubric": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "surfPrompt": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "relevanceThreshold": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "isActive": {
+          "type": "boolean",
+          "default": true
+        },
+        "showAiDashboard": {
+          "type": "boolean",
+          "default": true
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "toolConfig": {
+          "$ref": "#/properties/variables"
+        },
+        "viewConfigs": {
+          "$ref": "#/properties/variables"
+        },
+        "config": {
+          "$ref": "#/properties/variables"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_workflow",
+    "title": "Update Workflow",
+    "description": "Modify Workflow metadata, Project placement, prompt fields, target tables, and JSON config for an authorized workspace. To attach or detach workspace integration tools, set toolConfigPatch.auto_tool_ids using tool ids from list_workspace_tools/list_workflow_tools (shallow-merged). Pass workspaceId when this connection can access multiple workspaces.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.write"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "workflowId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "icon": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "projectId": {
+          "anyOf": [
+            {
+              "$ref": "#/properties/workspaceId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "databaseIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/properties/workspaceId"
+          }
+        },
+        "promptTemplate": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 10000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scoringRubric": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 10000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "surfPrompt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 10000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relevanceThreshold": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "isActive": {
+          "type": "boolean"
+        },
+        "showAiDashboard": {
+          "type": "boolean"
+        },
+        "variables": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "variablesPatch": {
+          "$ref": "#/properties/variables/anyOf/0"
+        },
+        "toolConfig": {
+          "anyOf": [
+            {
+              "$ref": "#/properties/variables/anyOf/0"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toolConfigPatch": {
+          "$ref": "#/properties/variables/anyOf/0"
+        },
+        "viewConfigs": {
+          "anyOf": [
+            {
+              "$ref": "#/properties/variables/anyOf/0"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/properties/variables/anyOf/0"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "configPatch": {
+          "$ref": "#/properties/variables/anyOf/0"
+        }
+      },
+      "required": [
+        "workflowId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "run_workflow",
+    "title": "Run Workflow",
+    "description": "Queue an authorized Workflow for execution by creating a pending SignalSurf surf job. Pass workspaceId when this connection can access multiple workspaces.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.execute"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.execute"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "workflowId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "allowInactive": {
+          "type": "boolean",
+          "default": false
+        },
+        "dedupePending": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": [
+        "workflowId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_surf_job",
+    "title": "Get Surf Job",
+    "description": "Read one SignalSurf surf job after verifying the job belongs to a Workflow in an authorized workspace.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.read"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "jobId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "required": [
+        "jobId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "wait_for_surf_job",
+    "title": "Wait For Surf Job",
+    "description": "Poll one SignalSurf surf job until it leaves an active status or the timeout expires.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.read"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "jobId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 120000,
+          "default": 30000
+        },
+        "pollIntervalMs": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 10000,
+          "default": 1000
+        }
+      },
+      "required": [
+        "jobId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_surf_jobs",
+    "title": "List Surf Jobs",
+    "description": "List SignalSurf surf jobs for an authorized workspace, optionally filtered by workflowId or status.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.read"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "workflowId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "cancel_surf_job",
+    "title": "Cancel Surf Job",
+    "description": "Cancel a pending SignalSurf surf job after verifying it belongs to an authorized workspace.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.execute"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.execute"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "jobId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "required": [
+        "jobId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_workflow",
+    "title": "Delete Workflow",
+    "description": "Soft-delete one or more Workflows in an authorized workspace and cancel pending jobs. Pass workspaceId when this connection can access multiple workspaces. This does not hard-delete historical rows.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.delete"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.delete"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "workflowIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/properties/workspaceId"
+          },
+          "minItems": 1,
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "workflowIds"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "describe_node_types",
+    "title": "Describe Flow Node Types",
+    "description": "List the Workflow Flow V2 node types (trigger, rule, agent, action, wait, sequence), their fields, and the legal edge conditions. A Workflow is now a node graph (DAG); call this before building or editing a flow so you shape nodes and wire edges correctly. No args.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.read"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "edit_workflow_flows",
+    "title": "Edit Workflow Flows",
+    "description": "Edit the Flows inside one Workflow in a single atomic call. Input { workflowId, edits }. A disconnected Node chain becomes its own Flow; connected Nodes remain in the same Flow. edits is an ordered list of ops: {op:'add_node', ref?, node}, {op:'connect', source, target, condition?}, {op:'update_node', nodeId, patch}, {op:'remove_node', nodeId}, {op:'remove_edge', edgeId}. If any edit is invalid, the whole batch is rejected.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.write"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "workflowId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "enum": [
+                  "add_node",
+                  "connect",
+                  "update_node",
+                  "remove_node",
+                  "remove_edge"
+                ]
+              },
+              "ref": {
+                "type": "string",
+                "description": "add_node: a local handle later ops in this batch can reference."
+              },
+              "node": {
+                "type": "object",
+                "additionalProperties": {},
+                "description": "add_node: the node to add (without id; the server mints it)."
+              },
+              "source": {
+                "type": "string",
+                "description": "connect: source node id or batch ref."
+              },
+              "target": {
+                "type": "string",
+                "description": "connect: target node id or batch ref."
+              },
+              "condition": {
+                "type": "string",
+                "description": "connect: edge condition."
+              },
+              "nodeId": {
+                "type": "string",
+                "description": "update_node / remove_node: node id or ref."
+              },
+              "patch": {
+                "type": "object",
+                "additionalProperties": {},
+                "description": "update_node: fields to merge into the node."
+              },
+              "edgeId": {
+                "type": "string",
+                "description": "remove_edge: edge id."
+              }
+            },
+            "required": [
+              "op"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "workflowId",
+        "edits"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_node_upstream_context",
+    "title": "Get Node Upstream Context",
+    "description": "Resolve what data is in scope at a flow node before you configure it: the upstream node chain, upstream triggers and their sources, upstream agent write targets (databaseId + columns), this node's own target-table columns (for create_row/object_sink), and signal fields you can reference as {{signal.<field>}}. Always call this before mapping a create_row/object_sink node's fields. Input { workflowId, nodeId }.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.read"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "workflowId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "nodeId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "workflowId",
+        "nodeId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_campaign",
+    "title": "Create Campaign",
+    "description": "Create a first-class draft cold-email Campaign for a Table or Object audience. Input { name, goal, description?, audienceDatabaseId, recipientField?, mailbox, steps:[{copy, delayDays?, gate?}] }. You MUST pass mailbox (a connected Unipile email account id). The Campaign is independent from Workflows and does not enroll contacts automatically.",
+    "domain": "campaigns",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "campaigns.write"
+    ],
+    "requiredScopes": [
+      "mcp:campaigns.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "audienceDatabaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "recipientField": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "mailbox": {
+          "type": "string",
+          "minLength": 1
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "copy": {
+                "type": "string",
+                "minLength": 1,
+                "description": "What this step's email should say."
+              },
+              "delayDays": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Days to wait before this step (step 1 from enrolment)."
+              },
+              "gate": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "replied",
+                  "not_replied"
+                ],
+                "description": "Condition after the wait. Step 1 is always unconditional."
+              }
+            },
+            "required": [
+              "copy"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "name",
+        "goal",
+        "audienceDatabaseId",
+        "steps"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "test_workflow_node",
+    "title": "Test Workflow Node",
+    "description": "Dry-run one flow node via the surf-flow-debug runner (no commit). Input { workflowId, nodeId, sampleText? }. Returns the node result (rule pass/fail + score, classify branch, or an agent's proposed writes). Requires the surf-flow-debug edge function to be reachable from this deployment.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.read"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "workflowId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "nodeId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sampleText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflowId",
+        "nodeId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_tables",
+    "title": "List Tables",
+    "description": "List tables available in an authorized workspace. Pass workspaceId when this connection can access multiple workspaces. System tables are hidden unless includeSystem is true.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "tables.read"
+    ],
+    "requiredScopes": [
+      "mcp:tables.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "includeSystem": {
+          "type": "boolean",
+          "default": false
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 100
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_table",
+    "title": "Create Table",
+    "description": "Create a SignalSurf table from the canonical outbound_accounts or contacts template, or with an optional custom schema, saved-view config, and folder placement. During creation, template schemas preserve required field types while accepting additive fields.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "schemas.write"
+    ],
+    "requiredScopes": [
+      "mcp:schemas.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "template": {
+          "type": "string",
+          "enum": [
+            "outbound_accounts",
+            "contacts"
+          ]
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 50
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 20
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "itemType": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 100
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "viewConfigs": {
+          "$ref": "#/properties/schema"
+        },
+        "folderId": {
+          "anyOf": [
+            {
+              "$ref": "#/properties/workspaceId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "displayOrder": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000,
+          "default": 0
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_table",
+    "title": "Update Table",
+    "description": "Update SignalSurf table metadata, custom schema, saved-view config, and folder placement after workspace-scope verification. Pass template to upgrade a compatible existing table to the canonical outbound_accounts or contacts baseline while preserving additive custom fields.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "schemas.write"
+    ],
+    "requiredScopes": [
+      "mcp:schemas.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "template": {
+          "type": "string",
+          "enum": [
+            "outbound_accounts",
+            "contacts"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 50
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 20
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schemaPatch": {
+          "$ref": "#/properties/schema/anyOf/0"
+        },
+        "itemType": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 100
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "viewConfigs": {
+          "anyOf": [
+            {
+              "$ref": "#/properties/schema/anyOf/0"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "folderId": {
+          "anyOf": [
+            {
+              "$ref": "#/properties/workspaceId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "displayOrder": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "databaseId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_table",
+    "title": "Delete Table",
+    "description": "Delete one or more user-facing SignalSurf tables after workspace-scope verification, then unlink the deleted table ids from active Workflows. Pass workspaceId when this connection can access multiple workspaces.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "tables.delete"
+    ],
+    "requiredScopes": [
+      "mcp:tables.delete"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/properties/workspaceId"
+          },
+          "minItems": 1,
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "databaseIds"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_table_views",
+    "title": "List Table Views",
+    "description": "List saved views configured for a SignalSurf table in an authorized workspace.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "tables.read"
+    ],
+    "requiredScopes": [
+      "mcp:tables.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "required": [
+        "databaseId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "read_table",
+    "title": "Read Table",
+    "description": "Read rows from a SignalSurf table in an authorized workspace. Pass workspaceId when this connection can access multiple workspaces. Supports pagination, JSON containment filters, and UI-style data filters/sorts.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "tables.read"
+    ],
+    "requiredScopes": [
+      "mcp:tables.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "orderBy": {
+          "type": "string",
+          "enum": [
+            "created_at",
+            "updated_at"
+          ],
+          "default": "created_at"
+        },
+        "ascending": {
+          "type": "boolean",
+          "default": false
+        },
+        "dataContains": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "op": {
+                "type": "string",
+                "enum": [
+                  "eq",
+                  "neq",
+                  "in",
+                  "not_in",
+                  "contains",
+                  "starts_with",
+                  "is_empty",
+                  "is_not_empty",
+                  "gt",
+                  "gte",
+                  "lt",
+                  "lte",
+                  "between",
+                  "array_contains",
+                  "relation_is",
+                  "relation_in"
+                ]
+              },
+              "value": {}
+            },
+            "required": [
+              "field",
+              "op"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 25
+        },
+        "filterLogic": {
+          "type": "string",
+          "enum": [
+            "and",
+            "or"
+          ],
+          "default": "and"
+        },
+        "sorts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc"
+                ],
+                "default": "asc"
+              }
+            },
+            "required": [
+              "field"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 5
+        },
+        "scanLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000,
+          "default": 1000
+        }
+      },
+      "required": [
+        "databaseId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "read_table_view",
+    "title": "Read Table View",
+    "description": "Read rows using a table saved view, with optional additional filters and sorts.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "tables.read"
+    ],
+    "requiredScopes": [
+      "mcp:tables.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "viewId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "op": {
+                "type": "string",
+                "enum": [
+                  "eq",
+                  "neq",
+                  "in",
+                  "not_in",
+                  "contains",
+                  "starts_with",
+                  "is_empty",
+                  "is_not_empty",
+                  "gt",
+                  "gte",
+                  "lt",
+                  "lte",
+                  "between",
+                  "array_contains",
+                  "relation_is",
+                  "relation_in"
+                ]
+              },
+              "value": {}
+            },
+            "required": [
+              "field",
+              "op"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 25
+        },
+        "filterLogic": {
+          "type": "string",
+          "enum": [
+            "and",
+            "or"
+          ],
+          "default": "and"
+        },
+        "sorts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc"
+                ],
+                "default": "asc"
+              }
+            },
+            "required": [
+              "field"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 5
+        },
+        "scanLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000,
+          "default": 1000
+        }
+      },
+      "required": [
+        "databaseId",
+        "viewId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_table_row",
+    "title": "Get Table Row",
+    "description": "Read one table row by rowId after verifying workspace scope. Pass workspaceId when this connection can access multiple workspaces.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "tables.read"
+    ],
+    "requiredScopes": [
+      "mcp:tables.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "rowId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "required": [
+        "rowId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_table_row",
+    "title": "Create Table Row",
+    "description": "Create a row/item in a SignalSurf table after verifying it belongs to an authorized workspace. Pass workspaceId when this connection can access multiple workspaces.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "tables.write"
+    ],
+    "requiredScopes": [
+      "mcp:tables.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "workflowId": {
+          "anyOf": [
+            {
+              "$ref": "#/properties/workspaceId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 500000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "databaseId",
+        "data"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_table_rows",
+    "title": "Update Table Rows",
+    "description": "Modify authorized rows with an edits array. Each edit may update data or dataPatch (mutually exclusive), note, and/or workflowId; rowIds must be unique. Data changes are atomic as a batch. Note and Workflow updates run afterward and may partially succeed if a later write fails.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "tables.write"
+    ],
+    "requiredScopes": [
+      "mcp:tables.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rowId": {
+                "$ref": "#/properties/workspaceId"
+              },
+              "databaseId": {
+                "$ref": "#/properties/workspaceId"
+              },
+              "data": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "dataPatch": {
+                "$ref": "#/properties/edits/items/properties/data"
+              },
+              "note": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 500000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "workflowId": {
+                "anyOf": [
+                  {
+                    "$ref": "#/properties/workspaceId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "rowId"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 100
+        }
+      },
+      "required": [
+        "edits"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_table_rows",
+    "title": "Delete Table Rows",
+    "description": "Delete one or more table rows/items after verifying every row belongs to an authorized workspace. Pass workspaceId when this connection can access multiple workspaces.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "tables.delete"
+    ],
+    "requiredScopes": [
+      "mcp:tables.delete"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "rowIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/properties/workspaceId"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        }
+      },
+      "required": [
+        "rowIds"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_table_fields",
+    "title": "List Table Fields",
+    "description": "List schema fields and relation definitions for an authorized SignalSurf table.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "schemas.read"
+    ],
+    "requiredScopes": [
+      "mcp:schemas.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "required": [
+        "databaseId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "add_table_field",
+    "title": "Add Table Field",
+    "description": "Add one schema field to an authorized SignalSurf table. This changes schema only; existing row data is not backfilled.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "schemas.write"
+    ],
+    "requiredScopes": [
+      "mcp:schemas.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "field": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "type": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "key",
+            "type"
+          ],
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "databaseId",
+        "field"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_table_field",
+    "title": "Update Table Field",
+    "description": "Patch one schema field in an authorized SignalSurf table.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "schemas.write"
+    ],
+    "requiredScopes": [
+      "mcp:schemas.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "fieldKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "patch": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "databaseId",
+        "fieldKey",
+        "patch"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "remove_table_field",
+    "title": "Remove Table Field",
+    "description": "Remove one schema field from an authorized SignalSurf table. This changes schema only and does not delete row data.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "schemas.write"
+    ],
+    "requiredScopes": [
+      "mcp:schemas.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "fieldKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "required": [
+        "databaseId",
+        "fieldKey"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_relation_field",
+    "title": "Create Relation Field",
+    "description": "Create an item_ref relation field from one authorized table to another workspace-owned table.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "schemas.write"
+    ],
+    "requiredScopes": [
+      "mcp:schemas.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "targetDatabaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "relationType": {
+          "type": "string",
+          "maxLength": 100,
+          "default": "item_ref"
+        },
+        "displayField": {
+          "type": "string",
+          "maxLength": 100
+        }
+      },
+      "required": [
+        "databaseId",
+        "key",
+        "targetDatabaseId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_signals",
+    "title": "List Signals",
+    "description": "List safe signal metadata for an authorized Workflow. Signal config and credentials are not exposed.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "sources.read"
+    ],
+    "requiredScopes": [
+      "mcp:sources.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "workflowId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "required": [
+        "workflowId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "create_signal",
+    "title": "Create Signal",
+    "description": "Create a SignalSurf signal for an authorized Workflow. Supports platform, custom-pull, RSS, webhook, web-monitor, GitHub, CoinGecko, Hacker News, Product Hunt, and the four exclusive internal trigger types. Webhook signals return the callable SignalSurf webhookUrl.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "sources.write"
+    ],
+    "requiredScopes": [
+      "mcp:sources.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "workflowId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "sourceType": {
+          "type": "string",
+          "enum": [
+            "platform",
+            "custom-pull",
+            "rss",
+            "webhook",
+            "web-monitor",
+            "github",
+            "coingecko",
+            "hackernews",
+            "producthunt",
+            "item-created",
+            "item-updated",
+            "manual-trigger",
+            "on-schedule"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "dataSchema": {
+          "$ref": "#/properties/config"
+        },
+        "isActive": {
+          "type": "boolean",
+          "default": true
+        },
+        "replaceExisting": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "workflowId",
+        "sourceType"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_signal",
+    "title": "Update Signal",
+    "description": "Update one signal after verifying its Workflow belongs to an authorized workspace. Supports signal name, active state (enable/pause via isActive), typed config rebuilds, and safe pull_config/metadata/data_schema replacements or shallow patches.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "sources.write"
+    ],
+    "requiredScopes": [
+      "mcp:sources.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sourceId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "sourceType": {
+          "type": "string",
+          "enum": [
+            "platform",
+            "custom-pull",
+            "rss",
+            "webhook",
+            "web-monitor",
+            "github",
+            "coingecko",
+            "hackernews",
+            "producthunt",
+            "item-created",
+            "item-updated",
+            "manual-trigger",
+            "on-schedule"
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "isActive": {
+          "type": "boolean"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "pullConfig": {
+          "anyOf": [
+            {
+              "$ref": "#/properties/config"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pullConfigPatch": {
+          "$ref": "#/properties/config"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "$ref": "#/properties/config"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadataPatch": {
+          "$ref": "#/properties/config"
+        },
+        "dataSchema": {
+          "anyOf": [
+            {
+              "$ref": "#/properties/config"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "replaceExisting": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "sourceId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "delete_signal",
+    "title": "Delete Signal",
+    "description": "Hard-delete one or more signals after workspace-scope validation and remove non-terminal jobs for those signal ids.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "sources.write"
+    ],
+    "requiredScopes": [
+      "mcp:sources.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sourceId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "sourceIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/properties/workspaceId"
+          },
+          "minItems": 1,
+          "maxItems": 50
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_workspace_tools",
+    "title": "List Workspace Tools",
+    "description": "List safe workspace tool metadata that can be attached to Workflows. Tool config secrets are not exposed.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.read"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "includeDisabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 100
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_workflow_tools",
+    "title": "List Workflow Tools",
+    "description": "List tool ids attached to a Workflow through toolConfig.auto_tool_ids.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.read"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "workflowId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "required": [
+        "workflowId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "deepline_search_people",
+    "title": "Search People via Deepline",
+    "description": "Search people through Deepline's managed Crustdata V3 search for an authorized workspace after consuming an exact, unexpired one-time Web approval. Pass provider-neutral nested people/company filters or the backward-compatible Apollo-shaped names (person_titles, person_seniorities, person_locations, organization_locations, organization_num_employees_ranges, contact_email_status). Apollo remains an explicit BYOC deployment override. Returns preview rows + match counts; emails require the separate enrich step.",
+    "domain": "deepline",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "deepline.read"
+    ],
+    "requiredScopes": [
+      "mcp:deepline.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "operation",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25,
+          "default": 10
+        },
+        "approvalRequestId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "search_instagram_content",
+    "title": "Search Instagram Public Content",
+    "description": "Search the broader public Instagram post corpus for an authorized workspace after consuming an exact, unexpired one-time Web approval. Returns post evidence plus deduplicated creator accounts. Costs three SignalSurf credits per requested page. This is a separate discovery lane and is never used as a fallback for Instagram Reels Search.",
+    "domain": "creator_discovery",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "creator_discovery.read"
+    ],
+    "requiredScopes": [
+      "mcp:creator_discovery.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "operation",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 1
+        },
+        "approvalRequestId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "deepline_search_companies",
+    "title": "Search Companies via Deepline",
+    "description": "Search companies through Deepline's managed Crustdata V3 search for an authorized workspace after consuming an exact, unexpired one-time Web approval. Pass provider-neutral company filters or the backward-compatible Apollo-shaped names (q_organization_keyword_tags, q_organization_domains_list, organization_locations, organization_not_locations, organization_num_employees_ranges); funding_stages is also supported. Apollo remains an explicit BYOC deployment override.",
+    "domain": "deepline",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "deepline.read"
+    ],
+    "requiredScopes": [
+      "mcp:deepline.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "operation",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25,
+          "default": 10
+        },
+        "approvalRequestId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "deepline_enrich_contact",
+    "title": "Find a Contact Email via Deepline",
+    "description": "Find a verified work email for a person via Deepline (leadmagic email finder) after consuming an exact, unexpired one-time Web approval. Requires firstName + lastName and at least one of domain / companyName. Spends Deepline credits ONLY on a hit (misses are free). Requires a Deepline integration key on the workspace.",
+    "domain": "deepline",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "deepline.enrich"
+    ],
+    "requiredScopes": [
+      "mcp:deepline.enrich"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "operation",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "firstName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "lastName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "domain": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "companyName": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "approvalRequestId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "required": [
+        "firstName",
+        "lastName"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "deepline_search_catalog",
+    "title": "Search Deepline Tool Catalog",
+    "description": "Search Deepline's live v2 tool catalog for an authorized workspace to discover provider tool ids before execution. An empty query returns the first tools in the catalog. Requires a Deepline integration key on the workspace.",
+    "domain": "deepline",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "deepline.read"
+    ],
+    "requiredScopes": [
+      "mcp:deepline.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 200,
+          "default": ""
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "default": 25
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "deepline_execute_tool",
+    "title": "Execute Deepline Tool",
+    "description": "Execute a selected Deepline v2 tool id with a JSON payload for an authorized workspace. Requires an approved, unexpired, one-time action request bound to the active OAuth grant, workspace, tool id, and exact payload. Use deepline_search_catalog first unless the tool id is already known. May spend Deepline credits depending on the provider and result. Requires a Deepline integration key on the workspace.",
+    "domain": "deepline",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "deepline.execute"
+    ],
+    "requiredScopes": [
+      "mcp:deepline.execute"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "operation",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "toolId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "approvalRequestId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": {},
+          "default": {}
+        }
+      },
+      "required": [
+        "toolId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "enable_enrich",
+    "title": "Enable Enrich",
+    "description": "Enable Enrich on one table column: bind a hidden Workflow + manual-trigger source to (databaseId, fieldKey) with a 'what to do' instruction the brain uses to fill that single column from each row's context. Optionally pass auto ('on_created' to auto-fill new rows, 'off' to clear auto-fill) and runCondition for the column's 'only run if' gate. Re-enabling an off column restores it and updates the instruction. Pass workspaceId when this connection can access multiple workspaces.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "sources.write"
+    ],
+    "requiredScopes": [
+      "mcp:sources.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "fieldKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "whatToDo": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "auto": {
+          "type": "string",
+          "enum": [
+            "off",
+            "on_created"
+          ]
+        },
+        "runCondition": {
+          "type": "object",
+          "properties": {
+            "column": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "predicate": {
+              "type": "string",
+              "enum": [
+                "has_value",
+                "is_empty",
+                "equals",
+                "not_equals",
+                "contains",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "in"
+              ]
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": [
+                          "string",
+                          "number"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "column",
+            "predicate"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "databaseId",
+        "fieldKey",
+        "whatToDo"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "disable_enrich",
+    "title": "Disable Enrich",
+    "description": "Turn off Enrich for a column without deleting it — the 'what to do' instruction is kept so re-enabling restores it.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "sources.write"
+    ],
+    "requiredScopes": [
+      "mcp:sources.write"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "fieldKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "required": [
+        "databaseId",
+        "fieldKey"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_enrich",
+    "title": "List Enrich",
+    "description": "List the columns in a database that have Enrich enabled, each with its 'what to do' instruction and bound Workflow id.",
+    "domain": "tables",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "sources.read"
+    ],
+    "requiredScopes": [
+      "mcp:sources.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        }
+      },
+      "required": [
+        "databaseId"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "run_enrich",
+    "title": "Run Enrich",
+    "description": "Queue Enrich for a column. Pass exactly one mode: scope ('first10' | 'first100' | 'all', capped at 1000 rows) to backfill across rows, entryIds for a specific row subset, or entryId for a single cell. Populated cells are skipped by default and reported as skippedExisting; pass overwriteExisting=true only with explicit user consent to refresh them. Column/subset runs also apply the persisted runCondition gate. Poll returned jobs with list_surf_jobs / wait_for_surf_job. Credits are charged by the brain as each job runs.",
+    "domain": "workflows",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "workflows.execute"
+    ],
+    "requiredScopes": [
+      "mcp:workflows.execute"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "databaseId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "fieldKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "first10",
+            "first100",
+            "all"
+          ]
+        },
+        "entryId": {
+          "$ref": "#/properties/workspaceId"
+        },
+        "entryIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/properties/workspaceId"
+          },
+          "minItems": 1,
+          "maxItems": 1000
+        },
+        "overwriteExisting": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "databaseId",
+        "fieldKey"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "inspect_sender_infrastructure",
+    "title": "Inspect Sender Infrastructure",
+    "description": "Read the active workspace's managed Domain inventory, mailbox lifecycle and health evidence, Warm-up and Placement metrics, editable sender settings, connected Email/LinkedIn/Instagram bindings, and sender entitlement. Secrets and mailbox credentials are never returned.",
+    "domain": "sender_infrastructure",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "sender_infrastructure.read"
+    ],
+    "requiredScopes": [
+      "mcp:sender_infrastructure.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "excludedDomainIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/properties/workspaceId"
+          },
+          "maxItems": 500,
+          "default": []
+        },
+        "excludedAccountIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "maxItems": 500,
+          "default": []
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "plan_sender_capacity",
+    "title": "Plan Sender Capacity",
+    "description": "Build a transparent worst-case Email sending plan from recipients, touches, sending days, mailbox daily volume, utilization, and mailboxes per Domain. Every input is editable; 30/day, 80%, and 3 mailboxes/Domain are planning defaults, never hard limits. Hosted MCP conservatively credits zero unverified live capacity.",
+    "domain": "sender_infrastructure",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "sender_infrastructure.read"
+    ],
+    "requiredScopes": [
+      "mcp:sender_infrastructure.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "excludedDomainIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/properties/workspaceId"
+          },
+          "maxItems": 500,
+          "default": []
+        },
+        "excludedAccountIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "maxItems": 500,
+          "default": []
+        },
+        "recipients": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000000
+        },
+        "touchesPerRecipient": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 3
+        },
+        "sendingDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650
+        },
+        "dailyLimitPerMailbox": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 30
+        },
+        "utilizationPercent": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 80
+        },
+        "mailboxesPerDomain": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 3
+        },
+        "custom": {
+          "type": "object",
+          "properties": {
+            "additionalMailboxes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "additionalDomains": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            }
+          },
+          "required": [
+            "additionalMailboxes",
+            "additionalDomains"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "recipients",
+        "sendingDays"
+      ],
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "search_sender_domains",
+    "title": "Search Sender Domains",
+    "description": "Check live availability for requested managed Email Domains, or generate typeahead-style candidates from a brand seed. This hosted read never computes customer pricing or authorizes purchase; exact retail price, plan-credit use, registrant details, and purchase confirmation stay in SignalSurf's secure in-app flow.",
+    "domain": "sender_infrastructure",
+    "executionOwner": "hosted-mcp",
+    "requiredCapabilities": [
+      "sender_infrastructure.read"
+    ],
+    "requiredScopes": [
+      "mcp:sender_infrastructure.read"
+    ],
+    "requiredWorkspaceRole": "member",
+    "approval": "none",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "domains": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 253,
+            "pattern": "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+          },
+          "maxItems": 50,
+          "default": []
+        },
+        "seed": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 5
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "$ref": "#/properties/domains/items"
+          },
+          "maxItems": 50,
+          "default": []
+        },
+        "infrastructureClass": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "isolated"
+          ],
+          "default": "standard"
+        }
+      },
+      "additionalProperties": false,
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  }
+]

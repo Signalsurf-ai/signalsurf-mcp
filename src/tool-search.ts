@@ -75,11 +75,15 @@ const STOPWORDS = new Set([
 ])
 
 const DOMAIN_ALIASES: Record<string, readonly string[]> = {
-  crm: ["table", "row", "record", "database"],
+  crm: ["object", "record", "list", "people", "company", "audience"],
+  listening: ["monitor", "social", "post", "reply", "mention"],
+  project: ["thread", "activity", "decision", "context", "collaboration"],
 }
 
 const DOMAIN_BOOTSTRAP_TOOLS: Record<string, readonly string[]> = {
-  crm: ["list_tables"],
+  crm: ["list_objects", "list_lists"],
+  listening: ["list_listenings", "list_listening_reply_accounts"],
+  project: ["list_activity_threads", "list_projects"],
 }
 
 function queryTerms(query: string): string[] {
@@ -124,8 +128,8 @@ export function searchCapabilities(
 
   const hint =
     tools.length === 0 && prompts.length === 0
-      ? "No capability matched. Try a broader query, or call get_workspace_context and list_tables to explore."
-      : "Prefer a prompt for a guided multi-step workflow (fetch it via prompts/get); call a tool directly for a single action. Resolve real ids with get_workspace_context / list_tables before calling id-typed tools."
+      ? "No capability matched. Try a broader query, or call get_workspace_context and the relevant list_projects, list_objects, list_lists, list_tables, list_workflows, or list_listenings tool."
+      : "Prefer a prompt for a guided multi-step workflow (fetch it via prompts/get); call a tool directly for a single action. Resolve real ids with get_workspace_context and the matching domain list tool before calling id-typed tools."
 
   return { query, tools, prompts, hint }
 }

@@ -244,12 +244,32 @@ class FakeQuery implements PromiseLike<any> {
   }
 
   gt(key: string, value: unknown) {
-    this.filters.push((row) => row[key] > value)
+    this.filters.push((row) => {
+      const candidate = row[key]
+      return (
+        (typeof candidate === "number" &&
+          typeof value === "number" &&
+          candidate > value) ||
+        (typeof candidate === "string" &&
+          typeof value === "string" &&
+          candidate > value)
+      )
+    })
     return this
   }
 
   lte(key: string, value: unknown) {
-    this.filters.push((row) => row[key] <= value)
+    this.filters.push((row) => {
+      const candidate = row[key]
+      return (
+        (typeof candidate === "number" &&
+          typeof value === "number" &&
+          candidate <= value) ||
+        (typeof candidate === "string" &&
+          typeof value === "string" &&
+          candidate <= value)
+      )
+    })
     return this
   }
 

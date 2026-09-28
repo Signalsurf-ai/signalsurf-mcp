@@ -1,4 +1,4 @@
-import { PROJECT_MCP_TOOL_SCOPES } from "@signalsurf/mcp-contract"
+import { SIGNALSURF_WEB_MCP_TOOL_SCOPES } from "@signalsurf/mcp-contract"
 
 import {
   authorizedWorkspaceIds,
@@ -7,9 +7,10 @@ import {
   listContextCapabilities,
 } from "./auth.js"
 import type { McpCapability } from "./capabilities.js"
-import type { ProjectExecutionClient } from "./project-execution.js"
 import type { SignalSurfRepository } from "./repository.js"
+import { SIGNALSURF_MCP_TOOL_REGISTRY } from "./tool-registry.js"
 import type { SignalSurfContext } from "./types.js"
+import type { SignalSurfWebExecutionClient } from "./web-execution.js"
 import {
   WORKSPACE_CAPABILITIES,
   projectMcpCapabilitiesForWorkspace,
@@ -23,13 +24,6 @@ function isRecord(value: unknown): value is JsonRecord {
 
 function scopeAllowed(context: SignalSurfContext, scope: string): boolean {
   return context.scopes?.includes(scope) === true
-}
-
-function capabilityAllowed(
-  capabilities: readonly McpCapability[],
-  capability: McpCapability
-): boolean {
-  return capabilities.includes(capability)
 }
 
 function accessList(input: {
@@ -57,92 +51,77 @@ export function buildWorkspaceCapabilityDomains(input: {
   context: SignalSurfContext
   workspaceId: string
   effective: readonly McpCapability[]
+  memberAccess?: string | null
 }) {
   const { context, workspaceId, effective } = input
   const modules = workspaceModules(context, workspaceId)
   const moduleEnabled = (...names: string[]) =>
     names.some((name) => modules.includes(name as never))
-  const projectAccess = accessList({
-    read:
-      scopeAllowed(context, "mcp:projects.read") ||
-      scopeAllowed(context, "mcp:conversations.read"),
-    write:
-      context.role !== "viewer" &&
-      scopeAllowed(context, "mcp:projects.write"),
-    control:
-      context.role !== "viewer" &&
-      scopeAllowed(context, "mcp:conversations.control"),
-  })
-  return [
-    {
-      domain: "projects",
-      enabled: projectAccess.length > 0,
-      access: projectAccess,
-    },
-    {
-      domain: "tables",
-      enabled: moduleEnabled("tables", "objects"),
-      access: accessList({
-        read: capabilityAllowed(effective, "tables.read"),
-        write: capabilityAllowed(effective, "tables.write"),
-      }),
-    },
-    {
-      domain: "workflows",
-      enabled: moduleEnabled("workflows"),
-      access: accessList({
-        read: capabilityAllowed(effective, "workflows.read"),
-        write: capabilityAllowed(effective, "workflows.write"),
-        execute: capabilityAllowed(effective, "workflows.execute"),
-      }),
-    },
-    {
-      domain: "listening",
-      enabled: moduleEnabled("listening"),
-      access: accessList({
-        read:
-          capabilityAllowed(effective, "sources.read") ||
-          capabilityAllowed(effective, "workflows.read"),
-        write:
-          capabilityAllowed(effective, "sources.write") ||
-          capabilityAllowed(effective, "workflows.write"),
-        execute: capabilityAllowed(effective, "workflows.execute"),
-      }),
-    },
-    {
-      domain: "campaigns",
-      enabled: moduleEnabled("campaigns"),
-      access: accessList({
-        read: scopeAllowed(context, "mcp:campaigns.read"),
-        write: capabilityAllowed(effective, "campaigns.write"),
-        execute: scopeAllowed(context, "mcp:campaigns.start"),
-      }),
-    },
-    {
-      domain: "lists",
-      enabled: moduleEnabled("lists"),
-      access: accessList({
-        read: capabilityAllowed(effective, "account_lists.read"),
-        write: capabilityAllowed(effective, "account_lists.write"),
-      }),
-    },
-    {
-      domain: "sender_infrastructure",
-      enabled: moduleEnabled("inbox"),
-      access: accessList({
-        read: capabilityAllowed(effective, "sender_infrastructure.read"),
-      }),
-    },
-    {
-      domain: "deepline",
-      enabled: true,
-      access: accessList({
-        read: capabilityAllowed(effective, "deepline.read"),
-        write: capabilityAllowed(effective, "deepline.enrich"),
-        execute: capabilityAllowed(effective, "deepline.execute"),
-      }),
-    },
-  ]
+  const enabledByDomain: Record<string, boolean> = {
+    projects: true,
+    tables: moduleEnabled("tables", "objects"),
+    objects: moduleEnabled("objects"),
+    records: moduleEnabled("objects"),
+    workflows: moduleEnabled("workflows"),
+    listening: moduleEnabled("listening"),
+    campaigns: moduleEnabled("campaigns"),
+    lists: moduleEnabled("lists"),
+    sender_infrastructure: moduleEnabled("inbox"),
+    deepline: true,
+  }
+  const domainNames = Object.keys(enabledByDomain)
+  const accessByDomain = new Map<
+    string,
+    { read: boolean; write: boolean; execute: boolean; control: boolean }
+  >(
+    domainNames.map((domain) => [
+      domain,
+      { read: false, write: false, execute: false, control: false },
+    ])
+  )
+
+  for (const tool of SIGNALSURF_MCP_TOOL_REGISTRY) {
+    const access = accessByDomain.get(tool.domain)
+    if (!access || enabledByDomain[tool.domain] !== true) continue
+    if (context.role === "viewer" && !tool.annotations.readOnlyHint) continue
+    if (tool.executionOwner === "signalsurf-web") {
+      const isCurrentMember = ["member", "admin"].includes(
+        input.memberAccess ?? ""
+      )
+      if (!isCurrentMember) continue
+      if (
+        tool.requiredWorkspaceRole === "admin" &&
+        input.memberAccess !== "admin"
+      )
+        continue
+    }
+    const authorized =
+      tool.executionOwner === "hosted-mcp"
+        ? tool.requiredCapabilities.every((capability) =>
+            effective.includes(capability as McpCapability)
+          )
+        : context.scopes === undefined ||
+          tool.requiredScopes.every((scope) => scopeAllowed(context, scope))
+    if (!authorized) continue
+
+    if (tool.annotations.readOnlyHint) access.read = true
+    else if (tool.requiredScopes.includes("mcp:conversations.control"))
+      access.control = true
+    else if (
+      tool.requiredScopes.includes("mcp:campaigns.start") ||
+      tool.requiredCapabilities.some((capability) =>
+        capability.endsWith(".execute")
+      )
+    )
+      access.execute = true
+    else access.write = true
+  }
+
+  return domainNames.map((domain) => ({
+    domain,
+    enabled: enabledByDomain[domain] === true,
+    access: accessList(accessByDomain.get(domain)!),
+  }))
 }
 
 function boundedAttentionThread(value: unknown) {
@@ -174,9 +153,9 @@ function boundedAttentionThread(value: unknown) {
 async function loadWorkspaceMemberAuthority(input: {
   context: SignalSurfContext
   workspaceId: string
-  projectExecutionClient: ProjectExecutionClient
+  webExecutionClient: SignalSurfWebExecutionClient
 }) {
-  const { context, workspaceId, projectExecutionClient } = input
+  const { context, workspaceId, webExecutionClient } = input
   if (!context.userId) {
     return {
       status: "unavailable" as const,
@@ -184,24 +163,16 @@ async function loadWorkspaceMemberAuthority(input: {
       memberAccess: null,
     }
   }
-  if (!scopeAllowed(context, "mcp:projects.read")) {
-    return {
-      status: "not_authorized" as const,
-      reason: "project_read_not_granted",
-      memberAccess: null,
-    }
-  }
   try {
-    const result = await projectExecutionClient.run(
+    const result = await webExecutionClient.run(
       "list_workspaces",
       {},
       null,
       5_000
     )
     const payload = isRecord(result) ? result : {}
-    const selected = (Array.isArray(payload.workspaces)
-      ? payload.workspaces
-      : []
+    const selected = (
+      Array.isArray(payload.workspaces) ? payload.workspaces : []
     ).find(
       (workspace) =>
         isRecord(workspace) && workspace.workspaceId === workspaceId
@@ -226,9 +197,9 @@ async function loadWorkspaceMemberAuthority(input: {
 async function loadWorkspaceAttention(input: {
   context: SignalSurfContext
   workspaceId: string
-  projectExecutionClient: ProjectExecutionClient
+  webExecutionClient: SignalSurfWebExecutionClient
 }) {
-  const { context, workspaceId, projectExecutionClient } = input
+  const { context, workspaceId, webExecutionClient } = input
   if (!context.userId) {
     return {
       status: "unavailable" as const,
@@ -237,7 +208,7 @@ async function loadWorkspaceAttention(input: {
       threads: [],
     }
   }
-  const requiredScopes = PROJECT_MCP_TOOL_SCOPES.list_activity_threads
+  const requiredScopes = SIGNALSURF_WEB_MCP_TOOL_SCOPES.list_activity_threads
   if (!requiredScopes.every((scope) => scopeAllowed(context, scope))) {
     return {
       status: "not_authorized" as const,
@@ -247,7 +218,7 @@ async function loadWorkspaceAttention(input: {
     }
   }
   try {
-    const result = await projectExecutionClient.run(
+    const result = await webExecutionClient.run(
       "list_activity_threads",
       {
         cursor: null,
@@ -306,10 +277,10 @@ async function loadWorkspaceAttention(input: {
 export async function buildWorkspaceContext(input: {
   context: SignalSurfContext
   repository: SignalSurfRepository
-  projectExecutionClient: ProjectExecutionClient
+  webExecutionClient: SignalSurfWebExecutionClient
   workspaceId: string
 }) {
-  const { context, repository, projectExecutionClient, workspaceId } = input
+  const { context, repository, webExecutionClient, workspaceId } = input
   const workspaceIds = authorizedWorkspaceIds(context)
   const workspaces = authorizedWorkspaces(context)
   const selectedCapabilityContext: SignalSurfContext = {
@@ -321,24 +292,25 @@ export async function buildWorkspaceContext(input: {
     selectedCapabilityContext,
     listContextCapabilities(context)
   )
-  const domains = buildWorkspaceCapabilityDomains({
-    context,
-    workspaceId,
-    effective,
-  })
   const [agents, memberAuthority, attention] = await Promise.all([
     repository.resolveAgentIdentities(workspaceIds),
     loadWorkspaceMemberAuthority({
       context,
       workspaceId,
-      projectExecutionClient,
+      webExecutionClient,
     }),
     loadWorkspaceAttention({
       context,
       workspaceId,
-      projectExecutionClient,
+      webExecutionClient,
     }),
   ])
+  const domains = buildWorkspaceCapabilityDomains({
+    context,
+    workspaceId,
+    effective,
+    memberAccess: memberAuthority.memberAccess,
+  })
   return {
     workspaceId,
     workspaceIds,
