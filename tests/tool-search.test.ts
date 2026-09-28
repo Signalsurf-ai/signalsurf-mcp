@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { createSignalSurfMcpServer } from "../src/server.js"
 import { searchCapabilities } from "../src/tool-search.js"
@@ -23,6 +23,11 @@ const catalog = {
       title: "List Tables",
       description: "List databases/tables for an authorized workspace.",
     },
+    {
+      name: "list_objects",
+      title: "List Objects",
+      description: "List first-class CRM Records collections.",
+    },
   ],
   prompts: [
     {
@@ -38,6 +43,27 @@ const catalog = {
   ],
 }
 
+function memberWebExecution(
+  workspaceId: string,
+  memberAccess: "member" | "admin" = "member"
+) {
+  return {
+    baseUrl: "https://app.signalsurf.test",
+    serviceToken: "service-token",
+    delegationToken: "delegation-token",
+    fetch: vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: { workspaces: [{ workspaceId, memberAccess }] },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    ) as unknown as typeof fetch,
+  }
+}
+
 describe("searchCapabilities", () => {
   it("ranks the enrich_table prompt first and surfaces the enrich tool", () => {
     const result = searchCapabilities("enrich a table", catalog)
@@ -51,9 +77,9 @@ describe("searchCapabilities", () => {
     expect(result.prompts.map((p) => p.name)).toContain("build_lead_list")
   })
 
-  it("maps CRM language to Table and record capabilities", () => {
+  it("maps CRM language to first-class Object and Record capabilities", () => {
     const result = searchCapabilities("show CRM records", catalog)
-    expect(result.tools.map((tool) => tool.name)).toContain("list_tables")
+    expect(result.tools.map((tool) => tool.name)).toContain("list_objects")
   })
 
   it("returns prompts as the entry point for an empty query", () => {
@@ -86,6 +112,7 @@ describe("find_capabilities tool over MCP", () => {
     const server = await createSignalSurfMcpServer({
       context,
       repository: {} as any,
+      webExecution: memberWebExecution(context.workspaceId),
     })
     const client = new Client({ name: "test-client", version: "0.0.0" })
     const [clientTransport, serverTransport] =
@@ -119,6 +146,7 @@ describe("find_capabilities tool over MCP", () => {
     const server = await createSignalSurfMcpServer({
       context,
       repository: {} as any,
+      webExecution: memberWebExecution(context.workspaceId),
     })
     const client = new Client({ name: "test-client", version: "0.0.0" })
     const [clientTransport, serverTransport] =
@@ -147,7 +175,59 @@ describe("find_capabilities tool over MCP", () => {
     )
   })
 
-  it("keeps the CRM bootstrap tool within the full catalog result limit", async () => {
+  it.each([
+    {
+      scope: "mcp:read",
+      query: "show CRM records",
+      visible: "list_objects",
+      hidden: "create_record",
+      memberAccess: "member" as const,
+    },
+    {
+      scope: "mcp:write",
+      query: "create CRM record",
+      visible: "create_record",
+      hidden: null,
+      memberAccess: "admin" as const,
+    },
+  ])(
+    "expands the legacy $scope grant during delegated capability discovery",
+    async ({ scope, query, visible, hidden, memberAccess }) => {
+      const workspaceId = "00000000-0000-4000-8000-000000000001"
+      const context: SignalSurfContext = {
+        workspaceId,
+        role: "editor",
+        scopes: [scope],
+        workspaceCapabilitiesByWorkspaceId: { [workspaceId]: ["objects"] },
+      }
+      const server = await createSignalSurfMcpServer({
+        context,
+        repository: {} as any,
+        webExecution: memberWebExecution(workspaceId, memberAccess),
+      })
+      const client = new Client({ name: "test-client", version: "0.0.0" })
+      const [clientTransport, serverTransport] =
+        InMemoryTransport.createLinkedPair()
+      cleanup.push(async () => client.close())
+      cleanup.push(async () => server.close())
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport),
+      ])
+
+      const result = await client.callTool({
+        name: "find_capabilities",
+        arguments: { query },
+      })
+      const toolNames = (result.structuredContent as any).data.tools.map(
+        (tool: any) => tool.name
+      )
+      expect(toolNames).toContain(visible)
+      if (hidden) expect(toolNames).not.toContain(hidden)
+    }
+  )
+
+  it("keeps first-class CRM bootstrap tools within the full catalog result limit", async () => {
     const context: SignalSurfContext = {
       workspaceId: "00000000-0000-4000-8000-000000000001",
       role: "editor",
@@ -155,6 +235,7 @@ describe("find_capabilities tool over MCP", () => {
     const server = await createSignalSurfMcpServer({
       context,
       repository: {} as any,
+      webExecution: memberWebExecution(context.workspaceId),
     })
     const client = new Client({ name: "test-client", version: "0.0.0" })
     const [clientTransport, serverTransport] =
@@ -175,6 +256,162 @@ describe("find_capabilities tool over MCP", () => {
       (tool: any) => tool.name
     )
     expect(toolNames).toHaveLength(8)
-    expect(toolNames).toContain("list_tables")
+    expect(toolNames).toContain("list_objects")
+    expect(toolNames).toContain("list_lists")
+  })
+
+  it("filters delegated domain tools by both grant and selected Workspace module", async () => {
+    const workspaceId = "00000000-0000-4000-8000-000000000001"
+    const context: SignalSurfContext = {
+      workspaceId,
+      role: "editor",
+      scopes: [
+        "mcp:objects.read",
+        "mcp:lists.read",
+        "mcp:projects.read",
+        "mcp:sources.read",
+      ],
+      workspaceCapabilitiesByWorkspaceId: {
+        [workspaceId]: ["objects"],
+      },
+    }
+    const server = await createSignalSurfMcpServer({
+      context,
+      repository: {} as any,
+      webExecution: memberWebExecution(workspaceId),
+    })
+    const client = new Client({ name: "test-client", version: "0.0.0" })
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
+    cleanup.push(async () => client.close())
+    cleanup.push(async () => server.close())
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    const crm = await client.callTool({
+      name: "find_capabilities",
+      arguments: { query: "show CRM records" },
+    })
+    const crmNames = (crm.structuredContent as any).data.tools.map(
+      (tool: any) => tool.name
+    )
+    expect(crmNames).toContain("list_objects")
+    expect(crmNames).not.toContain("list_lists")
+
+    const listening = await client.callTool({
+      name: "find_capabilities",
+      arguments: { query: "monitor social replies" },
+    })
+    expect(
+      (listening.structuredContent as any).data.tools.map(
+        (tool: any) => tool.name
+      )
+    ).not.toContain("list_listenings")
+  })
+
+  it.each([
+    ["member", false],
+    ["admin", true],
+  ] as const)(
+    "reports CRM write authority truthfully for a %s",
+    async (memberAccess, expected) => {
+      const workspaceId = "00000000-0000-4000-8000-000000000001"
+      const context: SignalSurfContext = {
+        workspaceId,
+        role: "editor",
+        userId: "00000000-0000-4000-8000-000000000002",
+        scopes: ["mcp:objects.read", "mcp:records.write"],
+        workspaceCapabilitiesByWorkspaceId: { [workspaceId]: ["objects"] },
+      }
+      const fetchImpl = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                workspaces: [{ workspaceId, memberAccess }],
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          )
+      ) as unknown as typeof fetch
+      const server = await createSignalSurfMcpServer({
+        context,
+        repository: {} as any,
+        webExecution: {
+          baseUrl: "https://app.signalsurf.test",
+          serviceToken: "service-token",
+          delegationToken: "delegation-token",
+          fetch: fetchImpl,
+        },
+      })
+      const client = new Client({ name: "test-client", version: "0.0.0" })
+      const [clientTransport, serverTransport] =
+        InMemoryTransport.createLinkedPair()
+      cleanup.push(async () => client.close())
+      cleanup.push(async () => server.close())
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport),
+      ])
+
+      const result = await client.callTool({
+        name: "find_capabilities",
+        arguments: { query: "create CRM record" },
+      })
+      const toolNames = (result.structuredContent as any).data.tools.map(
+        (tool: any) => tool.name
+      )
+      expect(toolNames.includes("create_record")).toBe(expected)
+    }
+  )
+
+  it("hides delegated tools when current Workspace membership is unavailable", async () => {
+    const workspaceId = "00000000-0000-4000-8000-000000000001"
+    const context: SignalSurfContext = {
+      workspaceId,
+      userId: "00000000-0000-4000-8000-000000000002",
+      role: "editor",
+      scopes: ["mcp:objects.read", "mcp:records.write"],
+      workspaceCapabilitiesByWorkspaceId: { [workspaceId]: ["objects"] },
+    }
+    const server = await createSignalSurfMcpServer({
+      context,
+      repository: {} as any,
+      webExecution: {
+        ...memberWebExecution(workspaceId),
+        fetch: vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({ ok: true, data: { workspaces: [] } }),
+              {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              }
+            )
+        ) as unknown as typeof fetch,
+      },
+    })
+    const client = new Client({ name: "test-client", version: "0.0.0" })
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair()
+    cleanup.push(async () => client.close())
+    cleanup.push(async () => server.close())
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ])
+
+    const result = await client.callTool({
+      name: "find_capabilities",
+      arguments: { query: "show CRM records" },
+    })
+    const toolNames = (result.structuredContent as any).data.tools.map(
+      (tool: any) => tool.name
+    )
+    expect(toolNames).not.toContain("list_objects")
+    expect(toolNames).not.toContain("create_record")
   })
 })

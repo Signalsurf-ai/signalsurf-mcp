@@ -51,7 +51,7 @@ while a short-lived access token remains cryptographically valid.
 `get_workspace_context` and `list_workspaces` expose every Workspace in the signed grant.
 Every Workspace-scoped call must pass one returned `workspaceId` when the grant
 contains more than one Workspace. The caller cannot target an id outside the
-signed grant, and Project execution checks current membership again.
+signed grant, and SignalSurf Web execution checks current membership again.
 
 ## Plugin and raw MCP
 

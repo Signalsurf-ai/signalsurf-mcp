@@ -1,6 +1,7 @@
 import {
   mcpServiceDelegationAudience,
   signMcpAccessToken,
+  signalSurfScopesGrantRequiredScope,
   verifyMcpAccessToken,
 } from "@signalsurf/mcp-contract"
 import { describe, expect, it } from "vitest"
@@ -387,6 +388,27 @@ describe("auth", () => {
     )
   })
 
+  it("expands legacy broad scopes for Web-owned tool requirements", () => {
+    expect(
+      signalSurfScopesGrantRequiredScope(["mcp:read"], "mcp:objects.read")
+    ).toBe(true)
+    expect(
+      signalSurfScopesGrantRequiredScope(["mcp:read"], "mcp:conversations.read")
+    ).toBe(true)
+    expect(
+      signalSurfScopesGrantRequiredScope(["mcp:read"], "mcp:objects.write")
+    ).toBe(false)
+    expect(
+      signalSurfScopesGrantRequiredScope(["mcp:write"], "mcp:objects.write")
+    ).toBe(true)
+    expect(
+      signalSurfScopesGrantRequiredScope(
+        ["mcp:write"],
+        "mcp:conversations.control"
+      )
+    ).toBe(true)
+  })
+
   it("treats explicit empty scopes as no capability grant", () => {
     const context = {
       workspaceId: "00000000-0000-4000-8000-000000000001",
@@ -416,6 +438,12 @@ describe("auth", () => {
       "tables.read",
       "tables.write",
       "tables.delete",
+      "objects.read",
+      "objects.write",
+      "records.read",
+      "records.write",
+      "lists.read",
+      "lists.write",
       "schemas.read",
       "schemas.write",
       "sources.read",

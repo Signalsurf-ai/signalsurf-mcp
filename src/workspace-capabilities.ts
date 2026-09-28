@@ -303,12 +303,8 @@ export function assertWorkspaceToolAllowed(
   context: SignalSurfContext,
   toolName: PublicMcpToolName
 ): void {
+  if (workspaceToolAllowed(context, toolName)) return
   const requirement = workspaceCapabilityRequirementForTool(toolName)
-  if (!requirement) return
-  const enabled =
-    context.workspaceCapabilitiesByWorkspaceId?.[context.workspaceId] ??
-    WORKSPACE_CAPABILITIES
-  if (requirementAllowed(enabled, requirement)) return
   console.warn("[mcp] Workspace capability denied", {
     workspaceId: context.workspaceId,
     requirement,
@@ -318,6 +314,18 @@ export function assertWorkspaceToolAllowed(
     "This operation is unavailable in the current Workspace.",
     { code: "FORBIDDEN", status: 403 }
   )
+}
+
+export function workspaceToolAllowed(
+  context: SignalSurfContext,
+  toolName: PublicMcpToolName
+): boolean {
+  const requirement = workspaceCapabilityRequirementForTool(toolName)
+  if (!requirement) return true
+  const enabled =
+    context.workspaceCapabilitiesByWorkspaceId?.[context.workspaceId] ??
+    WORKSPACE_CAPABILITIES
+  return requirementAllowed(enabled, requirement)
 }
 
 export function workspaceCapabilityEnabled(
@@ -343,6 +351,10 @@ function workspaceCapabilitiesForMcpCapability(
   if (capability.startsWith("tables.") || capability.startsWith("schemas.")) {
     return ["tables", "objects", "listening"]
   }
+  if (capability.startsWith("objects.") || capability.startsWith("records.")) {
+    return ["objects"]
+  }
+  if (capability.startsWith("lists.")) return ["lists"]
   if (capability.startsWith("account_lists.")) return ["lists"]
   if (capability.startsWith("sender_infrastructure.")) return ["inbox"]
   return []

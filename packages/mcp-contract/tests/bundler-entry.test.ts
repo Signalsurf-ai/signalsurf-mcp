@@ -3,28 +3,30 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
 const packageDirectory = resolve(process.cwd(), "packages/mcp-contract")
-
 describe("MCP contract consumer entrypoints", () => {
-  it("keeps the NodeNext barrel explicit and publishes typed subpaths", () => {
+  it("publishes explicit NodeNext dist entrypoints", () => {
     const packageJson = JSON.parse(
       readFileSync(resolve(packageDirectory, "package.json"), "utf8")
-    ) as { exports?: Record<string, string> }
+    ) as {
+      exports?: Record<string, { import: string; types: string }>
+    }
     expect(packageJson.exports).toMatchObject({
-      ".": {
-        types: "./dist/index.d.ts",
-        import: "./dist/index.js",
-      },
+      ".": { import: "./dist/index.js", types: "./dist/index.d.ts" },
       "./access-token": {
-        types: "./dist/access-token.d.ts",
         import: "./dist/access-token.js",
+        types: "./dist/access-token.d.ts",
       },
-      "./project-tools": {
-        types: "./dist/project-tools.d.ts",
-        import: "./dist/project-tools.js",
+      "./registry": {
+        import: "./dist/registry.js",
+        types: "./dist/registry.d.ts",
+      },
+      "./web-tools": {
+        import: "./dist/web-tools.js",
+        types: "./dist/web-tools.d.ts",
       },
       "./scopes": {
-        types: "./dist/scopes.d.ts",
         import: "./dist/scopes.js",
+        types: "./dist/scopes.d.ts",
       },
     })
 
@@ -35,11 +37,11 @@ describe("MCP contract consumer entrypoints", () => {
     expect(barrel).toBe(
       [
         'export * from "./access-token.js"',
-        'export * from "./project-tools.js"',
+        'export * from "./registry.js"',
+        'export * from "./web-tools.js"',
         'export * from "./scopes.js"',
         "",
       ].join("\n")
     )
-
   })
 })

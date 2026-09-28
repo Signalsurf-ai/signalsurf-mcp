@@ -194,6 +194,10 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - `list_threads`, `read_thread`, `wait_for_thread_response`, `list_thread_decisions`
 - `list_project_members`, `list_project_files`, `read_project_file`, `list_project_triggers`
 - `start_thread`, `reply_in_thread`, `publish_project_conclusion`, `create_project`, `rename_project`
+- First-class CRM Object, Record, and List discovery, schema, read, write,
+  membership, qualification, and source operations
+- First-class Listening discovery, lifecycle, post/account reads, draft,
+  import, public reply, activation, and audience-capture operations
 - `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `run_workflow`, `get_surf_job`, `wait_for_surf_job`, `list_surf_jobs`, `cancel_surf_job`, `delete_workflow`
 - `list_tables`, `create_table`, `update_table`, `delete_table`, `list_table_views`, `read_table`, `read_table_view`, `get_table_row`
 - `create_table_row`, `update_table_rows`, `delete_table_rows`
@@ -206,9 +210,10 @@ For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
 - Resources for context; single-workspace tokens also expose Workflow, database,
   surf job, and database-row resources
 
-Project and Thread tools require hosted OAuth because their Web execution
-boundary revalidates the authorizing member and Project/File authority. Static
-env tokens remain available for local or internal product-tool access.
+Web-canonical Project, CRM, and Listening tools require hosted OAuth in
+production because their execution boundary revalidates the authorizing member,
+Workspace module, resource, Project authority, and exact action approval when
+applicable. Static env tokens remain available for local or internal access.
 
 All workspace-scoped tools execute against one `workspaceId`. A single-workspace token
 can omit `workspaceId`; a multi-workspace OAuth token must pass `workspaceId` to every
@@ -232,6 +237,12 @@ capability instead of hiding them behind broad write access:
 - `mcp:projects.write`
 - `mcp:conversations.read`
 - `mcp:conversations.control`
+- `mcp:objects.read`
+- `mcp:objects.write`
+- `mcp:records.read`
+- `mcp:records.write`
+- `mcp:lists.read`
+- `mcp:lists.write`
 - `mcp:workflows.read`
 - `mcp:workflows.write`
 - `mcp:workflows.execute`
@@ -271,7 +282,7 @@ MCP client
   -> stdio or Streamable HTTP transport
   -> signed token auth resolves { workspaceIds, userId, role, scopes, clientId, grantId }
   -> MCP tool/resource handlers
-  -> product repository or owned Web Project execution boundary
+  -> product repository or owned SignalSurf Web execution boundary
   -> explicit Workspace, membership, Project, and File checks
 ```
 
@@ -281,7 +292,7 @@ Key files:
 - `src/http.ts`: stateless Streamable HTTP transport
 - `src/stdio.ts`: stdio transport for local MCP clients
 - `src/auth.ts`: access-token verification, bearer parsing, and role checks
-- `src/project-execution.ts`: static Project registry and Web service boundary
+- `src/web-execution.ts`: Web-canonical Project, CRM, and Listening execution boundary
 - `src/capabilities.ts`: public scope, capability, and tool contract
 - `docs/public-tool-contract.json`: shared schema fingerprints and semantic fixtures
 - `src/repository.ts`: SignalSurf workspace-scope and mutation logic

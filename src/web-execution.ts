@@ -1,19 +1,18 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import {
-  PROJECT_MCP_TOOL_CATALOG,
-  PROJECT_MCP_TOOL_SCOPES,
   SIGNALSURF_MCP_INSTRUCTIONS,
-  type ProjectMcpToolName,
+  SIGNALSURF_WEB_MCP_TOOL_CATALOG,
 } from "@signalsurf/mcp-contract"
+import { signalSurfScopesGrantRequiredScope } from "@signalsurf/mcp-contract/scopes"
 import { z, type ZodTypeAny } from "zod"
 
 import { UserFacingError } from "./errors.js"
 import { jsonErrorResult, jsonResult } from "./mcp-results.js"
 import type { AccessRole } from "./types.js"
 
-export const PROJECT_EXECUTION_UNAVAILABLE = "PROJECT_EXECUTION_UNAVAILABLE"
+export const WEB_EXECUTION_UNAVAILABLE = "WEB_EXECUTION_UNAVAILABLE"
 
-export type ProjectExecutionClientOptions = {
+export type SignalSurfWebExecutionClientOptions = {
   baseUrl?: string
   serviceToken?: string
   delegationToken?: string
@@ -23,35 +22,42 @@ export type ProjectExecutionClientOptions = {
 
 type JsonRecord = Record<string, unknown>
 
-export type ProjectExecutionTool = {
+export type SignalSurfWebExecutionTool = {
   name: string
   title?: string
   description: string
   inputSchema: JsonRecord
+  requiredScopes: readonly string[]
   annotations?: {
     readOnlyHint?: boolean
     destructiveHint?: boolean
     idempotentHint?: boolean
     openWorldHint?: boolean
   }
+  workspaceCapability?: "objects" | "lists" | "listening"
+  requiredWorkspaceRole: "member" | "admin"
 }
 
 function unavailable(message: string, details?: JsonRecord): UserFacingError {
   return new UserFacingError(message, {
-    code: PROJECT_EXECUTION_UNAVAILABLE,
+    code: WEB_EXECUTION_UNAVAILABLE,
     status: 503,
     details,
   })
 }
 
-export class ProjectExecutionClient {
+export class SignalSurfWebExecutionClient {
   private readonly baseUrl: string | undefined
   private readonly serviceToken: string | undefined
   private readonly delegationToken: string | undefined
   private readonly fetchImpl: typeof fetch
   private readonly timeoutMs: number
+  private readonly memberAccessRequests = new Map<
+    string,
+    Promise<"admin" | "member" | null>
+  >()
 
-  constructor(options: ProjectExecutionClientOptions) {
+  constructor(options: SignalSurfWebExecutionClientOptions) {
     this.baseUrl = options.baseUrl?.trim().replace(/\/+$/, "") || undefined
     this.serviceToken = options.serviceToken?.trim() || undefined
     this.delegationToken = options.delegationToken?.trim() || undefined
@@ -70,7 +76,7 @@ export class ProjectExecutionClient {
   ): Promise<JsonRecord> {
     if (!this.endpoint || !this.serviceToken || !this.delegationToken) {
       throw unavailable(
-        "Project execution is not configured on this hosted MCP deployment."
+        "SignalSurf Web execution is not configured on this hosted MCP deployment."
       )
     }
     let response: Response
@@ -88,7 +94,7 @@ export class ProjectExecutionClient {
         signal: AbortSignal.timeout(requestTimeoutMs),
       })
     } catch (error) {
-      console.error("Project execution request failed", {
+      console.error("SignalSurf Web execution request failed", {
         action: body.action,
         endpoint: this.endpoint,
         error:
@@ -116,7 +122,7 @@ export class ProjectExecutionClient {
       const code =
         typeof record.code === "string"
           ? record.code
-          : PROJECT_EXECUTION_UNAVAILABLE
+          : WEB_EXECUTION_UNAVAILABLE
       throw new UserFacingError(message, {
         code,
         status: response.status,
@@ -144,9 +150,40 @@ export class ProjectExecutionClient {
     )
     return result.data
   }
+
+  async getWorkspaceMemberAccess(
+    workspaceId: string
+  ): Promise<"admin" | "member" | null> {
+    const existing = this.memberAccessRequests.get(workspaceId)
+    if (existing) return existing
+    const request = this.run("list_workspaces", {}, null, 5_000)
+      .then((result) => {
+        const payload =
+          result && typeof result === "object" && !Array.isArray(result)
+            ? (result as JsonRecord)
+            : {}
+        const selected = (
+          Array.isArray(payload.workspaces) ? payload.workspaces : []
+        ).find(
+          (workspace) =>
+            workspace &&
+            typeof workspace === "object" &&
+            !Array.isArray(workspace) &&
+            (workspace as JsonRecord).workspaceId === workspaceId
+        ) as JsonRecord | undefined
+        return selected?.memberAccess === "admin"
+          ? "admin"
+          : selected?.memberAccess === "member"
+            ? "member"
+            : null
+      })
+      .catch(() => null)
+    this.memberAccessRequests.set(workspaceId, request)
+    return request
+  }
 }
 
-export type ProjectExecutionSurface = {
+export type SignalSurfWebExecutionSurface = {
   instructions: string
   capabilities: Array<{
     name: string
@@ -154,6 +191,8 @@ export type ProjectExecutionSurface = {
     description: string
     requiredScopes: readonly string[]
     readOnly: boolean
+    workspaceCapability?: "objects" | "lists" | "listening"
+    requiredWorkspaceRole: "member" | "admin"
   }>
   register: (server: McpServer, reservedToolNames?: readonly string[]) => void
 }
@@ -284,7 +323,7 @@ function composedObjectToZod(schema: JsonRecord): ZodTypeAny {
 /**
  * SignalSurf Web owns these input contracts and validates them again before
  * execution. Convert the JSON Schema subset emitted by Zod into an MCP SDK
- * schema so the member/Project tools can share one registry with static public
+ * schema so Web-canonical tools can share one registry with static public
  * tools without weakening the authoritative Web-side validation.
  */
 export function publishedSchemaToZod(input: unknown): ZodTypeAny {
@@ -434,24 +473,23 @@ export function publishedSchemaToZod(input: unknown): ZodTypeAny {
   return described(result, schema)
 }
 
-function requiredScopes(toolName: string): readonly string[] {
-  const scopes = PROJECT_MCP_TOOL_SCOPES[toolName as ProjectMcpToolName]
-  if (!scopes) {
-    throw unavailable(
-      `SignalSurf published ${toolName} without an authorization mapping.`,
-      { tool: toolName }
-    )
-  }
-  return scopes
-}
-
-export function createProjectExecutionSurface(input: {
-  client: ProjectExecutionClient
-  scopes: readonly string[]
+export function createSignalSurfWebExecutionSurface(input: {
+  client: SignalSurfWebExecutionClient
+  scopes?: readonly string[]
   role: AccessRole
-}): ProjectExecutionSurface {
-  const tools = PROJECT_MCP_TOOL_CATALOG as readonly ProjectExecutionTool[]
-  for (const tool of tools) requiredScopes(tool.name)
+  tools?: readonly SignalSurfWebExecutionTool[]
+}): SignalSurfWebExecutionSurface {
+  const tools =
+    input.tools ??
+    (SIGNALSURF_WEB_MCP_TOOL_CATALOG as readonly SignalSurfWebExecutionTool[])
+  for (const tool of tools) {
+    if (tool.requiredScopes.length === 0 && tool.name !== "list_workspaces") {
+      throw unavailable(
+        `SignalSurf published ${tool.name} without an authorization mapping.`,
+        { tool: tool.name }
+      )
+    }
+  }
 
   return {
     instructions: SIGNALSURF_MCP_INSTRUCTIONS,
@@ -464,8 +502,12 @@ export function createProjectExecutionSurface(input: {
           .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
           .join(" "),
       description: tool.description,
-      requiredScopes: requiredScopes(tool.name),
+      requiredScopes: tool.requiredScopes,
       readOnly: tool.annotations?.readOnlyHint === true,
+      requiredWorkspaceRole: tool.requiredWorkspaceRole,
+      ...(tool.workspaceCapability
+        ? { workspaceCapability: tool.workspaceCapability }
+        : {}),
     })),
     register(server: McpServer, reservedToolNames = []) {
       const names = new Set(reservedToolNames)
@@ -496,9 +538,15 @@ export function createProjectExecutionSurface(input: {
                   { code: "FORBIDDEN", status: 403 }
                 )
               }
-              const missing = requiredScopes(tool.name).filter(
-                (scope) => !input.scopes.includes(scope)
-              )
+              const missing = input.scopes
+                ? tool.requiredScopes.filter(
+                    (scope) =>
+                      !signalSurfScopesGrantRequiredScope(
+                        input.scopes ?? [],
+                        scope
+                      )
+                  )
+                : []
               if (missing.length > 0) {
                 throw new UserFacingError(
                   `Token scope does not allow SignalSurf MCP tool: ${tool.name}`,
@@ -508,6 +556,20 @@ export function createProjectExecutionSurface(input: {
                     details: { requiredScopes: missing, toolName: tool.name },
                   }
                 )
+              }
+              const workspaceId =
+                typeof (args as JsonRecord).workspaceId === "string"
+                  ? String((args as JsonRecord).workspaceId)
+                  : null
+              if (tool.requiredWorkspaceRole === "admin" && workspaceId) {
+                const memberAccess =
+                  await input.client.getWorkspaceMemberAccess(workspaceId)
+                if (memberAccess !== "admin") {
+                  throw new UserFacingError(
+                    `Workspace admin access is required for SignalSurf MCP tool: ${tool.name}`,
+                    { code: "FORBIDDEN", status: 403 }
+                  )
+                }
               }
               return jsonResult(
                 await input.client.run(tool.name, args as JsonRecord)

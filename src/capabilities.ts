@@ -12,6 +12,12 @@ export const MCP_GRANULAR_SCOPES = [
   "mcp:tables.read",
   "mcp:tables.write",
   "mcp:tables.delete",
+  "mcp:objects.read",
+  "mcp:objects.write",
+  "mcp:records.read",
+  "mcp:records.write",
+  "mcp:lists.read",
+  "mcp:lists.write",
   "mcp:schemas.read",
   "mcp:schemas.write",
   "mcp:sources.read",
@@ -82,6 +88,12 @@ export type McpCapability =
   | "tables.read"
   | "tables.write"
   | "tables.delete"
+  | "objects.read"
+  | "objects.write"
+  | "records.read"
+  | "records.write"
+  | "lists.read"
+  | "lists.write"
   | "schemas.read"
   | "schemas.write"
   | "sources.read"
@@ -150,7 +162,7 @@ export type PublicMcpToolName =
   | "plan_sender_capacity"
   | "search_sender_domains"
 
-type PublicMcpToolDefinition = {
+export type PublicMcpToolDefinition = {
   title: string
   description: string
   requiredCapability: McpCapability
@@ -707,6 +719,9 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "context.read",
     "workflows.read",
     "tables.read",
+    "objects.read",
+    "records.read",
+    "lists.read",
     "schemas.read",
     "sources.read",
     "account_lists.read",
@@ -724,6 +739,12 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
     "tables.read",
     "tables.write",
     "tables.delete",
+    "objects.read",
+    "objects.write",
+    "records.read",
+    "records.write",
+    "lists.read",
+    "lists.write",
     "schemas.read",
     "schemas.write",
     "sources.read",
@@ -754,6 +775,12 @@ const SCOPE_GRANTS: Record<McpScope, readonly McpCapability[]> = {
   "mcp:tables.read": ["context.read", "tables.read"],
   "mcp:tables.write": ["context.read", "tables.read", "tables.write"],
   "mcp:tables.delete": ["context.read", "tables.read", "tables.delete"],
+  "mcp:objects.read": ["context.read", "objects.read"],
+  "mcp:objects.write": ["context.read", "objects.read", "objects.write"],
+  "mcp:records.read": ["context.read", "records.read"],
+  "mcp:records.write": ["context.read", "records.read", "records.write"],
+  "mcp:lists.read": ["context.read", "lists.read"],
+  "mcp:lists.write": ["context.read", "lists.read", "lists.write"],
   "mcp:schemas.read": ["context.read", "schemas.read"],
   "mcp:schemas.write": ["context.read", "schemas.read", "schemas.write"],
   "mcp:sources.read": ["context.read", "sources.read"],
@@ -799,6 +826,12 @@ const CAPABILITY_SCOPE_HINTS: Record<McpCapability, readonly string[]> = {
   "tables.read": ["mcp:tables.read"],
   "tables.write": ["mcp:tables.write"],
   "tables.delete": ["mcp:tables.delete"],
+  "objects.read": ["mcp:objects.read"],
+  "objects.write": ["mcp:objects.write"],
+  "records.read": ["mcp:records.read"],
+  "records.write": ["mcp:records.write"],
+  "lists.read": ["mcp:lists.read"],
+  "lists.write": ["mcp:lists.write"],
   "schemas.read": ["mcp:schemas.read"],
   "schemas.write": ["mcp:schemas.write"],
   "sources.read": ["mcp:sources.read"],

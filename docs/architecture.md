@@ -11,9 +11,9 @@ MCP client
   -> stdio or stateless Streamable HTTP
   -> signed OAuth token, env token, or direct stdio context resolution
   -> MCP tool/resource handler
-  -> static tool registry and per-call scope guard
-  -> private SignalSurf Web execution boundary
-  -> current membership and resource authorization
+  -> composed hosted + SignalSurf Web tool registry and per-call scope guard
+  -> hosted repository executor OR private SignalSurf Web execution boundary
+  -> current membership, module, resource, Project, and action authorization
 ```
 
 The server always resolves a `SignalSurfContext` before any tool runs:
@@ -108,10 +108,12 @@ multiple workspaces are authorized, omitted `workspaceId` is rejected instead of
 guessing. The server rejects OAuth access tokens whose signed `audience` does
 not match `SIGNALSURF_MCP_RESOURCE_URL`.
 
-The public scope and tool contract lives in `@signalsurf/mcp-contract` and is
-documented in `docs/capabilities.md`. Granular scopes support least-privilege
-access to Projects, Surf Points, execution, table data, schemas, and safe source
-controls.
+The client-visible tool set is the collision-checked composition of the hosted
+registry and `@signalsurf/mcp-contract`'s SignalSurf Web delegated registry.
+Clients see one paginated `tools/list` result and never select an execution
+owner. Granular scopes support least-privilege access to Projects, CRM Objects,
+Records, Lists, Surf Points, execution, table data, schemas, and safe Listening
+or source controls.
 
 Every chargeable Deepline search, enrichment, or generic execution has an
 additional per-action boundary. This server creates or reuses a redacted,
@@ -255,7 +257,7 @@ suppressed; agents should use tools with an explicit `workspaceId`.
 
 ## Extending The Server
 
-When adding a tool:
+When adding a repository-owned hosted tool:
 
 1. Add a Zod schema and exhaustive registry entry in `src/schemas.ts`.
 2. Add the repository method in `src/repository.ts`.
@@ -269,6 +271,14 @@ When adding a tool:
 8. Update `README.md`, `docs/capabilities.md`,
    `docs/public-tool-contract.json`, and the Web-side Surfer
    capability matrix when the public contract changes.
+
+When the canonical operation lives in SignalSurf Web, add it to
+`SIGNALSURF_WEB_MCP_TOOLS`, its canonical input schema adapter, and
+`SIGNALSURF_WEB_MCP_TOOL_SCOPES`. Regenerate the delegated catalog. The catalog
+must classify domain, execution owner, Workspace module, annotations, and exact
+approval behavior. `check:mcp-agent-parity` treats both registries as the one
+public surface and fails on omissions, collisions, or unsafe consequential
+writes.
 
 Do not add a tool that accepts raw SQL, table names, arbitrary filters, or
 service-role-like capabilities. Model concrete workspace operations instead.
