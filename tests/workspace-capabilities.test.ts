@@ -35,7 +35,7 @@ function policyDb(overrides: Array<Record<string, unknown>> = []) {
       { id: workspaceId, organization_id: organizationId, name: "Acme" },
     ],
     workspace_capability_overrides: overrides,
-    subscriptions: [
+    workspace_subscriptions: [
       {
         workspace_id: workspaceId,
         plan_name: "individual",
@@ -107,7 +107,7 @@ describe("hosted MCP Workspace capability projection", () => {
     )
   })
 
-  it("requires Listening, not generic Workflows, for Signal mutations", () => {
+  it("allows Signal mutations through Workflows without enabling Listening", () => {
     const workflowOnlyContext: SignalSurfContext = {
       workspaceId,
       role: "editor",
@@ -116,7 +116,7 @@ describe("hosted MCP Workspace capability projection", () => {
 
     expect(workspaceCapabilityForTool("create_signal")).toBe("listening")
     expect(workspaceToolAllowed(workflowOnlyContext, "create_signal")).toBe(
-      false
+      true
     )
     expect(
       projectMcpCapabilitiesForWorkspace(workflowOnlyContext, [
@@ -124,7 +124,7 @@ describe("hosted MCP Workspace capability projection", () => {
         "sources.read",
         "sources.write",
       ])
-    ).toEqual(["context.read", "sources.read"])
+    ).toEqual(["context.read", "sources.read", "sources.write"])
     expect(
       workspaceToolAllowed(
         {
@@ -148,9 +148,55 @@ describe("hosted MCP Workspace capability projection", () => {
     expect(domains).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          domain: "workflows",
+          enabled: true,
+          access: expect.arrayContaining(["read", "write"]),
+        }),
+        expect.objectContaining({
           domain: "listening",
           enabled: false,
           access: ["read"],
+        }),
+      ])
+    )
+  })
+
+  it("does not advertise shared mutations in disabled domains", () => {
+    const domains = buildWorkspaceCapabilityDomains({
+      context: {
+        workspaceId,
+        role: "editor",
+        workspaceCapabilitiesByWorkspaceId: { [workspaceId]: ["listening"] },
+      },
+      workspaceId,
+      effective: [
+        "context.read",
+        "tables.read",
+        "tables.write",
+        "workflows.read",
+        "workflows.write",
+        "workflows.execute",
+        "sources.read",
+        "sources.write",
+      ],
+    })
+
+    expect(domains).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: "tables",
+          enabled: false,
+          access: ["read"],
+        }),
+        expect.objectContaining({
+          domain: "workflows",
+          enabled: false,
+          access: ["read"],
+        }),
+        expect.objectContaining({
+          domain: "listening",
+          enabled: true,
+          access: expect.arrayContaining(["read", "write", "execute"]),
         }),
       ])
     )
@@ -301,8 +347,8 @@ describe("hosted MCP Workspace capability projection", () => {
       expect.arrayContaining([
         expect.objectContaining({
           domain: "listening",
-          enabled: false,
-          access: ["read"],
+          enabled: true,
+          access: expect.arrayContaining(["read", "write"]),
         }),
       ])
     )

@@ -15,6 +15,7 @@ import type { SignalSurfWebExecutionClient } from "./web-execution.js"
 import {
   WORKSPACE_CAPABILITIES,
   projectMcpCapabilitiesForWorkspace,
+  workspaceCapabilitiesForTool,
   workspaceToolAllowed,
 } from "./workspace-capabilities.js"
 
@@ -84,10 +85,19 @@ export function buildWorkspaceCapabilityDomains(input: {
       { read: false, write: false, execute: false, control: false },
     ])
   )
+  const domainByWorkspaceCapability = {
+    tables: "tables",
+    objects: "objects",
+    lists: "lists",
+    workflows: "workflows",
+    campaigns: "campaigns",
+    listening: "listening",
+    inbox: "sender_infrastructure",
+    meetings: "meetings",
+    content: "content",
+  } as const
 
   for (const tool of SIGNALSURF_MCP_TOOL_REGISTRY) {
-    const access = accessByDomain.get(tool.domain)
-    if (!access) continue
     if (context.role === "viewer" && !tool.annotations.readOnlyHint) continue
     if (
       tool.executionOwner === "hosted-mcp" &&
@@ -123,17 +133,38 @@ export function buildWorkspaceCapabilityDomains(input: {
           tool.requiredScopes.every((scope) => scopeAllowed(context, scope))
     if (!authorized) continue
 
-    if (tool.annotations.readOnlyHint) access.read = true
-    else if (tool.requiredScopes.includes("mcp:conversations.control"))
-      access.control = true
-    else if (
-      tool.requiredScopes.includes("mcp:campaigns.start") ||
-      tool.requiredCapabilities.some((capability) =>
-        capability.endsWith(".execute")
+    const workspaceCapabilities =
+      tool.executionOwner === "hosted-mcp"
+        ? workspaceCapabilitiesForTool(tool.name as PublicMcpToolName)
+        : []
+    const candidateDomains = workspaceCapabilities.length
+      ? [
+          ...new Set(
+            workspaceCapabilities.map(
+              (capability) => domainByWorkspaceCapability[capability]
+            )
+          ),
+        ]
+      : [tool.domain]
+    const projectedDomains = tool.annotations.readOnlyHint
+      ? candidateDomains
+      : candidateDomains.filter((domain) => enabledByDomain[domain] === true)
+
+    for (const domain of projectedDomains) {
+      const access = accessByDomain.get(domain)
+      if (!access) continue
+      if (tool.annotations.readOnlyHint) access.read = true
+      else if (tool.requiredScopes.includes("mcp:conversations.control"))
+        access.control = true
+      else if (
+        tool.requiredScopes.includes("mcp:campaigns.start") ||
+        tool.requiredCapabilities.some((capability) =>
+          capability.endsWith(".execute")
+        )
       )
-    )
-      access.execute = true
-    else access.write = true
+        access.execute = true
+      else access.write = true
+    }
   }
 
   return domainNames.map((domain) => ({
