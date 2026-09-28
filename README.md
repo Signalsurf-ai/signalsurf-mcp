@@ -99,7 +99,7 @@ Deploy from a clean checkout of `main`:
 
 ```bash
 corepack pnpm@10.0.0 install --frozen-lockfile
-corepack pnpm@10.0.0 deploy
+corepack pnpm@10.0.0 run deploy
 ```
 
 The Worker loads its configuration on the first request, so a missing secret
