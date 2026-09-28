@@ -22,6 +22,13 @@ export type WorkspaceCapabilitiesByWorkspaceId = Record<
 
 const WORKSPACE_CAPABILITY_SET = new Set<string>(WORKSPACE_CAPABILITIES)
 
+const SIGNAL_TOOLS = new Set<PublicMcpToolName>([
+  "list_signals",
+  "create_signal",
+  "update_signal",
+  "delete_signal",
+])
+
 const WORKFLOW_TOOLS = new Set<PublicMcpToolName>([
   "list_workflows",
   "get_workflow",
@@ -82,6 +89,7 @@ const SENDER_INFRASTRUCTURE_TOOLS = new Set<PublicMcpToolName>([
 export function workspaceCapabilityForTool(
   toolName: PublicMcpToolName
 ): WorkspaceCapability | null {
+  if (SIGNAL_TOOLS.has(toolName)) return "listening"
   if (WORKFLOW_TOOLS.has(toolName)) return "workflows"
   if (TABLE_TOOLS.has(toolName)) return "tables"
   if (SENDER_INFRASTRUCTURE_TOOLS.has(toolName)) return "inbox"
@@ -96,6 +104,7 @@ type WorkspaceToolRequirement =
 function workspaceCapabilityRequirementForTool(
   toolName: PublicMcpToolName
 ): WorkspaceToolRequirement | null {
+  if (SIGNAL_TOOLS.has(toolName)) return { allOf: ["listening"] }
   if (WORKFLOW_CREATE_TOOLS.has(toolName)) return { allOf: ["workflows"] }
   if (WORKFLOW_TOOLS.has(toolName)) {
     // Generic Workflow tools may resolve an ordinary Workflow or a Listening.
@@ -342,11 +351,14 @@ function workspaceCapabilitiesForMcpCapability(
   capability: McpCapability
 ): readonly WorkspaceCapability[] {
   if (capability.startsWith("campaigns.")) return ["campaigns"]
-  if (
-    capability.startsWith("workflows.") ||
-    capability.startsWith("sources.")
-  ) {
+  if (capability.startsWith("workflows.")) {
     return ["workflows", "listening"]
+  }
+  if (capability.startsWith("sources.")) {
+    // Source scopes cover Listening Signals plus Table/Object Enrich. Keep the
+    // coarse capability only when at least one of those product surfaces can
+    // use it; individual tools still enforce their exact module requirement.
+    return ["tables", "objects", "listening"]
   }
   if (capability.startsWith("tables.") || capability.startsWith("schemas.")) {
     return ["tables", "objects", "listening"]

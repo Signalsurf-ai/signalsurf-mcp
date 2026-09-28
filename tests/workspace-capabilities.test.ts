@@ -9,7 +9,10 @@ import { buildWorkspaceCapabilityDomains } from "../src/workspace-context.js"
 import {
   WORKSPACE_CAPABILITIES,
   loadWorkspaceCapabilities,
+  projectMcpCapabilitiesForWorkspace,
   resolveEffectiveWorkspaceCapabilities,
+  workspaceCapabilityForTool,
+  workspaceToolAllowed,
 } from "../src/workspace-capabilities.js"
 import { FakeSupabase } from "./fake-supabase.js"
 
@@ -99,6 +102,55 @@ describe("hosted MCP Workspace capability projection", () => {
           domain: "listening",
           enabled: true,
           access: expect.arrayContaining(["read", "write"]),
+        }),
+      ])
+    )
+  })
+
+  it("requires Listening, not generic Workflows, for Signal mutations", () => {
+    const workflowOnlyContext: SignalSurfContext = {
+      workspaceId,
+      role: "editor",
+      workspaceCapabilitiesByWorkspaceId: { [workspaceId]: ["workflows"] },
+    }
+
+    expect(workspaceCapabilityForTool("create_signal")).toBe("listening")
+    expect(workspaceToolAllowed(workflowOnlyContext, "create_signal")).toBe(
+      false
+    )
+    expect(
+      projectMcpCapabilitiesForWorkspace(workflowOnlyContext, [
+        "context.read",
+        "sources.read",
+        "sources.write",
+      ])
+    ).toEqual(["context.read", "sources.read"])
+    expect(
+      workspaceToolAllowed(
+        {
+          ...workflowOnlyContext,
+          workspaceCapabilitiesByWorkspaceId: {
+            [workspaceId]: ["listening"],
+          },
+        },
+        "create_signal"
+      )
+    ).toBe(true)
+
+    const domains = buildWorkspaceCapabilityDomains({
+      context: {
+        ...workflowOnlyContext,
+        scopes: ["mcp:sources.write"],
+      },
+      workspaceId,
+      effective: ["context.read", "sources.read", "sources.write"],
+    })
+    expect(domains).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: "listening",
+          enabled: false,
+          access: ["read"],
         }),
       ])
     )
