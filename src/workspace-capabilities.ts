@@ -104,7 +104,11 @@ type WorkspaceToolRequirement =
 function workspaceCapabilityRequirementForTool(
   toolName: PublicMcpToolName
 ): WorkspaceToolRequirement | null {
-  if (SIGNAL_TOOLS.has(toolName)) return { allOf: ["listening"] }
+  if (SIGNAL_TOOLS.has(toolName)) {
+    // Signals are sources for both ordinary Workflows and Listenings. The
+    // repository rechecks the concrete parent Workflow kind before mutation.
+    return { anyOf: ["workflows", "listening"] }
+  }
   if (WORKFLOW_CREATE_TOOLS.has(toolName)) return { allOf: ["workflows"] }
   if (WORKFLOW_TOOLS.has(toolName)) {
     // Generic Workflow tools may resolve an ordinary Workflow or a Listening.
@@ -122,6 +126,14 @@ function workspaceCapabilityRequirementForTool(
     return { allOf: ["inbox"] }
   }
   return null
+}
+
+export function workspaceCapabilitiesForTool(
+  toolName: PublicMcpToolName
+): readonly WorkspaceCapability[] {
+  const requirement = workspaceCapabilityRequirementForTool(toolName)
+  if (!requirement) return []
+  return "allOf" in requirement ? requirement.allOf : requirement.anyOf
 }
 
 function requirementAllowed(
@@ -358,7 +370,7 @@ function workspaceCapabilitiesForMcpCapability(
     // Source scopes cover Listening Signals plus Table/Object Enrich. Keep the
     // coarse capability only when at least one of those product surfaces can
     // use it; individual tools still enforce their exact module requirement.
-    return ["tables", "objects", "listening"]
+    return ["workflows", "tables", "objects", "listening"]
   }
   if (capability.startsWith("tables.") || capability.startsWith("schemas.")) {
     return ["tables", "objects", "listening"]
