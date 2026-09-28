@@ -7,7 +7,7 @@ import {
   canUseCapability,
   listContextCapabilities,
 } from "./auth.js"
-import type { McpCapability } from "./capabilities.js"
+import type { McpCapability, PublicMcpToolName } from "./capabilities.js"
 import type { SignalSurfRepository } from "./repository.js"
 import { SIGNALSURF_MCP_TOOL_REGISTRY } from "./tool-registry.js"
 import type { SignalSurfContext } from "./types.js"
@@ -15,6 +15,7 @@ import type { SignalSurfWebExecutionClient } from "./web-execution.js"
 import {
   WORKSPACE_CAPABILITIES,
   projectMcpCapabilitiesForWorkspace,
+  workspaceToolAllowed,
 } from "./workspace-capabilities.js"
 
 type JsonRecord = Record<string, unknown>
@@ -86,9 +87,23 @@ export function buildWorkspaceCapabilityDomains(input: {
 
   for (const tool of SIGNALSURF_MCP_TOOL_REGISTRY) {
     const access = accessByDomain.get(tool.domain)
-    if (!access || enabledByDomain[tool.domain] !== true) continue
+    if (!access) continue
     if (context.role === "viewer" && !tool.annotations.readOnlyHint) continue
+    if (
+      tool.executionOwner === "hosted-mcp" &&
+      (!tool.annotations.readOnlyHint || tool.annotations.openWorldHint) &&
+      !workspaceToolAllowed(
+        { ...context, workspaceId, workspaceIds: [workspaceId] },
+        tool.name as PublicMcpToolName
+      )
+    )
+      continue
     if (tool.executionOwner === "signalsurf-web") {
+      if (
+        tool.workspaceCapability &&
+        !modules.includes(tool.workspaceCapability)
+      )
+        continue
       const isCurrentMember = ["member", "admin"].includes(
         input.memberAccess ?? ""
       )

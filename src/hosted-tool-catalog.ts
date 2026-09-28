@@ -12,7 +12,18 @@ import {
 } from "./capabilities.js"
 import { PUBLIC_MCP_TOOL_SCHEMAS } from "./schemas.js"
 
-function hostedDomain(capabilities: readonly McpCapability[]): string {
+const LISTENING_SIGNAL_TOOLS = new Set<PublicMcpToolName>([
+  "list_signals",
+  "create_signal",
+  "update_signal",
+  "delete_signal",
+])
+
+function hostedDomain(
+  name: PublicMcpToolName,
+  capabilities: readonly McpCapability[]
+): string {
+  if (LISTENING_SIGNAL_TOOLS.has(name)) return "listening"
   const capability = capabilities[0]
   if (!capability || capability === "context.read") return "workspace"
   if (capability.startsWith("workflows.")) return "workflows"
@@ -57,7 +68,7 @@ export function buildHostedToolCatalog(): SignalSurfMcpToolRegistryEntry[] {
       name,
       title: definition.title,
       description: definition.description,
-      domain: hostedDomain(requiredCapabilities),
+      domain: hostedDomain(name, requiredCapabilities),
       executionOwner: "hosted-mcp",
       requiredCapabilities,
       requiredScopes: [

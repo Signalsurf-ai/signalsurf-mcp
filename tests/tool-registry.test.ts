@@ -20,6 +20,15 @@ describe("SignalSurf MCP tool registry", () => {
       executionOwner: "signalsurf-web",
       requiredWorkspaceRole: "admin",
     })
+    expect(
+      SIGNALSURF_MCP_TOOL_REGISTRY.find((tool) => tool.name === "list_signals")
+    ).toMatchObject({ domain: "listening" })
+    expect(
+      SIGNALSURF_MCP_TOOL_REGISTRY.find((tool) => tool.name === "create_signal")
+    ).toMatchObject({ domain: "listening" })
+    expect(
+      SIGNALSURF_MCP_TOOL_REGISTRY.find((tool) => tool.name === "enable_enrich")
+    ).toMatchObject({ domain: "tables" })
     for (const tool of SIGNALSURF_MCP_TOOL_REGISTRY) {
       expect(tool.domain).not.toBe("")
       expect(tool.inputSchema).toBeTruthy()

@@ -2240,7 +2240,7 @@
     "name": "list_signals",
     "title": "List Signals",
     "description": "List safe signal metadata for an authorized Workflow. Signal config and credentials are not exposed.",
-    "domain": "tables",
+    "domain": "listening",
     "executionOwner": "hosted-mcp",
     "requiredCapabilities": [
       "sources.read"
@@ -2278,7 +2278,7 @@
     "name": "create_signal",
     "title": "Create Signal",
     "description": "Create a SignalSurf signal for an authorized Workflow. Supports platform, custom-pull, RSS, webhook, web-monitor, GitHub, CoinGecko, Hacker News, Product Hunt, and the four exclusive internal trigger types. Webhook signals return the callable SignalSurf webhookUrl.",
-    "domain": "tables",
+    "domain": "listening",
     "executionOwner": "hosted-mcp",
     "requiredCapabilities": [
       "sources.write"
@@ -2355,7 +2355,7 @@
     "name": "update_signal",
     "title": "Update Signal",
     "description": "Update one signal after verifying its Workflow belongs to an authorized workspace. Supports signal name, active state (enable/pause via isActive), typed config rebuilds, and safe pull_config/metadata/data_schema replacements or shallow patches.",
-    "domain": "tables",
+    "domain": "listening",
     "executionOwner": "hosted-mcp",
     "requiredCapabilities": [
       "sources.write"
@@ -2470,7 +2470,7 @@
     "name": "delete_signal",
     "title": "Delete Signal",
     "description": "Hard-delete one or more signals after workspace-scope validation and remove non-terminal jobs for those signal ids.",
-    "domain": "tables",
+    "domain": "listening",
     "executionOwner": "hosted-mcp",
     "requiredCapabilities": [
       "sources.write"

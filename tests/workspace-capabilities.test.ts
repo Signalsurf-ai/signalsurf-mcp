@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { SignalSurfRepository } from "../src/repository.js"
 import { createSignalSurfMcpServer } from "../src/server.js"
 import type { SignalSurfContext } from "../src/types.js"
+import { buildWorkspaceCapabilityDomains } from "../src/workspace-context.js"
 import {
   WORKSPACE_CAPABILITIES,
   loadWorkspaceCapabilities,
@@ -80,6 +81,29 @@ async function connect(db: FakeSupabase) {
 }
 
 describe("hosted MCP Workspace capability projection", () => {
+  it("projects Signal writes into Listening when only Listening is enabled", () => {
+    const domains = buildWorkspaceCapabilityDomains({
+      context: {
+        workspaceId,
+        role: "editor",
+        scopes: ["mcp:sources.write"],
+        workspaceCapabilitiesByWorkspaceId: { [workspaceId]: ["listening"] },
+      },
+      workspaceId,
+      effective: ["context.read", "sources.read", "sources.write"],
+    })
+
+    expect(domains).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: "listening",
+          enabled: true,
+          access: expect.arrayContaining(["read", "write"]),
+        }),
+      ])
+    )
+  })
+
   it("projects plan defaults with explicit Workspace overrides", () => {
     expect(
       resolveEffectiveWorkspaceCapabilities(
@@ -221,6 +245,15 @@ describe("hosted MCP Workspace capability projection", () => {
     expect(JSON.parse(contextText).data.capabilities.effective).toContain(
       "sources.read"
     )
+    expect(JSON.parse(contextText).data.capabilities.domains).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: "listening",
+          enabled: false,
+          access: ["read"],
+        }),
+      ])
+    )
   })
 
   it("keeps disabled modules discoverable and read-only", async () => {
@@ -265,6 +298,29 @@ describe("hosted MCP Workspace capability projection", () => {
     const body = JSON.parse(text)
     expect(body.data.tools.length).toBeGreaterThan(0)
     expect(body.data.prompts.length).toBeGreaterThan(0)
+
+    const contextResult = await client.callTool({
+      name: "get_workspace_context",
+      arguments: {},
+    })
+    const contextText =
+      contextResult.content?.[0]?.type === "text"
+        ? contextResult.content[0].text
+        : ""
+    expect(JSON.parse(contextText).data.capabilities.domains).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: "tables",
+          enabled: false,
+          access: ["read"],
+        }),
+        expect.objectContaining({
+          domain: "workflows",
+          enabled: false,
+          access: ["read"],
+        }),
+      ])
+    )
 
     const mutation = await client.callTool({
       name: "create_table",
