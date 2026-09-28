@@ -1,4 +1,5 @@
 import { SIGNALSURF_WEB_MCP_TOOL_SCOPES } from "@signalsurf/mcp-contract"
+import { signalSurfScopesGrantRequiredScope } from "@signalsurf/mcp-contract/scopes"
 
 import {
   authorizedWorkspaceIds,
@@ -23,7 +24,10 @@ function isRecord(value: unknown): value is JsonRecord {
 }
 
 function scopeAllowed(context: SignalSurfContext, scope: string): boolean {
-  return context.scopes?.includes(scope) === true
+  return (
+    context.scopes === undefined ||
+    signalSurfScopesGrantRequiredScope(context.scopes, scope)
+  )
 }
 
 function accessList(input: {

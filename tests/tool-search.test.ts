@@ -175,6 +175,58 @@ describe("find_capabilities tool over MCP", () => {
     )
   })
 
+  it.each([
+    {
+      scope: "mcp:read",
+      query: "show CRM records",
+      visible: "list_objects",
+      hidden: "create_record",
+      memberAccess: "member" as const,
+    },
+    {
+      scope: "mcp:write",
+      query: "create CRM record",
+      visible: "create_record",
+      hidden: null,
+      memberAccess: "admin" as const,
+    },
+  ])(
+    "expands the legacy $scope grant during delegated capability discovery",
+    async ({ scope, query, visible, hidden, memberAccess }) => {
+      const workspaceId = "00000000-0000-4000-8000-000000000001"
+      const context: SignalSurfContext = {
+        workspaceId,
+        role: "editor",
+        scopes: [scope],
+        workspaceCapabilitiesByWorkspaceId: { [workspaceId]: ["objects"] },
+      }
+      const server = await createSignalSurfMcpServer({
+        context,
+        repository: {} as any,
+        webExecution: memberWebExecution(workspaceId, memberAccess),
+      })
+      const client = new Client({ name: "test-client", version: "0.0.0" })
+      const [clientTransport, serverTransport] =
+        InMemoryTransport.createLinkedPair()
+      cleanup.push(async () => client.close())
+      cleanup.push(async () => server.close())
+      await Promise.all([
+        server.connect(serverTransport),
+        client.connect(clientTransport),
+      ])
+
+      const result = await client.callTool({
+        name: "find_capabilities",
+        arguments: { query },
+      })
+      const toolNames = (result.structuredContent as any).data.tools.map(
+        (tool: any) => tool.name
+      )
+      expect(toolNames).toContain(visible)
+      if (hidden) expect(toolNames).not.toContain(hidden)
+    }
+  )
+
   it("keeps first-class CRM bootstrap tools within the full catalog result limit", async () => {
     const context: SignalSurfContext = {
       workspaceId: "00000000-0000-4000-8000-000000000001",

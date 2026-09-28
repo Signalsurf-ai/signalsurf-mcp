@@ -704,7 +704,7 @@ describe("MCP server", () => {
         workspaceId: context.workspaceId,
         userId,
         role: "editor",
-        scopes: ["mcp:projects.read", "mcp:conversations.read"],
+        scopes: ["mcp:read"],
         workspaceCapabilitiesByWorkspaceId: {
           [context.workspaceId]: WORKSPACE_CAPABILITIES,
         },
@@ -783,6 +783,18 @@ describe("MCP server", () => {
           },
         ],
         threads: [{ projectId, threadId, title: "Review first wave" }],
+      },
+      capabilities: {
+        domains: expect.arrayContaining([
+          expect.objectContaining({
+            domain: "projects",
+            access: expect.arrayContaining(["read"]),
+          }),
+          expect.objectContaining({
+            domain: "objects",
+            access: expect.arrayContaining(["read"]),
+          }),
+        ]),
       },
       contextVersion: { schema: 2 },
     })

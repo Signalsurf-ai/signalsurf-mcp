@@ -2,6 +2,7 @@ import {
   McpServer,
   ResourceTemplate,
 } from "@modelcontextprotocol/sdk/server/mcp.js"
+import { signalSurfScopesGrantRequiredScope } from "@signalsurf/mcp-contract/scopes"
 
 import {
   assertCanUseCapability,
@@ -465,7 +466,7 @@ function registerTools(
               (capability) =>
                 (context.scopes === undefined ||
                   capability.requiredScopes.every((scope) =>
-                    context.scopes?.includes(scope)
+                    signalSurfScopesGrantRequiredScope(context.scopes!, scope)
                   )) &&
                 (capability.readOnly || context.role !== "viewer") &&
                 (memberAccess === "member" || memberAccess === "admin") &&
