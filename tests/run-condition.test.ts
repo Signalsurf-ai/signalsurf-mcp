@@ -56,6 +56,32 @@ describe("evaluateRunCondition", () => {
     ).toBe(true)
   })
 
+  it.each([
+    ["equals", true, false],
+    ["not_equals", false, true],
+  ] as const)(
+    "%s compares tag arrays with list targets by overlap",
+    (predicate, matching, disjoint) => {
+      const condition: RunCondition = {
+        column: "tags",
+        predicate,
+        value: ["cold", "B2B"],
+      }
+      expect(
+        evaluateRunCondition(condition, row({ tags: ["hot", "b2b"] }))
+      ).toBe(matching)
+      expect(
+        evaluateRunCondition(condition, row({ tags: ["warm", "b2c"] }))
+      ).toBe(disjoint)
+      expect(
+        evaluateRunCondition(
+          { ...condition, value: ["hot,b2b"] },
+          row({ tags: ["hot", "b2b"] })
+        )
+      ).toBe(disjoint)
+    }
+  )
+
   it("supports not_equals while failing closed on missing comparison values", () => {
     expect(
       evaluateRunCondition(

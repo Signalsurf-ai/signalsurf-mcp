@@ -465,11 +465,6 @@ type CreateRelationFieldInput = {
   displayField?: string
 }
 
-type SetWorkflowSourceActiveInput = {
-  sourceId: string
-  isActive: boolean
-}
-
 type ListWebhookPayloadSamplesInput = {
   sourceId: string
   limit?: number
@@ -530,11 +525,6 @@ type UpdateWorkflowSourceInput = {
 type DeleteWorkflowSourceInput = {
   sourceId?: string
   sourceIds?: string[]
-}
-
-type WorkflowToolInput = {
-  workflowId: string
-  toolId: string
 }
 
 type WorkspaceContextRow = {
@@ -798,13 +788,6 @@ function uniqueStrings(value: unknown): string[] {
   ]
 }
 
-function sameStrings(left: string[], right: string[]): boolean {
-  return (
-    left.length === right.length &&
-    left.every((value, index) => value === right[index])
-  )
-}
-
 function idempotentSurfJobId(
   context: SignalSurfContext,
   workflowId: string,
@@ -922,15 +905,6 @@ function asRecord(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as JsonRecord)
     : {}
-}
-
-function withoutLegacyToolRouting(config: JsonRecord): JsonRecord {
-  const {
-    tool_modes: _toolModes,
-    trigger_tools: _triggerTools,
-    ...rest
-  } = config
-  return rest
 }
 
 function readTrimmedString(value: unknown): string | null {
@@ -5590,41 +5564,6 @@ export class SignalSurfRepository {
     }
   }
 
-  async setWorkflowSourceActive(
-    context: SignalSurfContext,
-    input: SetWorkflowSourceActiveInput
-  ) {
-    const { data: existing, error: existingError } = await this.db
-      .from("sources")
-      .select(SOURCE_COLUMNS)
-      .eq("id", input.sourceId)
-      .maybeSingle()
-
-    requireNoDbError(existingError, "Failed to read Workflow source")
-    if (!existing) {
-      throw new UserFacingError("Source not found or access denied.", {
-        code: "NOT_FOUND",
-        status: 404,
-      })
-    }
-
-    const source = existing as SourceRow
-    await this.assertWorkflowBelongsToWorkspace(context, source.workflow_id)
-
-    const { data, error } = await this.db
-      .from("sources")
-      .update({
-        is_active: input.isActive,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", input.sourceId)
-      .select(SOURCE_COLUMNS)
-      .single()
-
-    requireNoDbError(error, "Failed to update Workflow source")
-    return { source: formatSource(data as SourceRow) }
-  }
-
   async listWebhookPayloadSamples(
     context: SignalSurfContext,
     input: ListWebhookPayloadSamplesInput
@@ -5715,26 +5654,6 @@ export class SignalSurfRepository {
       toolIds,
       totalCount: toolIds.length,
     }
-  }
-
-  async attachWorkflowTool(
-    context: SignalSurfContext,
-    input: WorkflowToolInput
-  ) {
-    await this.assertWorkspaceToolBelongsToWorkspace(context, input.toolId)
-    return this.updateWorkflowToolIds(context, input.workflowId, (toolIds) =>
-      toolIds.includes(input.toolId) ? toolIds : [...toolIds, input.toolId]
-    )
-  }
-
-  async detachWorkflowTool(
-    context: SignalSurfContext,
-    input: WorkflowToolInput
-  ) {
-    await this.assertWorkspaceToolBelongsToWorkspace(context, input.toolId)
-    return this.updateWorkflowToolIds(context, input.workflowId, (toolIds) =>
-      toolIds.filter((toolId) => toolId !== input.toolId)
-    )
   }
 
   private async getAccountListProfileForUpdate(
@@ -6023,25 +5942,6 @@ export class SignalSurfRepository {
     }
     if (requireCapability) {
       this.assertWorkflowCapability(context, (data as { kind?: unknown }).kind)
-    }
-  }
-
-  private async assertWorkspaceToolBelongsToWorkspace(
-    context: SignalSurfContext,
-    toolId: string
-  ): Promise<void> {
-    const { data, error } = await this.db
-      .from("workspace_tools")
-      .select("id")
-      .eq("id", toolId)
-      .eq("workspace_id", context.workspaceId)
-      .maybeSingle()
-    requireNoDbError(error, "Failed to validate workspace tool access")
-    if (!data) {
-      throw new UserFacingError("Tool not found or access denied.", {
-        code: "NOT_FOUND",
-        status: 404,
-      })
     }
   }
 
@@ -6352,48 +6252,6 @@ export class SignalSurfRepository {
       "This operation is unavailable in the current Workspace.",
       { code: "FORBIDDEN", status: 403 }
     )
-  }
-
-  private async updateWorkflowToolIds(
-    context: SignalSurfContext,
-    workflowId: string,
-    mutate: (toolIds: string[]) => string[]
-  ) {
-    const existing = await this.getWorkflowForUpdate(context, workflowId)
-    const currentToolConfig = asRecord(existing.tool_config)
-    const cleanToolConfig = withoutLegacyToolRouting(currentToolConfig)
-    const currentToolIds = uniqueStrings(currentToolConfig.auto_tool_ids)
-    const nextToolIds = uniqueStrings(mutate(currentToolIds))
-
-    if (sameStrings(currentToolIds, nextToolIds)) {
-      return {
-        workflow: formatWorkflow(existing),
-        toolIds: currentToolIds,
-        changed: false,
-      }
-    }
-
-    const { data, error } = await this.db
-      .from("workflows")
-      .update({
-        tool_config: {
-          ...cleanToolConfig,
-          auto_tool_ids: nextToolIds,
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", workflowId)
-      .eq("workspace_id", context.workspaceId)
-      .is("deleted_at", null)
-      .select(WORKFLOW_COLUMNS)
-      .single()
-
-    requireNoDbError(error, "Failed to update Workflow tools")
-    return {
-      workflow: formatWorkflow(data as WorkflowRow),
-      toolIds: nextToolIds,
-      changed: true,
-    }
   }
 
   private async findFirstActiveWorkflow(
