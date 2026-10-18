@@ -731,7 +731,7 @@ describe("SignalSurfRepository", () => {
     })
   })
 
-  it("lists and toggles safe Workflow source metadata", async () => {
+  it("lists safe Workflow source metadata and updates its active state", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
@@ -757,7 +757,7 @@ describe("SignalSurfRepository", () => {
     expect(result.sources[0]).not.toHaveProperty("config")
     expect(result.sources[0]).not.toHaveProperty("credentials")
 
-    const updated = await repo.setWorkflowSourceActive(context, {
+    const updated = await repo.updateWorkflowSource(context, {
       sourceId: source1,
       isActive: false,
     })
@@ -773,7 +773,7 @@ describe("SignalSurfRepository", () => {
     })
 
     await expect(
-      repo.setWorkflowSourceActive(context, {
+      repo.updateWorkflowSource(context, {
         sourceId: otherWorkspaceSource,
         isActive: false,
       })
@@ -1453,7 +1453,7 @@ describe("SignalSurfRepository", () => {
     expect(result.tools[0]).not.toHaveProperty("token")
   })
 
-  it("manages Workflow tool ids idempotently", async () => {
+  it("lists configured Workflow tool ids without crossing workspace scope", async () => {
     const db = makeDb()
     const repo = new SignalSurfRepository(db as any)
 
@@ -1463,66 +1463,19 @@ describe("SignalSurfRepository", () => {
       totalCount: 0,
     })
 
-    await expect(
-      repo.attachWorkflowTool(context, {
-        workflowId: workflow1,
-        toolId: tool1,
-      })
-    ).resolves.toMatchObject({
-      changed: true,
-      toolIds: [tool1],
-      workflow: {
-        workflowId: workflow1,
-        toolConfig: {
-          auto_tool_ids: [tool1],
-        },
-      },
-    })
-
-    await expect(
-      repo.attachWorkflowTool(context, {
-        workflowId: workflow1,
-        toolId: tool1,
-      })
-    ).resolves.toMatchObject({
-      changed: false,
-      toolIds: [tool1],
-    })
-
-    await repo.attachWorkflowTool(context, {
+    await repo.updateWorkflow(context, {
       workflowId: workflow1,
-      toolId: tool2,
+      toolConfigPatch: { auto_tool_ids: [tool1, tool2] },
+    })
+
+    await expect(repo.listWorkflowTools(context, workflow1)).resolves.toEqual({
+      workflowId: workflow1,
+      toolIds: [tool1, tool2],
+      totalCount: 2,
     })
 
     await expect(
-      repo.detachWorkflowTool(context, {
-        workflowId: workflow1,
-        toolId: tool1,
-      })
-    ).resolves.toMatchObject({
-      changed: true,
-      toolIds: [tool2],
-    })
-
-    expect(
-      db.tables.workflows.find((workflow) => workflow.id === workflow1)
-        ?.tool_config
-    ).toMatchObject({
-      auto_tool_ids: [tool2],
-    })
-
-    await expect(
-      repo.attachWorkflowTool(context, {
-        workflowId: otherWorkspaceWorkflow,
-        toolId: tool1,
-      })
-    ).rejects.toMatchObject({ code: "NOT_FOUND" })
-
-    await expect(
-      repo.attachWorkflowTool(context, {
-        workflowId: workflow1,
-        toolId: "00000000-0000-4000-8000-000000000903",
-      })
+      repo.listWorkflowTools(context, otherWorkspaceWorkflow)
     ).rejects.toMatchObject({ code: "NOT_FOUND" })
   })
 
