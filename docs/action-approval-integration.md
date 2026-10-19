@@ -1,5 +1,11 @@
 # Hosted MCP Action Approval Integration
 
+> Historical standalone documentation. This repository is deprecated; the
+> following describes the retired implementation. See the
+> [retirement and migration notice](../README.md) and Web's maintained
+> [action approval integration](https://github.com/Signalsurf-ai/signalsurf-web/blob/main/packages/mcp-server/docs/action-approval-integration.md)
+> for the current service.
+
 Chargeable Deepline tools depend on the SignalSurf Web migration and approval UI
 for `public.mcp_action_approvals`. This includes curated company/people search,
 contact enrichment, and generic `deepline_execute_tool`. Deploy Web first; until

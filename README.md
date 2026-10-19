@@ -1,667 +1,77 @@
-# SignalSurf MCP
+# SignalSurf MCP — Deprecated
 
-Standalone MCP server for controlled agent access to SignalSurf Workflows and
-workspace tables.
+This standalone repository is retired. The maintained MCP runtime, thin
+Cloudflare Worker gateway, and portable contracts live in
+[Signalsurf-ai/signalsurf-web](https://github.com/Signalsurf-ai/signalsurf-web).
+Do not install, deploy, or make product changes from this repository.
+Its source and Git history are retained for historical reference.
 
-This server is intentionally narrow. It gives external agents the core workspace
-operations they need without exposing arbitrary SQL or raw service-role access.
-Every workspace operation is bound to a SignalSurf Workspace. OAuth tokens can
-grant one or more Workspaces through one deterministic tool registry.
-See `docs/architecture.md` for the request lifecycle and safety model, and
-`docs/capabilities.md` for the public tool/scope contract.
+## Connect to SignalSurf
 
-## External User Setup
-
-If you are connecting an agent to SignalSurf, install the official SignalSurf
-Plugin from `Signalsurf-ai/signalsurf-agent`. It bundles this hosted MCP service
-with the context and Project writeback Skill. You do not need this repository,
-a Supabase key, or a local server.
-
-1. Install SignalSurf from the host's Plugin marketplace and start a new chat.
-2. The first SignalSurf tool call opens SignalSurf's OAuth authorization page.
-3. Sign in, choose the SignalSurf workspace or workspaces this client may access,
-   review requested scopes, and approve.
-4. The MCP client receives OAuth tokens through its callback and can use
-   SignalSurf tools. If you approve multiple workspaces, the agent should call
-   `get_workspace_context` first, choose from the returned `workspaces[].name` list, and
-   pass that workspace's `workspaceId` to workspace-scoped tool calls.
-
-The hosted MCP connects only to existing Workspaces. It supports Workspace-scoped
-Workflow CRUD, table create/update, table schema edits, Workflow execution, signal
-creation/configuration/deletion, signal toggles, tool attachment, and table row
-read/create/update/delete. It is a safe public subset of Surfer, the agent in
-SignalSurf Web's right panel; it does not expose every internal chat tool.
-
-Example:
-
-```json
-{
-  "mcpServers": {
-    "signalsurf": {
-      "type": "streamable-http",
-      "url": "https://mcp.signalsurf.ai/mcp"
-    }
-  }
-}
-```
-
-Raw remote MCP at `https://mcp.signalsurf.ai/mcp` is available for advanced
-clients that cannot load plugins and implement OAuth themselves.
-
-## Hosted Service Deployment
-
-Use this repository when you are operating SignalSurf's hosted MCP service or a
-single-tenant internal deployment.
-
-```bash
-git clone https://github.com/Signalsurf-ai/signalsurf-mcp.git
-cd signalsurf-mcp
-corepack enable
-corepack pnpm@10.0.0 install
-cp .env.example .env
-```
-
-Minimal hosted `.env`:
-
-```bash
-SIGNALSURF_SUPABASE_URL=https://your-project-ref.supabase.co
-SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-SIGNALSURF_MCP_TRANSPORT=http
-SIGNALSURF_MCP_AUTH_MODE=database
-SIGNALSURF_MCP_RESOURCE_URL=https://mcp.signalsurf.ai/mcp
-SIGNALSURF_MCP_AUTHORIZATION_SERVER_URL=https://www.signalsurf.ai
-SIGNALSURF_MCP_ACCESS_TOKEN_SECRET=shared-signing-secret-at-least-32-bytes
-SIGNALSURF_MCP_WEB_SERVICE_TOKEN=worker-to-web-service-secret
-SIGNALSURF_MCP_HOST=0.0.0.0
-SIGNALSURF_MCP_PATH=/mcp
-SIGNALSURF_MCP_ALLOWED_HOSTS=mcp.signalsurf.ai
-SIGNALSURF_MCP_TRUST_PROXY=true
-```
-
-### Production hosting: Cloudflare Worker (SIG-2671)
-
-`mcp.signalsurf.ai` runs as the Cloudflare Worker `signalsurf-mcp`
-(`worker/index.ts`, `wrangler.toml`). The Worker serves the same Express app
-through Cloudflare's Node HTTP server support (`nodejs_compat`); non-secret
-settings are `[vars]` in `wrangler.toml`, and secrets are set once with
-`wrangler secret put`:
-
-- `SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY`: a Supabase secret API key dedicated
-  to this Worker (`signalsurf_mcp_worker`), so it can be revoked without
-  touching other services;
-- `SIGNALSURF_MCP_ACCESS_TOKEN_SECRET`: shared with SignalSurf Web for local
-  verification of short-lived access tokens;
-- `SIGNALSURF_MCP_WEB_SERVICE_TOKEN`: presented only to Web's owned Project
-  execution boundary (use Web's `INTERNAL_API_SECRET` value);
-- `BYCRAWL_API_KEY` and any optional provider keys.
-
-Deploy from a clean checkout of `main`:
-
-```bash
-corepack pnpm@10.0.0 install --frozen-lockfile
-corepack pnpm@10.0.0 run deploy
-```
-
-The Worker loads its configuration on the first request, so a missing secret
-answers `503 CONFIG_ERROR` instead of failing the upload. `wrangler tail
-signalsurf-mcp` streams production logs.
-
-On container platforms, do not hard-code `SIGNALSURF_MCP_PORT=3333`. The
-service reads the platform-provided `PORT` and listens on `0.0.0.0` when that
-variable is present.
-
-Build and run:
-
-```bash
-corepack pnpm@10.0.0 build
-corepack pnpm@10.0.0 start
-```
-
-In `database` auth mode, the server verifies short-lived signed OAuth access
-tokens locally. Refresh and revocation state stays owned by SignalSurf Web;
-connector discovery does not depend on an application-database lookup.
-
-## Local Development Quick Start
-
-Use stdio first. It is the simplest and does not expose an HTTP port.
-
-You only need these SignalSurf values:
-
-- Supabase URL
-- Supabase service-role key
-- SignalSurf `workspaceId`
-
-1. Install and create `.env`:
-
-```bash
-git clone https://github.com/Signalsurf-ai/signalsurf-mcp.git
-cd signalsurf-mcp
-corepack enable
-corepack pnpm@10.0.0 install
-cp .env.example .env
-```
-
-2. Replace `.env` with this minimal local config:
-
-```bash
-SIGNALSURF_SUPABASE_URL=https://your-project-ref.supabase.co
-SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-SIGNALSURF_MCP_TRANSPORT=stdio
-SIGNALSURF_MCP_AUTH_MODE=env
-SIGNALSURF_MCP_TOKEN=local-dev-token
-SIGNALSURF_MCP_TOKENS='[{"name":"local-agent","token":"local-dev-token","workspaceId":"signal-surf-workspace-uuid","role":"editor"}]'
-```
-
-For shared or hosted use, replace `"token"` with `"tokenSha256"` later. The
-plain token above is only the shortest local setup.
-
-3. Build:
-
-```bash
-corepack pnpm@10.0.0 build
-```
-
-4. Add this MCP server to Claude Code or another stdio MCP client:
-
-```json
-{
-  "mcpServers": {
-    "signalsurf": {
-      "command": "node",
-      "args": ["/absolute/path/to/signalsurf-mcp/dist/index.js"],
-      "env": {
-        "SIGNALSURF_MCP_TRANSPORT": "stdio",
-        "SIGNALSURF_MCP_TOKEN": "local-dev-token"
-      }
-    }
-  }
-}
-```
-
-The server automatically loads `.env` from the repo root. After the client
-connects, call `get_workspace_context` first and confirm the returned `workspaceId`.
-
-For HTTP instead of stdio, set `SIGNALSURF_MCP_TRANSPORT=http`, remove
-`SIGNALSURF_MCP_TOKEN` from the server env, set
-`SIGNALSURF_MCP_AUTH_MODE=env`, start the server, and send the token as
-`Authorization: Bearer <token>`.
-
-## What It Exposes
-
-- `get_workspace_context`, `get_brand_context`
-- `list_workspaces`, `list_projects`, `get_project`, `get_project_context`
-- `list_activity`, `list_activity_threads`, `mark_activity_read`
-- `list_threads`, `read_thread`, `wait_for_thread_response`, `list_thread_decisions`
-- `list_project_members`, `list_project_files`, `read_project_file`, `list_project_triggers`
-- `start_thread`, `reply_in_thread`, `publish_project_conclusion`, `create_project`, `rename_project`
-- First-class CRM Object, Record, and List discovery, schema, read, write,
-  membership, qualification, and source operations
-- First-class Listening discovery, lifecycle, post/account reads, draft,
-  import, public reply, activation, and audience-capture operations
-- `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `run_workflow`, `get_surf_job`, `wait_for_surf_job`, `list_surf_jobs`, `cancel_surf_job`, `delete_workflow`
-- `list_tables`, `create_table`, `update_table`, `delete_table`, `list_table_views`, `read_table`, `read_table_view`, `get_table_row`
-- `create_table_row`, `update_table_rows`, `delete_table_rows`
-- `list_table_fields`, `add_table_field`, `update_table_field`, `remove_table_field`, `create_relation_field`
-- `list_signals`, `create_signal`, `update_signal`, `delete_signal`
-- `enable_enrich`, `disable_enrich`, `list_enrich`, `run_enrich`
-- `list_workspace_tools`, `list_workflow_tools` (attach/detach tools via `update_workflow` `toolConfigPatch.auto_tool_ids`)
-- `search_instagram_content`
-- `deepline_search_people`, `deepline_search_companies`, `deepline_enrich_contact`, `deepline_search_catalog`, `deepline_execute_tool`
-- Resources for context; single-workspace tokens also expose Workflow, database,
-  surf job, and database-row resources
-
-Web-canonical Project, CRM, and Listening tools require hosted OAuth in
-production because their execution boundary revalidates the authorizing member,
-Workspace module, resource, Project authority, and exact action approval when
-applicable. Static env tokens remain available for local or internal access.
-
-All workspace-scoped tools execute against one `workspaceId`. A single-workspace token
-can omit `workspaceId`; a multi-workspace OAuth token must pass `workspaceId` to every
-workspace-scoped tool call. The server uses Supabase service-role credentials
-internally, so every operation explicitly validates workspace ownership before
-touching rows. Workflow deletion is a soft delete (`deleted_at`), matching the
-web app behavior.
-
-Chargeable creator discovery and Deepline calls use a two-step approval flow. This includes Instagram Content Search, curated
-company/people search, contact enrichment, and generic tool execution. Omit
-`approvalRequestId` to create or reuse a redacted pending request, approve it in
-SignalSurf Web, then repeat the exact tool call with the returned request id.
-The MCP server never approves requests itself.
-
-OAuth clients can request broad compatibility scopes (`mcp:read`, `mcp:write`)
-or granular scopes. The protected resource metadata advertises the registered
-granular SignalSurf resource scopes so the consent screen can name each
-capability instead of hiding them behind broad write access:
-
-- `mcp:projects.read`
-- `mcp:projects.write`
-- `mcp:conversations.read`
-- `mcp:conversations.control`
-- `mcp:objects.read`
-- `mcp:objects.write`
-- `mcp:records.read`
-- `mcp:records.write`
-- `mcp:lists.read`
-- `mcp:lists.write`
-- `mcp:workflows.read`
-- `mcp:workflows.write`
-- `mcp:workflows.execute`
-- `mcp:workflows.delete`
-- `mcp:tables.read`
-- `mcp:tables.write`
-- `mcp:tables.delete`
-- `mcp:schemas.read`
-- `mcp:schemas.write`
-- `mcp:sources.read`
-- `mcp:sources.write`
-- `mcp:creator_discovery.read`
-- `mcp:deepline.read`
-- `mcp:deepline.enrich`
-- `mcp:deepline.execute`
-- `mcp:sender_infrastructure.read`
-
-Default authorization requests include `mcp:deepline.read`, but not the
-higher-risk enrichment or execution scopes. The MCP server still accepts the
-legacy `mcp:deepline.write` alias for existing grants without advertising it.
-OAuth tokens may also carry
-`offline_access` for refresh-token support. The MCP resource server accepts that scope but does not advertise it as
-a resource requirement, and it grants no tool capability by itself.
-
-## Hosted connection
-
-A hosted grant's scopes are its complete capability contract. Project and
-conversation scopes authorize collaboration calls, while granular product
-scopes authorize Workspace operations. Every client discovers the same static
-registry; authorization is enforced when it calls a tool.
-See [docs/mcp-connection.md](docs/mcp-connection.md).
-
-## Architecture
+Use the official
+[SignalSurf Plugin](https://github.com/Signalsurf-ai/signalsurf-agent) or, for a
+client that supports remote Streamable HTTP and OAuth, the existing endpoint:
 
 ```text
-MCP client
-  -> stdio or Streamable HTTP transport
-  -> signed token auth resolves { workspaceIds, userId, role, scopes, clientId, grantId }
-  -> MCP tool/resource handlers
-  -> product repository or owned SignalSurf Web execution boundary
-  -> explicit Workspace, membership, Project, and File checks
+https://mcp.signalsurf.ai/mcp
 ```
 
-Key files:
+The endpoint is not being retired. Follow the current Web
+[hosted connection guide](https://github.com/Signalsurf-ai/signalsurf-web/blob/main/docs/hosted-mcp.md#user-setup)
+for OAuth and Workspace selection. End users do not need a local server or
+Supabase service-role credentials.
 
-- `src/index.ts`: process entrypoint and transport selection
-- `src/http.ts`: stateless Streamable HTTP transport
-- `src/stdio.ts`: stdio transport for local MCP clients
-- `src/auth.ts`: access-token verification, bearer parsing, and role checks
-- `src/web-execution.ts`: Web-canonical Project, CRM, and Listening execution boundary
-- `src/capabilities.ts`: public scope, capability, and tool contract
-- `docs/public-tool-contract.json`: shared schema fingerprints and semantic fixtures
-- `src/repository.ts`: SignalSurf workspace-scope and mutation logic
-- `src/server.ts`: MCP tools and resources
-- `src/schemas.ts`: Zod input schemas exposed to MCP clients
+## Migrate development and deployments
 
-The HTTP transport is stateless. Each POST resolves auth, creates a fresh MCP
-server instance, handles one JSON-RPC request, and closes. This avoids shared
-in-memory session state and makes bearer-token workspace scoping straightforward.
+- Change the hosted runtime and gateway in Web's
+  [packages/mcp-server](https://github.com/Signalsurf-ai/signalsurf-web/tree/main/packages/mcp-server).
+  Web also owns OAuth, product execution, and Workspace authorization.
+- Change portable contracts in Web's
+  [packages/mcp-contract](https://github.com/Signalsurf-ai/signalsurf-web/tree/main/packages/mcp-contract).
+  Plugin source lives in Web's `agent-plugins/`; `signalsurf-agent` is its public
+  distribution.
+- For an existing local stdio or separately managed Node HTTP deployment, review
+  the maintained package's
+  [local setup](https://github.com/Signalsurf-ai/signalsurf-web/blob/main/packages/mcp-server/README.md#local-development-quick-start).
+  Review the client's configuration, available tools, scopes, and response
+  contracts, then validate its required operations. Retirement does not perform
+  an automatic migration or establish drop-in parity for this old distribution.
 
-## Tool Semantics
+The ownership and deployment baseline was verified against Web commit
+[`3ef557d`](https://github.com/Signalsurf-ai/signalsurf-web/blob/3ef557dec1d997dc0ece511505dd4ee086b52a9f/docs/chatgpt-extension/README.md#architecture-decision-and-repository-boundaries).
+Use the current Web documentation for subsequent changes.
 
-Context:
+## Operator notice
 
-- `get_workspace_context`: returns authorized workspaces with human-readable names,
-  optional workspace names, ids, optional user, role, token name, and
-  scope/capability context for the current connection. Agents should call this
-  before writes. If `workspaceIds` contains more than one id, choose the intended
-  workspace from `workspaces[]` and pass its `workspaceId` to every workspace-scoped
-  tool call.
-- `get_brand_context`: returns the active workspace's brand and positioning
-  context from workspace memory (brand name, brand description, product
-  description, product categories, selling points, target audience, competitors,
-  and official website). Fields are empty until the workspace completes brand
-  setup. Pass `workspaceId` when this connection can access multiple workspaces.
+The old deployment script and `wrangler.toml` are retired from this repository.
+Their historical configuration uses the same `signalsurf-mcp` Worker name and
+`mcp.signalsurf.ai` domain as the maintained Web gateway. Do not restore or
+publish that old deployment: it could replace the maintained gateway. Follow Web's
+[deployment order](https://github.com/Signalsurf-ai/signalsurf-web/blob/main/packages/mcp-server/README.md#hosted-service-deployment)
+from a reviewed Web checkout.
 
-Workflows:
+Deprecating or archiving a GitHub repository does not stop a deployed service,
+remove a custom domain, revoke credentials, or migrate external consumers.
+Keep the Web-owned hosted MCP and its gateway running. Before removing any
+separately operated legacy instance or dedicated credential, identify its
+deployment and consumers and verify their migration. This repository does not
+contain a complete inventory of external installations or deployed artifacts.
 
-- `list_workflows`: returns non-deleted Workflows. Use
-  `includeInactive=false` to hide paused Workflows.
-- `get_workflow`: reads one Workflow after workspace-scope validation.
-- `create_workflow`: creates a Workflow. Pass `projectId` to place it in an
-  existing Project. If the workspace has exactly one user-facing database, that
-  database is used by default. If the workspace has multiple databases, pass
-  `databaseIds`. Pass `databaseIds: []` only for an intentional action-only
-  Workflow.
-- `update_workflow`: updates metadata, Project placement, prompt fields, target
-  databases, and JSON config. Patch fields such as `toolConfigPatch` are shallow
-  merges.
-- `run_workflow`: queues an active Workflow for asynchronous execution by
-  creating one pending `extract` surf job per active pull source, matching
-  SignalSurf Web's Surf Now worker contract. Existing pending/processing jobs
-  are deduplicated by source by default. Pass `idempotencyKey` when an agent may
-  retry the same intended run.
-- `get_surf_job` / `list_surf_jobs`: reads async execution status after workspace
-  scope validation.
-- `wait_for_surf_job`: polls one surf job until it leaves an active status
-  (`pending`, `queued`, `running`, `processing`, or `in_progress`) or until the
-  timeout expires. It does not run a worker itself.
-- `cancel_surf_job`: cancels a pending surf job. Running jobs are not forcefully
-  interrupted through MCP.
-- `delete_workflow`: soft-deletes Workflows and cancels pending jobs.
+The historical package metadata is `@signalsurf/mcp@0.1.0`, marked `private`,
+with a `signalsurf-mcp` executable. That metadata is not evidence that no package,
+container, fork, or private installation exists elsewhere.
 
-Tables:
+## Historical documentation
 
-- `list_tables`: lists tables for the selected workspace. System tables
-  are hidden unless `includeSystem=true`.
-- `create_table`: creates a workspace table with optional custom schema, saved
-  view config, item type, display order, and existing table folder placement.
-  Pass `template="outbound_accounts"` or `template="contacts"` to start from
-  the canonical outbound account or contact baseline. Extra schema fields are
-  additive; same-key fields in that create call cannot downgrade the baseline.
-  The Accounts baseline contains only Company, Domain, Website, LinkedIn,
-  Location, Industry, Company Size, Funding Stage, Latest Round, Tech Stack,
-  Fit Score, Fit Reason, and Status. Fit Score is visible and sorted descending;
-  provider facts auto-reveal when populated. Active Jobs, Employees, Tier, and
-  review/provenance/planning fields are not created by default.
-- `update_table`: updates table metadata, custom schema, saved view config,
-  item type, display order, or folder placement. Applying the Accounts template
-  to an existing table preserves additive legacy/custom fields; known legacy
-  fields remain hidden, and legacy Tier is made non-automatable.
-- `delete_table`: hard-deletes one or more user-facing tables after workspace
-  scope validation, then removes those table ids from active Workflows'
-  `databaseIds`. System tables cannot be deleted through MCP.
-- `read_table`: reads rows with pagination and optional JSON containment filter.
-  It also supports UI-style `filters`, `filterLogic`, and data-field `sorts`.
-  Advanced filters are evaluated over a bounded scan (`scanLimit`, default
-  1000, max 5000) so array, date, number, text, and relation comparisons behave
-  consistently across JSON fields. Results include `scannedCount` and
-  `hasMoreToScan` when a wider scan may be needed.
-- `list_table_views` / `read_table_view`: lists saved views from table
-  `viewConfigs` and reads rows using compatible saved-view filters/sorts.
-- `get_table_row`: reads one row after verifying its database belongs to the
-  token workspace.
-- `create_table_row`: inserts a row. If `workflowId` is supplied, that Workflow
-  must target the row's database. The server stamps `origin="mcp"` and
-  `origin_ref` from the token name; callers cannot forge provenance, triggered
-  state, or dedupe keys.
-- `update_table_rows`: updates one or more rows through changelog-preserving
-  RPCs; pass an `edits` array even for a single row. `item_ref` fields are
-  validated against the database schema and must point to rows in the same
-  workspace.
-- `delete_table_rows`: hard-deletes table rows after every row is workspace-scoped.
+These documents describe the retired implementation, not the current hosted
+service or instructions for new deployments:
 
-Schema:
+- [Connection](docs/mcp-connection.md)
+- [Architecture](docs/architecture.md)
+- [Capabilities](docs/capabilities.md)
+- [Action approvals](docs/action-approval-integration.md)
+- [Schema snapshot](schema/README.md)
 
-- `list_table_fields`: returns schema fields and relation definitions for a
-  table.
-- `create_table` / `update_table`: accept a complete `schema` object or
-  `schemaPatch`; `item_ref` fields and relation targets must point at tables
-  in the same authorized workspace.
-- `add_table_field` / `update_table_field` / `remove_table_field`:
-  mutate table schema only. They do not backfill or delete row data.
-- `create_relation_field`: adds an `item_ref` field after verifying the target
-  table belongs to the same authorized workspace.
-
-Sources and Workflow tools:
-
-- `list_signals`: returns safe signal metadata only:
-  `sourceId`, `workflowId`, name, database type, public `sourceType`,
-  endpoint, schedule, URL, provider, event type, database id,
-  `webhookUrl` for custom webhook signals, `webhookSecretConfigured`,
-  `isActive`, and timestamps. Signal config, credentials, headers, bodies, auth
-  settings, and provider payloads are not exposed through MCP.
-- `create_signal`: creates a SignalSurf signal for a Surf
-  Point. Supported `sourceType` values are `platform`, `custom-pull`, `rss`,
-  `webhook`, `web-monitor`, `github`, `coingecko`, `hackernews`,
-  `producthunt`, `item-created`, `item-updated`, `manual-trigger`, and
-  `on-schedule`. Creating a `webhook` signal also returns top-level
-  `webhookUrl`, matching the URL shown in SignalSurf Web. Platform signals also
-  write `keywords` and `trackedAccounts` into the workspace search-config tables.
-- `update_signal`: updates signal name, active state, typed signal
-  config, `pull_config`, `metadata`, or `data_schema`. Set the active state here
-  to enable or pause a signal after verifying its Workflow belongs to the
-  authorized workspace. Secret-bearing config such as headers, bodies, and auth
-  may be written but is not returned by list responses.
-- `delete_signal`: deletes one or more signals after workspace-scope
-  validation and removes non-terminal jobs for those source ids.
-- Internal trigger `sourceType` values (`item-created`, `item-updated`,
-  `manual-trigger`, `on-schedule`) are exclusive. A Workflow can have one
-  internal trigger and no external discovery signals alongside it. Pass
-  `replaceExisting=true` only when intentionally replacing existing signals.
-- `enable_enrich` / `disable_enrich` / `list_enrich` / `run_enrich`:
-  per-column enrichment. Enable binds a hidden Workflow plus an internal
-  `manual_trigger` source to one `(databaseId, fieldKey)` with a "what to do"
-  instruction; the brain fills that single column from each row's context. Enable
-  can also persist `auto: "on_created"` and an "only run if" `runCondition`
-  gate (`has_value`, `is_empty`, comparisons, numeric comparisons, or `in`).
-  Disable keeps the instruction and gate (off-but-remembered). Run queues one
-  `analyze` surf job per matching row: pass `scope` (`first10` | `first100` |
-  `all`, capped at 1000), a specific `entryIds` subset, or a single `entryId`.
-  Column/subset runs apply the persisted `runCondition` before queueing and
-  skip populated cells by default, returning the count as `skippedExisting`.
-  Pass `overwriteExisting=true` only when the user explicitly approves a
-  refresh. Runs return `queued`, `skipped`, `rawSignalIds`, jobs, and the touched `entryIds`;
-  poll the returned jobs with `list_surf_jobs` / `wait_for_surf_job`. Credits
-  are charged by the brain as each job runs. Enable needs `mcp:sources.write`,
-  list needs `mcp:sources.read`, and run needs `mcp:workflows.execute`.
-- `list_workspace_tools`: returns safe workspace tool metadata from
-  `workspace_tools`; config secrets are not exposed.
-- `list_workflow_tools`: lists the tool ids in `tool_config.auto_tool_ids`
-  for a Workflow. To attach or detach a tool, set
-  `toolConfigPatch.auto_tool_ids` via `update_workflow` (shallow-merged).
-
-Roles:
-
-- `viewer`: can read tools and resources only
-- `editor`: can read and write
-- `owner`: currently same MCP capability as `editor`; reserved for future policy
-
-OAuth scopes can narrow those role grants. For example, an editor OAuth token
-with `mcp:tables.write` can create and update rows but cannot delete rows or
-create Workflows. MCP never creates Organizations or Workspaces. Manual fallback
-tokens without `scopes` keep the legacy role-only behavior.
-
-Resources:
-
-- `signalsurf://context`
-- `signalsurf://workflows` for single-workspace tokens
-- `signalsurf://workflows/{workflowId}` for single-workspace tokens
-- `signalsurf://workflows/{workflowId}/sources` for single-workspace tokens
-- `signalsurf://workflows/{workflowId}/tools` for single-workspace tokens
-- `signalsurf://workspace-tools` for single-workspace tokens
-- `signalsurf://surf-jobs` for single-workspace tokens
-- `signalsurf://surf-jobs/{jobId}` for single-workspace tokens
-- `signalsurf://databases` for single-workspace tokens
-- `signalsurf://databases/{databaseId}/rows` for single-workspace tokens
-
-For multi-workspace OAuth tokens, only `signalsurf://context` is listed. Read its
-`workspaces[]` list to see workspace names and organization names, then use tools with
-an explicit `workspaceId` to read or modify workspace data.
-
-Schema limits:
-
-- List/read limits are capped at 200 rows per call.
-- Workflow names are capped at 100 characters.
-- Prompt fields are capped at 10,000 characters each.
-- Table row notes are capped at 500,000 characters.
-
-## Setup
-
-```bash
-corepack pnpm@10.0.0 install
-cp .env.example .env
-corepack pnpm@10.0.0 build
-```
-
-Required env:
-
-- `SIGNALSURF_SUPABASE_URL`, `SUPABASE_URL`, or `NEXT_PUBLIC_SUPABASE_URL`
-- `SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SERVICE_ROLE_KEY`
-- `SIGNALSURF_MCP_AUTH_MODE=database` for hosted SignalSurf Web tokens, or
-  `SIGNALSURF_MCP_AUTH_MODE=env` with `SIGNALSURF_MCP_TOKENS` for static
-  token config
-- `SIGNALSURF_MCP_TOKEN` / direct context for local stdio
-- `SIGNALSURF_MCP_ALLOWED_HOSTS` when HTTP is served behind a hostname that is
-  not the configured bind host
-- `SIGNALSURF_MCP_TRUST_PROXY=true` only behind a trusted proxy that overwrites
-  `X-Forwarded-For`
-
-Do not expose this service directly to the public internet without a trusted
-network boundary. MCP tokens limit workspace scope, but the process still holds a
-Supabase service-role key.
-
-## Static Token Config
-
-Static token config is for local development or internal single-tenant
-deployments. Hosted production should use `SIGNALSURF_MCP_AUTH_MODE=database`.
-
-Prefer hashed tokens:
-
-```bash
-printf '%s' 'ssmcp_live_xxx' | shasum -a 256
-```
-
-Then configure:
-
-```json
-[
-  {
-    "name": "claude-code",
-    "tokenSha256": "sha256-hex",
-    "workspaceId": "workspace-uuid",
-    "userId": "user-uuid",
-    "role": "editor",
-    "scopes": ["mcp:tables.read", "mcp:tables.write"]
-  }
-]
-```
-
-Plaintext `token` entries are supported for local development, but
-`tokenSha256` is preferred for shared environments.
-
-Each static token binds one MCP caller to one `workspaceId`. OAuth tokens from
-SignalSurf Web may grant multiple `workspaceIds`; static env tokens intentionally
-remain single-workspace for local and internal fallback use. `userId` is optional,
-but include it when you want Workflow deletion to repair that user's
-`current_workflow_id`. `tokenName` appears in `get_workspace_context` and is used as the
-row-update source reference.
-
-`scopes` is optional for static tokens. When present, the server enforces both
-the token role and the listed scopes. When omitted, static tokens retain the
-legacy broad role behavior.
-
-Rotate a token by:
-
-1. Generate a new random token.
-2. Add its SHA-256 hash to `SIGNALSURF_MCP_TOKENS`.
-3. Restart the MCP server.
-4. Update the client env.
-5. Remove the old hash and restart again.
-
-## Stdio
-
-```bash
-SIGNALSURF_MCP_TRANSPORT=stdio \
-SIGNALSURF_MCP_AUTH_MODE=env \
-SIGNALSURF_MCP_TOKEN=ssmcp_live_xxx \
-pnpm start
-```
-
-Claude Code example:
-
-```json
-{
-  "mcpServers": {
-    "signalsurf": {
-      "command": "node",
-      "args": ["/absolute/path/to/signalsurf-mcp/dist/index.js"],
-      "env": {
-        "SIGNALSURF_MCP_TRANSPORT": "stdio",
-        "SIGNALSURF_MCP_AUTH_MODE": "env",
-        "SIGNALSURF_SUPABASE_URL": "https://your-project-ref.supabase.co",
-        "SIGNALSURF_SUPABASE_SERVICE_ROLE_KEY": "service-role-key",
-        "SIGNALSURF_MCP_TOKENS": "[{\"tokenSha256\":\"sha256-hex\",\"workspaceId\":\"workspace-uuid\",\"userId\":\"user-uuid\",\"role\":\"editor\"}]",
-        "SIGNALSURF_MCP_TOKEN": "ssmcp_live_xxx"
-      }
-    }
-  }
-}
-```
-
-For trusted local development only, stdio can skip token lookup with direct
-context:
-
-```bash
-SIGNALSURF_MCP_AUTH_DISABLED=true \
-SIGNALSURF_MCP_WORKSPACE_ID=00000000-0000-0000-0000-000000000000 \
-SIGNALSURF_MCP_USER_ID=00000000-0000-0000-0000-000000000000 \
-SIGNALSURF_MCP_ROLE=editor \
-pnpm start
-```
-
-`SIGNALSURF_MCP_AUTH_DISABLED=true` is rejected in HTTP mode. It bypasses token
-auth for the process and is only for trusted local stdio sessions with an
-explicit `SIGNALSURF_MCP_WORKSPACE_ID`.
-
-## Streamable HTTP
-
-```bash
-SIGNALSURF_MCP_TRANSPORT=http pnpm start
-```
-
-The server listens on `http://127.0.0.1:3333/mcp` by default.
-
-HTTP mode serves stateless MCP Streamable HTTP at `POST {host}:{port}{path}`.
-There is no session create/reuse/delete lifecycle. `GET` and `DELETE` return
-`405` by design. Clients must send MCP JSON-RPC requests to the same
-`POST /mcp` endpoint with `Authorization: Bearer <token>`.
-
-HTTP clients must send:
-
-```http
-Authorization: Bearer ssmcp_live_xxx
-```
-
-Host headers are checked before request handling to reduce localhost
-DNS-rebinding risk. By default the server accepts loopback hostnames when bound
-locally. Set `SIGNALSURF_MCP_ALLOWED_HOSTS=signalsurf-mcp.example.com` for
-reverse-proxy or hosted HTTP deployments.
-
-Basic request shape:
-
-```bash
-curl -s http://127.0.0.1:3333/mcp \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  -H 'Authorization: Bearer ssmcp_live_xxx' \
-  --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0.0.0"}}}'
-```
-
-## Validation
-
-```bash
-corepack pnpm@10.0.0 typecheck
-corepack pnpm@10.0.0 test
-corepack pnpm@10.0.0 build
-git diff --check
-```
-
-## Safety Notes
-
-- The server does not expose arbitrary SQL write tools.
-- Row writes require the target database to belong to the token's workspace.
-- Rows with no `database_id` are not accessible through MCP.
-- Workflow reads and mutations filter `deleted_at IS NULL`.
-- Workflows attached to row writes must target that row's database.
-- Row `item_ref` values must reference entries in workspace-owned databases.
-- Row data updates call SignalSurf's `update_entry_with_source` RPC, preserving entry changelog behavior.
-- HTTP auth-disabled mode is rejected; direct context is stdio-only.
-- HTTP Host headers are allowlisted through `SIGNALSURF_MCP_ALLOWED_HOSTS`.
-- Do not commit `.env` or plaintext service-role keys.
-
-## Known Limits
-
-- This package is a standalone MCP server. It does not yet mount inside
-  `SignalsurfWeb` at `src/app/api/mcp/[transport]/route.ts`.
-- It exposes a curated tool surface, not every internal SignalSurf chat tool.
-- `dataPatch`, `toolConfigPatch`, `variablesPatch`, and `configPatch` are shallow
-  merges. Replace the full object when nested merge semantics matter.
-- `delete_table_rows` hard-deletes rows. Use it only when the user explicitly
-  wants row deletion, not when hiding or archiving would be more appropriate.
+Old installation and deployment instructions remain available in Git history.
+Open product issues and changes in
+[signalsurf-web](https://github.com/Signalsurf-ai/signalsurf-web/issues).

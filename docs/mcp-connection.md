@@ -1,5 +1,11 @@
 # SignalSurf MCP connection
 
+> Historical standalone documentation. This repository is deprecated; the
+> following describes the retired implementation. See the
+> [retirement and migration notice](../README.md) and Web's maintained
+> [connection guide](https://github.com/Signalsurf-ai/signalsurf-web/blob/main/packages/mcp-server/docs/mcp-connection.md)
+> for the current service.
+
 SignalSurf exposes one remote MCP endpoint and one deterministic tool registry.
 Project collaboration and product operations are not connection modes: OAuth
 scopes authorize individual calls while `tools/list` stays stable, so clients do
