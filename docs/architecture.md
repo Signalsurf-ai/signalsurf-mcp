@@ -1,5 +1,11 @@
 # SignalSurf MCP Architecture
 
+> Historical standalone documentation. This repository is deprecated; the
+> following describes the retired implementation. See the
+> [retirement and migration notice](../README.md) and Web's maintained
+> [architecture](https://github.com/Signalsurf-ai/signalsurf-web/blob/main/packages/mcp-server/docs/architecture.md)
+> for the current service.
+
 This package is a standalone MCP server that exposes a narrow, workspace-scoped
 SignalSurf control surface to other agents. It does not expose arbitrary SQL or
 raw Supabase access.

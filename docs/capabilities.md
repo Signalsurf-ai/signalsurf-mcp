@@ -1,5 +1,11 @@
 # SignalSurf MCP Capabilities
 
+> Historical standalone documentation. This repository is deprecated; the
+> following describes the retired implementation. See the
+> [retirement and migration notice](../README.md) and Web's maintained
+> [capability contract](https://github.com/Signalsurf-ai/signalsurf-web/blob/main/docs/mcp-agent-capabilities.md)
+> for the current service.
+
 This package exposes the public MCP contract for external agents. It is not a
 raw mirror of every internal SignalSurf Web UI helper, but portable
 agent-facing capabilities should have a public MCP equivalent.

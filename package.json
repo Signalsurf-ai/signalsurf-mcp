@@ -2,7 +2,7 @@
   "name": "@signalsurf/mcp",
   "version": "0.1.0",
   "private": true,
-  "description": "SignalSurf MCP server for agent access to Workflows and workspace tables.",
+  "description": "Deprecated standalone MCP server; use Signalsurf-ai/signalsurf-web/packages/mcp-server.",
   "type": "module",
   "bin": {
     "signalsurf-mcp": "dist/index.js"
@@ -13,7 +13,6 @@
     "check:contract": "pnpm --filter @signalsurf/mcp-contract build",
     "check:schema-usage": "node scripts/check-schema-usage.mjs",
     "check:surfer-parity": "node scripts/check-surfer-parity.mjs",
-    "deploy": "pnpm --filter @signalsurf/mcp-contract build && npx wrangler@4 deploy",
     "dev": "tsx src/index.ts",
     "generate:hosted-contract": "tsx scripts/generate-hosted-tool-catalog.ts",
     "start": "node dist/index.js",

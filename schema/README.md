@@ -1,5 +1,10 @@
 # Schema snapshot
 
+> Historical standalone snapshot. This repository is deprecated; do not refresh
+> this snapshot or operate production from these instructions. See the
+> [retirement and migration notice](../README.md) and the maintained
+> [Web MCP package](https://github.com/Signalsurf-ai/signalsurf-web/tree/main/packages/mcp-server).
+
 `public-snapshot.json` lists the production `public` tables, columns, and RPC
 signatures this server actually uses. `pnpm check:schema-usage` reads it and
 fails when the code names a table, column, or RPC argument production does not
